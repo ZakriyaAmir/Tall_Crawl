@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="705fefff-4313-4e4b-8190-7232d9babd3f" name="Default Changelist" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/bonusSpawner.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/treeChunk.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/GooglePlayGames/Editor/GPGSUpgrader.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/bees.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/menu.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/continuousRotation.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/menubuttons.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://C:/Program Files/Unity/Hub/Editor/2019.2.17f1/Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.ugui/Runtime/UI/Core/VertexModifiers/Shadow.cs" root0="SKIP_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/playerInteract.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/branch.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/levelManager.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/hurdlesSpawner.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Google Play/GoogleMobileAdsDemoScript.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/player.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/scripts/movement.cs" root0="FORCE_HIGHLIGHTING" />
+  </component>
+  <component name="IdeDocumentHistory">
+    <option name="CHANGED_PATHS">
+      <list>
+        <option value="$PROJECT_DIR$/Assets/scripts/branch.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/treeChunk.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/bonusSpawner.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/playerLife.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/bees.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/continuousROtation.cs" />
+        <option value="$PROJECT_DIR$/Assets/GoogleMobileAds/GoogleMobileAdsDemoScript.cs" />
+        <option value="$PROJECT_DIR$/Assets/Plugins/Android/GoogleMobileAdsPlugin/AndroidManifest.xml" />
+        <option value="$PROJECT_DIR$/Assets/scripts/menu.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/menubuttons.cs" />
+        <option value="$PROJECT_DIR$/Assets/Google Play/GoogleMobileAdsDemoScript.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/continuousRotation.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/player.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/hurdlesSpawner.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/levelManager.cs" />
+        <option value="$PROJECT_DIR$/Assets/scripts/playerInteract.cs" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectId" id="1YI1mBE59rYONf6djFZkvphvTQG" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showExcludedFiles" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="Discover.Launch.Via.Unity" value="true" />
+    <property name="Rider.SolutionExplorerActivator" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="false" />
+  </component>
+  <component name="RunManager" selected="Attach to Unity Editor.Attach to Unity Editor">
+    <configuration name="Attach to Unity Editor &amp; Play" type="UNITY_DEBUG_RUN_CONFIGURATION" factoryName="UNITY_ATTACH_AND_PLAY" show_console_on_std_err="false" show_console_on_std_out="false" port="50000" address="localhost">
+      <option name="allowRunningInParallel" value="false" />
+      <option name="listenPortForConnections" value="false" />
+      <option name="pid" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Attach to Unity Editor" type="UNITY_DEBUG_RUN_CONFIGURATION" factoryName="Unity Debug" show_console_on_std_err="false" show_console_on_std_out="false" port="50000" address="localhost">
+      <option name="allowRunningInParallel" value="false" />
+      <option name="listenPortForConnections" value="false" />
+      <option name="pid" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="705fefff-4313-4e4b-8190-7232d9babd3f" name="Default Changelist" comment="" />
+      <created>1582615463186</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1582615463186</updated>
+      <workItem from="1582615497975" duration="45274000" />
+      <workItem from="1583132799851" duration="14004000" />
+      <workItem from="1583233266492" duration="2535000" />
+      <workItem from="1583299577336" duration="24135000" />
+      <workItem from="1583471026956" duration="2847000" />
+      <workItem from="1583491509561" duration="21084000" />
+      <workItem from="1583816377874" duration="7152000" />
+      <workItem from="1583833923055" duration="752000" />
+      <workItem from="1583834951683" duration="29540000" />
+      <workItem from="1584078702963" duration="595000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="1" />
+  </component>
+  <component name="UnityProjectConfiguration" hasMinimizedUI="true" />
+  <component name="UnityUnitTestConfiguration" currentTestLauncher="EditMode" />
+  <component name="WindowStateProjectService">
+    <state x="361" y="0" width="644" height="728" key="find.popup" timestamp="1583840214572">
+      <screen x="0" y="0" width="1366" height="728" />
+    </state>
+    <state x="361" y="0" width="644" height="728" key="find.popup/0.0.1366.728@0.0.1366.728" timestamp="1583840214572" />
+    <state x="339" y="162" key="run.anything.popup" timestamp="1583920745233">
+      <screen x="0" y="0" width="1366" height="728" />
+    </state>
+    <state x="339" y="162" key="run.anything.popup/0.0.1366.728@0.0.1366.728" timestamp="1583920745233" />
+  </component>
+</project>
