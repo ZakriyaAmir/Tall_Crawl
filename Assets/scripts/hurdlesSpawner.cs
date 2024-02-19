@@ -35,6 +35,7 @@ public class hurdlesSpawner : MonoBehaviour
         {
             StartCoroutine(BonusComponent.spawnHealth());
             StartCoroutine(BonusComponent.spawnBoost());
+            StartCoroutine(BonusComponent.spawnCoin());
         }
 
         for (int i = 0; i <= hurdlesCount; i++)

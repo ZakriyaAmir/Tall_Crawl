@@ -6,7 +6,7 @@ public class bonusSpawner : MonoBehaviour
 {
     public GameObject health;
     public GameObject boost;
-    public GameObject corns;
+    public GameObject coins;
     public Transform bonusParent;
     private int cornsCount;
     private int healthCount;
@@ -17,7 +17,7 @@ public class bonusSpawner : MonoBehaviour
 
     public void Start()
     {
-        //StartCoroutine(spawnCorns());
+        StartCoroutine(spawnCoin());
         StartCoroutine(spawnBoost());
     }
 
@@ -94,9 +94,40 @@ public class bonusSpawner : MonoBehaviour
         yield return new WaitForSeconds(1f);
     }
     
+    public IEnumerator spawnCoin()
+    {
+        boostCount = Random.Range(0,2);
+        if (boostCount == 1)
+        {
+            boostCount = Random.Range(0,2);
+        }
+        if (boostCount == 1)
+        {
+            boostCount = Random.Range(0,2);
+        }
+
+        if (boostCount > 0)
+        {
+            LastYCoordinate = GameObject.Find("player").transform.position.y + Random.Range(3f,7f);
+            Vector3 rot = new Vector3(0,Random.Range(0,360),0);
+            coinSpawner(LastYCoordinate,rot);
+            
+        }
+
+        yield return new WaitForSeconds(1f);
+    }
+    
     public void boostSpawner(float y,Vector3 rot)
     {
         GameObject prop = (GameObject) Instantiate(boost,bonusParent);
+        Vector3 position = new Vector3(0, y, 0);
+        prop.transform.position = position;
+        prop.transform.eulerAngles = rot;
+    }
+
+    public void coinSpawner(float y, Vector3 rot)
+    {
+        GameObject prop = (GameObject)Instantiate(coins, bonusParent);
         Vector3 position = new Vector3(0, y, 0);
         prop.transform.position = position;
         prop.transform.eulerAngles = rot;

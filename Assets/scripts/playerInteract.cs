@@ -19,6 +19,7 @@ public class playerInteract : MonoBehaviour
     public AudioClip beesImpactSound;
     public AudioClip deathSound;
     public AudioClip boostSound;
+    public AudioClip coinSound;
     public AudioClip healthSound;
     public AudioClip jumpSound;
     AudioSource audioSource;
@@ -139,6 +140,14 @@ public class playerInteract : MonoBehaviour
             boostDuration = 4;
             audioSource.PlayOneShot(boostSound, 1F);
         }
+
+        if (other.CompareTag("points"))
+        {
+            Destroy(other.gameObject);
+            //Add coin
+            gameManager.Instance.addCoin();
+            audioSource.PlayOneShot(coinSound, 1F);
+        }
     }
 
 
@@ -151,13 +160,13 @@ public class playerInteract : MonoBehaviour
     public IEnumerator Invincible()
     {
         gameObject.GetComponent<CapsuleCollider>().enabled = false;
-        transform.GetChild(0).gameObject.SetActive(false);
+        transform.GetChild(1).gameObject.SetActive(false);
         yield return new WaitForSeconds(0.4f);
-        transform.GetChild(0).gameObject.SetActive(true);
+        transform.GetChild(1).gameObject.SetActive(true);
         yield return new WaitForSeconds(0.4f);
-        transform.GetChild(0).gameObject.SetActive(false);
+        transform.GetChild(1).gameObject.SetActive(false);
         yield return new WaitForSeconds(0.4f);
-        transform.GetChild(0).gameObject.SetActive(true);
+        transform.GetChild(1).gameObject.SetActive(true);
         gameObject.GetComponent<CapsuleCollider>().enabled = true;
     }
 
@@ -171,7 +180,7 @@ public class playerInteract : MonoBehaviour
         transform.GetComponent<Animator>().SetBool("death", true);
         audioSource.PlayOneShot(deathSound, 1F);
         StartCoroutine(gameOver());
-        GameObject.Find("Canvas").GetComponent<menu>().pauseBtn.enabled = false;
+        gameManager.Instance.pauseBtn.enabled = false;
     }
 
     public IEnumerator gameOver()

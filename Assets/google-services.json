@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "953033522255",
+    "project_id": "tallcrawl-5360a",
+    "storage_bucket": "tallcrawl-5360a.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:953033522255:android:cf6c5e7c1da731932efe3a",
+        "android_client_info": {
+          "package_name": "com.SiliconMenace.TallCrawl"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmPxf7Die1Y9yIFZ7EioClwC13itXpSGY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

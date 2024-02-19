@@ -1,0 +1,86 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3247063619235202457
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5822271271944541869}
+  - component: {fileID: 1473798443534734330}
+  - component: {fileID: 4145910107939913111}
+  m_Layer: 0
+  m_Name: Ads+FirebaseManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5822271271944541869
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3247063619235202457}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 654.0021, y: 1582.6831, z: -1.2297907}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1473798443534734330
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3247063619235202457}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62311547766638d47ad8492672f3632c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  testMode: 0
+  AdmobBannerUnitId: ca-app-pub-4987175712306793/3348628581
+  AdmobInterstitialUnitId: ca-app-pub-4987175712306793/9597523925
+  AdmobRewardedUnitId: ca-app-pub-4987175712306793/6984020172
+  AdmobRewardedInterstitialUnitId: 
+  AdmobAppOpenAdUnitId: 
+  admobInterstitial: 1
+  admobBanner: 1
+  admobRewarded: 1
+  admobRewardedInterstitial: 0
+  admobOpenAd: 0
+  MaxSdkKey: sVWGuOQVG4gzyhb-2Qb6sRTv8qavlPzA-5V-1DcTfCWvHWTNRTTB12ENHdoQyLpX5rp1LVcPGq9Nol8469q4z7
+  MaxInterstitialAdUnitId: f7794de01adb3bac
+  MaxRewardedAdUnitId: 2ac7a59f9db948ee
+  MaxRewardedInterstitialAdUnitId: 2ac7a59f9db948ee
+  MaxBannerAdUnitId: a7b90d54cef49c8a
+  MaxMRecAdUnitId: bcb5a19fc4a78113
+  useMaxAds: 0
+  maxInterstitial: 0
+  maxBanner: 0
+  maxRewarded: 0
+  maxRewardedInterstitial: 0
+  maxMRec: 0
+  bannerPosition: 0
+  MRecPos: 1
+  money: 0
+  moneytext: {fileID: 0}
+--- !u!114 &4145910107939913111
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3247063619235202457}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11cd5d6509815f54cad70f87f36e60c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

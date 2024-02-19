@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Firebase.Analytics;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net.Mime;
@@ -26,8 +27,8 @@ public class player : MonoBehaviour
     public Text finalscore;
     public Text highscore;
     public float currentScore;
-    public Animator playerActionAnimator;
     private float swipeUpDuration;
+    public Animator anim;
 
     public float SWIPE_THRESHOLD = 20f;
     public Camera maincam;
@@ -164,6 +165,8 @@ public class player : MonoBehaviour
     IEnumerator endGame()
     {
         yield return new WaitForSeconds(2f);
+        gameManager.Instance.totalCoins = PlayerPrefs.GetInt("coins", 0);
+        gameManager.Instance.TotalcoinsText.text = gameManager.Instance.totalCoins.ToString();
         finalscore.text = ((int) currentScore).ToString();
         if (currentScore >= PlayerPrefs.GetInt("highscore"))
         {
@@ -174,18 +177,18 @@ public class player : MonoBehaviour
         //Time.timeScale = 0;
 
         //Show InterStitial ad
-        adsplugin.instance.Showinterstial();
+        AdsManager.Instance.RunInterstitialAd();
 
         //GA Event
-        MyAnalytics.instance.LevelFailedEvent("Gameplay");
+        FirebaseAnalytics.LogEvent("Player_Score_" + finalscore);
     }
 
     public void jump()
     {
         if (jumpAllowed)
         {
-            playerActionAnimator.GetComponent<Animator>().SetTrigger("jump");
-            playerActionAnimator.GetComponent<playerInteract>().jump();
+            anim.SetTrigger("jump");
+            anim.GetComponent<playerInteract>().jump();
             jumpAllowed = false;
             StartCoroutine(readyJump());
         }
