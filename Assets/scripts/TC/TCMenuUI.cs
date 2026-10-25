@@ -203,6 +203,7 @@ public class TCMenuUI : MonoBehaviour
     // ---------- Shop ----------
     static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Coin Value", "Head Start" };
     static readonly int[] upgMax = { 0, 5, 2, 3, 3 };
+    public CanvasGroup GetPanel(string n) => n == "Skins" ? skinsPanel : n == "Shop" ? shopPanel : n == "Settings" ? settingsPanel : n == "Daily" ? dailyPanel : consentPanel;
     void BuildShop()
     {
         shopPanel = TCUI.Panel("Shop", safe, out var card, new Vector2(980, 1520), "SHOP");
@@ -213,7 +214,7 @@ public class TCMenuUI : MonoBehaviour
             var row = TCUI.Img("Upg" + id, card, Color.white); TCUI.Place(row.rectTransform, new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(880, 120));
             var name = TCUI.Label("N", row.transform, upgNames[id], 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Stretch(name.rectTransform, 30, 400, 0, 40);
             var pips = TCUI.Label("P", row.transform, "", 34, TCUI.Mint, TextAlignmentOptions.Left); TCUI.Stretch(pips.rectTransform, 30, 400, 60, 0);
-            var buy = TCUI.Btn("Buy", row.transform, "", TCUI.Butter, () =>
+            var buy = TCUI.Btn("Buy", row.transform, "0", TCUI.Butter, () =>
             {
                 int lvl = TCSave.Upgrade(u); if (lvl >= upgMax[u]) return; int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
                 if (TCSave.Coins < cost) { Toast("Not enough coins"); return; }
@@ -225,7 +226,7 @@ public class TCMenuUI : MonoBehaviour
             {
                 int lvl = TCSave.Upgrade(u); pips.text = "Level " + lvl + " / " + upgMax[u];
                 bool max = lvl >= upgMax[u]; int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
-                bt.text = max ? "MAX" : cost.ToString(); buy.interactable = !max && TCSave.Coins >= cost;
+                if (bt) bt.text = max ? "MAX" : cost.ToString(); buy.interactable = !max && TCSave.Coins >= cost;
             });
         }
         var h2 = TCUI.Label("H2", card, "COIN & GEM PACKS", 46, TCUI.Peach); TCUI.Place(h2.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -800), new Vector2(800, 60));

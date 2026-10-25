@@ -49,7 +49,7 @@ public class TCGameUI : MonoBehaviour
         var pause = TCUI.Btn("Pause", top, "", TCUI.Butter, ShowPause, 40, TCUI.Icon("pause"));
         TCUI.Place((RectTransform)pause.transform, new Vector2(0, 0.5f), new Vector2(170, -110), new Vector2(110, 110));
         boostText = TCUI.Label("Boost", safe, "BOOST!", 110, TCUI.Peach); TCUI.Place(boostText.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(900, 160));
-        boostText.outlineWidth = 0.25f; boostText.outlineColor = TCUI.Cocoa; boostText.gameObject.SetActive(false);
+        TCUI.Outline(boostText, 0.25f); boostText.gameObject.SetActive(false);
     }
 
     void RefreshHearts()
@@ -97,7 +97,7 @@ public class TCGameUI : MonoBehaviour
     {
         if (!cam) cam = Camera.main; if (!cam) return;
         var t = popPool.Count > 0 ? popPool.Dequeue() : null;
-        if (!t) { t = TCUI.Label("Pop", safe.parent, "", 64, c); t.rectTransform.sizeDelta = new Vector2(400, 100); t.outlineWidth = 0.22f; t.outlineColor = TCUI.Cocoa; }
+        if (!t) { t = TCUI.Label("Pop", safe.parent, "", 64, c); t.rectTransform.sizeDelta = new Vector2(400, 100); TCUI.Outline(t, 0.22f); }
         t.text = text; t.color = c; t.gameObject.SetActive(true);
         StartCoroutine(PopRoutine(t, cam.WorldToScreenPoint(world)));
     }
@@ -125,7 +125,7 @@ public class TCGameUI : MonoBehaviour
         var hit = root.gameObject.AddComponent<Image>(); hit.color = new Color(0, 0, 0, 0.001f);
         var b = root.gameObject.AddComponent<Button>(); b.transition = Selectable.Transition.None; b.onClick.AddListener(StartRun);
         hintText = TCUI.Label("Hint", root, TCSave.TutorialDone ? "TAP TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk", 72, Color.white);
-        hintText.outlineWidth = 0.25f; hintText.outlineColor = TCUI.Cocoa;
+        TCUI.Outline(hintText, 0.25f);
         TCUI.Place(hintText.rectTransform, new Vector2(0.5f, 0.3f), Vector2.zero, new Vector2(1000, 260));
         hand = TCUI.Img("Hand", root, Color.white, TCUI.Icon("hand")).rectTransform; TCUI.Place(hand, new Vector2(0.5f, 0.2f), Vector2.zero, new Vector2(150, 150));
         StartCoroutine(HandWiggle());
@@ -201,7 +201,7 @@ public class TCGameUI : MonoBehaviour
     {
         revivePanel = TCUI.Panel("Revive", safe.parent, out var card, new Vector2(820, 900), "SECOND CHANCE?");
         reviveTimer = TCUI.Label("Timer", card, "5", 160, TCUI.Peach); TCUI.Place(reviveTimer.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 200), new Vector2(300, 200));
-        reviveTimer.outlineWidth = 0.2f; reviveTimer.outlineColor = TCUI.Cocoa;
+        TCUI.Outline(reviveTimer, 0.2f);
         TCUI.Place((RectTransform)TCUI.Btn("Ad", card, "REVIVE (AD)", TCUI.Mint, () => TCServices.Rewarded(DoRevive, "revive"), 54, TCUI.Icon("play")).transform, new Vector2(0.5f, 0.5f), new Vector2(0, 10), new Vector2(620, 140));
         reviveGemBtn = TCUI.Btn("Gems", card, "REVIVE  " + TCConfig.I.reviveCostGems, TCUI.Sky, () =>
         {

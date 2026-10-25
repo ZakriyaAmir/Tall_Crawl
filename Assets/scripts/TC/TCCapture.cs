@@ -17,7 +17,7 @@ public class TCCapture : MonoBehaviour
         g.AddComponent<TCCapture>().dir = i + 1 < args.Length ? args[i + 1] : "/tmp";
     }
     IEnumerator Shot(string name) { yield return new WaitForEndOfFrame(); ScreenCapture.CaptureScreenshot($"{dir}/{++n:00}_{name}.png"); yield return new WaitForSecondsRealtime(0.3f); }
-    CanvasGroup Panel(string n) { var g = GameObject.Find("TC_MenuUI/Safe/" + n) ?? GameObject.Find(n); if (!g) foreach (var cg in Resources.FindObjectsOfTypeAll<CanvasGroup>()) if (cg.name == n && cg.gameObject.scene.IsValid()) return cg; return g ? g.GetComponent<CanvasGroup>() : null; }
+    CanvasGroup Panel(string n) { var mu = FindObjectOfType<TCMenuUI>(); if (mu && mu.GetPanel(n)) return mu.GetPanel(n); var g = GameObject.Find("TC_MenuUI/Safe/" + n) ?? GameObject.Find(n); if (!g) foreach (var cg in Resources.FindObjectsOfTypeAll<CanvasGroup>()) if (cg.name == n && cg.gameObject.scene.IsValid()) return cg; return g ? g.GetComponent<CanvasGroup>() : null; }
     IEnumerator Start()
     {
         yield return new WaitForSecondsRealtime(3f);

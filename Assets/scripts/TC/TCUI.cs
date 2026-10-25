@@ -253,6 +253,11 @@ public static class TCUI
         cg.gameObject.SetActive(true); cg.transform.SetAsLastSibling();
         host.StartCoroutine(Anim(cg, true, pop));
     }
+    public static void Outline(TMP_Text t, float w)
+    {
+        try { var m = t.fontMaterial; m.EnableKeyword("OUTLINE_ON"); m.SetFloat("_OutlineWidth", w); m.SetColor("_OutlineColor", Cocoa); }
+        catch (Exception) { }
+    }
     public static void Hide(MonoBehaviour host, CanvasGroup cg, Action done = null)
     {
         if (!cg.gameObject.activeSelf) { done?.Invoke(); return; }
