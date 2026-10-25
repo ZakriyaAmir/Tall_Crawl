@@ -1,252 +1,110 @@
-﻿using Firebase.Analytics;
 using System.Collections;
-using System.Collections.Generic;
-using TMPro;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
+/// Run flow: countdown, pause, game over, revive, rewards. UI lives in TCGameUI.
 public class gameManager : MonoBehaviour
 {
-    public AudioClip[] bgMusic;
     public Material[] bgImage;
     public AudioClip[] BGM;
-    public Sprite[] stagetoload;
-    public GameObject LoadingScreen;
-    public GameObject TutorialScreen;
-    public GameObject PauseScreen;
-    public GameObject loseScreen;
-    public GameObject confirmScreen;
     public Camera camera;
-    public bool cantplay;
-    public int coinsCollected;
-    public int totalCoins;
-    public Text CollectedCoinsText;
-    public Text TotalcoinsText;
-
-    public AudioClip music;
-    public int musicIndex;
-    private AudioSource audioSource1;
-    private player p;
-    public Button pauseBtn;
-    public Button respawnBtn;
-    public static gameManager Instance;
     public GameObject Sun;
 
-    private void Awake()
+    public static gameManager Instance;
+    public int coinsCollected;
+    public bool revivedThisRun, runEnded;
+    public int RunReward { get; private set; }
+    player p; AudioSource music; playerInteract spider;
+
+    void Awake()
     {
-        Application.targetFrameRate = 120;
-
-        totalCoins = PlayerPrefs.GetInt("coins", 0);
-
-        if (Instance != null)
-        {
-            Destroy(gameObject);
-            return;
-        }
-
         Instance = this;
-        //DontDestroyOnLoad(gameObject);
-
-        /*PauseScreen.SetActive(false);
-        confirmScreen.SetActive(false);
-        LoadingScreen.GetComponent<Image>().sprite = stagetoload[PlayerPrefs.GetInt("Difficulty")];
-        LoadingScreen.SetActive(true);
-        //Show Tutorial
-        if (PlayerPrefs.GetInt("notnew") == 0)
-        {
-            TutorialScreen.SetActive(true);
-            cantplay = true;
-            Time.timeScale = 0;
-        }*/
+        Application.targetFrameRate = 60;
+        QualitySettings.vSyncCount = 0;
+        Screen.sleepTimeout = SleepTimeout.NeverSleep;
+        TCSave.Apply();
     }
 
-    public void addCoin() 
-    {
-        coinsCollected++;
-        PlayerPrefs.SetInt("coins", PlayerPrefs.GetInt("coins", 0) + 1);
-        CollectedCoinsText.text = coinsCollected.ToString();
-    }
-
-    // Use this for initialization
     void Start()
     {
-        p = GameObject.Find("player").GetComponent<player>();
-
-        pauseBtn.enabled = false;
-        PauseScreen.SetActive(false);
-        audioSource1 = transform.GetComponent<AudioSource>();
+        p = FindObjectOfType<player>();
+        spider = FindObjectOfType<playerInteract>();
+        music = GetComponent<AudioSource>();
         p.paused = true;
-        StartCoroutine(startGame());
-        int RandomStage = Random.Range(0, 5);
-
-        camera.GetComponent<Skybox>().material = bgImage[RandomStage];
-
-        AudioClip muse;
-        switch (RandomStage)
+        int stage = bgImage != null && bgImage.Length > 0 ? Random.Range(0, bgImage.Length) : 0;
+        if (camera && bgImage != null && bgImage.Length > 0) { var sb = camera.GetComponent<Skybox>(); if (sb) sb.material = bgImage[stage]; }
+        if (Sun) Sun.SetActive(stage != 2);
+        if (music && BGM != null && BGM.Length > 0)
         {
-            // Select and play BGM
-            case 2:
-                muse = BGM[1];
-                //Hide sun in daytime
-                Sun.SetActive(false);
-                break;
-
-            default:
-                muse = BGM[0];
-                //Show sun in daytime
-                Sun.SetActive(true);
-                break;
+            music.clip = BGM[stage == 2 && BGM.Length > 1 ? 1 : 0]; music.loop = true;
+            music.volume = 0.5f; music.mute = !TCSave.Music; music.Play();
         }
-
-        //Play Taunt only if the game not runs for the first time
-        playMusic(muse);
+        TCServices.Banner(true);
+        TCServices.Log("run_start");
     }
 
-    IEnumerator startGame()
+    /// Called by the UI after the "tap to start"/tutorial.
+    public void BeginRun()
     {
-        yield return new WaitForSeconds(2);
         p.paused = false;
-        pauseBtn.enabled = true;
-        p.anim.SetBool("started", true);
+        if (p.anim) p.anim.SetBool("started", true);
+        if (TCSave.Upgrade(4) > 0 && spider) { spider.boostDuration = 1.5f + TCSave.Upgrade(4); }
     }
 
-    public void playMusic(AudioClip muse)
+    public void addCoin()
     {
-        music = muse;
-        audioSource1.clip = muse;
-        audioSource1.Play();
+        coinsCollected += TCConfig.I.coinValue * (1 + TCSave.Upgrade(3));
     }
 
-    public void stopMusic()
+    public void Pause(bool on)
     {
-        audioSource1.Stop();
+        if (runEnded) return;
+        Time.timeScale = on ? 0 : 1;
+        if (music) { if (on) music.Pause(); else music.UnPause(); }
     }
 
-    public void restartgamebtn()
+    void OnApplicationPause(bool paused) { if (paused && p && !p.paused && !p.GameOver) TCGameUI.Instance?.ShowPause(); }
+
+    public void OnPlayerDied() { StartCoroutine(DeathRoutine()); }
+    IEnumerator DeathRoutine()
     {
-        SceneManager.LoadScene("gameplay");
-        Time.timeScale = 1;
+        yield return new WaitForSeconds(1.2f);
+        TCGameUI.Instance?.ShowGameOver(!revivedThisRun);
     }
 
-    public void MainMenubtn()
+    public void Revive()
     {
-        SceneManager.LoadScene(0);
-        Time.timeScale = 1;
-    }
-
-    public void pausebtn()
-    {
-        pauseBtn.enabled = false;
-        PauseScreen.SetActive(true);
-        //Time.timeScale = 0;
-        player p = GameObject.Find("player").GetComponent<player>();
-        p.paused = true;
-    }
-
-    public void resumebtn()
-    {
-        pauseBtn.enabled = true;
-        PauseScreen.SetActive(false);
-        Time.timeScale = 1;
-        player p = GameObject.Find("player").GetComponent<player>();
-        p.paused = false;
-    }
-
-    private void Update()
-    {
-        if (!audioSource1.isPlaying)
-        {
-        }
-    }
-
-    public void notfirstitme()
-    {
-        PlayerPrefs.SetInt("notnew", 1);
-        closeTutorial();
-    }
-
-    public void closeTutorial()
-    {
-        cantplay = false;
-        TutorialScreen.SetActive(false);
-    }
-
-    public void OpenConfirm()
-    {
-        confirmScreen.SetActive(true);
-    }
-
-    public void CancelConfirm()
-    {
-        confirmScreen.SetActive(false);
-    }
-
-    public void PlayRewardedAd() 
-    {
-        //Play Reward Ad here
-        //Initialize Admob reward callback in the script in which you are required to use rewarded ad for admob
-        if (AdsManager.Instance.RunRewardedAd(() => grantReward()))
-        {
-            Debug.Log("Reward Ad Available");
-        }
-
-        else
-        {
-            Debug.Log("Reward Ad Unavailable");
-            grantReward();
-        }
-
-        //Initialize Max reward callback in the script in which you are required to use rewarded ad for applovin
-        //MaxSdkCallbacks.Rewarded.OnAdReceivedRewardEvent += OnRewardedAdReceivedRewardEvent;
-    }
-
-    public void getRewardInterstitial()
-    {
-        //Initialize Admob reward callback in the script in which you are required to use rewarded ad for admob
-        AdsManager.Instance.RunRewardedInterstitialAd(() => grantReward());
-        //Initialize Max reward callback in the script in which you are required to use rewarded ad for applovin
-        //MaxSdkCallbacks.RewardedInterstitial.OnAdReceivedRewardEvent += OnRewardedInterstitialAdReceivedRewardEvent;
-    }
-
-    //Rewarded sample callback methods for Applovin Max
-    /*private void OnRewardedAdReceivedRewardEvent(string adUnitId, MaxSdk.Reward reward, MaxSdkBase.AdInfo adInfo)
-    {
-        grantReward();
-        MaxSdkCallbacks.Rewarded.OnAdReceivedRewardEvent -= OnRewardedAdReceivedRewardEvent;
-    }
-    //Rewarded sample callback methods for Applovin Max
-    private void OnRewardedInterstitialAdReceivedRewardEvent(string adUnitId, MaxSdk.Reward reward, MaxSdkBase.AdInfo adInfo)
-    {
-        grantReward();
-        MaxSdkCallbacks.RewardedInterstitial.OnAdReceivedRewardEvent -= OnRewardedInterstitialAdReceivedRewardEvent;
-    }*/
-
-    public void grantReward()
-    {
-        //Give reward on watching video
-        gameManager.Instance.RespawnPlayer();
-
-        //GA Event
-        FirebaseAnalytics.LogEvent("Player_Respawned");
-    }
-
-    public void RespawnPlayer() 
-    {
-        respawnBtn.gameObject.SetActive(false);
-        FindObjectOfType<playerInteract>().increaseHealth();
-        p.anim.SetTrigger("respawn");
-        p.anim.SetBool("death",false);
-        loseScreen.SetActive(false);
-
-        Invoke("RestartMoving",1);
-    }
-
-    public void RestartMoving() 
-    {
+        revivedThisRun = true;
         p.GameOver = false;
-        //Blink spider
-        StartCoroutine(FindObjectOfType<playerInteract>().Invincible());
+        spider.Revive();
+        TCServices.Log("player_revived");
+    }
+
+    /// Banks the run: coins + distance bonus, best score, achievements, interstitial cadence.
+    public int EndRun(bool doubled)
+    {
+        if (runEnded) return RunReward;
+        runEnded = true;
+        int metres = (int)p.currentScore;
+        int bonus = metres / 100 * TCConfig.I.coinsPerHundredMetres;
+        RunReward = (coinsCollected + bonus) * (doubled ? 2 : 1);
+        TCSave.Coins += RunReward;
+        TCSave.LifetimeCoins += RunReward;
+        TCSave.Runs++;
+        if (metres > TCSave.Best) TCSave.Best = metres;
+        TCSkins.CheckAchievements();
+        TCServices.Log("run_end", "metres", metres);
+        return RunReward;
+    }
+
+    public int DistanceBonus => (int)p.currentScore / 100 * TCConfig.I.coinsPerHundredMetres;
+    public int Metres => p ? (int)p.currentScore : 0;
+
+    public void Restart() { MaybeInterstitial(); Time.timeScale = 1; SceneManager.LoadScene("gameplay"); }
+    public void Home() { MaybeInterstitial(); Time.timeScale = 1; SceneManager.LoadScene("MainMenu"); }
+    void MaybeInterstitial()
+    {
+        int n = Mathf.Max(1, TCConfig.I.interstitialEveryNRuns);
+        if (TCSave.Runs > 0 && TCSave.Runs % n == 0) TCServices.Interstitial();
     }
 }

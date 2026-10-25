@@ -1,277 +1,106 @@
-﻿using Firebase.Analytics;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Net.Mime;
 using UnityEngine;
-using UnityEngine.UI;
 
+/// Climbing + input. Drag horizontally to circle the trunk (smoothed, dead-zone, sensitivity from
+/// settings), swipe up / tap the jump area to hop bee swarms. Editor: A/D or arrows, Space to jump,
+/// mouse drag works too.
 public class player : MonoBehaviour
 {
-    public float speed = 2;
-    public bool boost = false;
-
     public Transform p1;
-
-    private Vector2 fingerDown;
-    private Vector2 fingerUp;
-    public bool detectSwipeOnlyAfterRelease = false;
-    public bool Ymove;
-    public bool Xmove;
-    public bool GameOver;
-    public bool GameOverTrriggered;
-    public bool jumpAllowed;
-    public bool paused;
-    public Text test;
-    public Text score;
-    public Text finalscore;
-    public Text highscore;
-    public float currentScore;
-    private float swipeUpDuration;
     public Animator anim;
-
-    public float SWIPE_THRESHOLD = 20f;
     public Camera maincam;
+    public bool paused = true, GameOver, boost;
+    public float currentScore, calcSpeed;
+    public bool jumpAllowed = true;
 
-    public float rotSpeed = 7f;
-    public int life = 3;
-    private Rigidbody rb;
-    public float calcSpeed;
+    public static System.Action OnJumped, OnTurned;
 
-    float _doubleTapTime;
-
-    
+    TCConfig C;
+    Animator camAnim;
+    bool camBoost;
+    float targetYaw, yaw, startY, jumpCooldown;
+    Vector2 touchStart, lastPos; float touchStartTime; bool dragging, swipeUsed, passedDeadZone;
+    playerInteract spider;
 
     void Awake()
     {
-        rb = transform.GetChild(0).GetComponent<Rigidbody>();
-        jumpAllowed = true;
-        maincam = GameObject.FindWithTag("MainCamera").GetComponent<Camera>();
+        C = TCConfig.I;
+        if (!p1) p1 = transform;
+        if (!maincam) maincam = Camera.main;
+        if (maincam) camAnim = maincam.GetComponent<Animator>();
+        spider = GetComponentInChildren<playerInteract>();
+        yaw = targetYaw = p1.localEulerAngles.y;
+        startY = p1.position.y;
     }
 
-    // Update is called once per frame
+    public float Metres => currentScore;
+
     void Update()
     {
-        if (!paused)
-        {
-            if (!GameOver)
-            {
-                //Count score
-                currentScore = currentScore + Time.deltaTime * speed * 20;
-                score.text = ((int) currentScore + "M").ToString();
-                //Jump on double tap
-                /*for (var i = 0; i < Input.touchCount; ++i)
-                {
-                    {
-                        if (Input.GetTouch(i).phase == TouchPhase.Began)
-                        {
-                            if (Input.GetTouch(i).tapCount == 2)
-                            {
-                                jump();
-                            }
-                        }
-                    }
-                }*/
+        if (paused || GameOver) return;
+        float dt = Time.deltaTime;
+        float d = C.Difficulty(currentScore);
+        float baseSpeed = Mathf.Lerp(C.startSpeed, C.maxSpeed, d);
+        calcSpeed = boost ? baseSpeed * C.boostMultiplier : baseSpeed;
+        var pos = p1.position; pos.y += calcSpeed * dt; p1.position = pos;
+        currentScore = (pos.y - startY) * C.metresPerUnit;
 
-                // Constantly move player upwards
-                if (boost)
-                {
-                    p1.transform.position = new Vector3(p1.transform.position.x,
-                        p1.transform.position.y + calcSpeed * 2 * Time.deltaTime, p1.transform.position.z);
-                    maincam.GetComponent<Animator>().SetBool("boost",true);
-                }
+        if (camAnim && camBoost != boost) { camBoost = boost; camAnim.SetBool("boost", boost); }
 
-                else
-                {
-                    calcSpeed = speed + currentScore / 5000;
-                    p1.transform.position = new Vector3(p1.transform.position.x,
-                        p1.transform.position.y + calcSpeed * Time.deltaTime, p1.transform.position.z);
-                    maincam.GetComponent<Animator>().SetBool("boost",false);
-                }
-
-                foreach (Touch touch in Input.touches)
-                {
-                    if (touch.phase == TouchPhase.Began)
-                    {
-                        fingerUp = touch.position;
-                        fingerDown = touch.position;
-                    }
-
-                    //Detects Swipe while finger is still moving
-                    if (touch.phase == TouchPhase.Moved)
-                    {
-                        if (!detectSwipeOnlyAfterRelease)
-                        {
-                            fingerDown = touch.position;
-                            checkSwipe();
-                        }
-                    }
-
-                    //Detects swipe after finger is released
-                    if (touch.phase == TouchPhase.Ended)
-                    {
-                        fingerDown = touch.position;
-                        checkSwipe();
-                    }
-
-
-                    //Live movements
-                    //Horizontal
-                    if (Input.touches.Length > 0 && Input.GetTouch(0).phase == TouchPhase.Moved && Xmove)
-                    {
-                        float rotateSpeed = rotSpeed;
-                        Touch touchZero = Input.GetTouch(0);
-
-                        //Rotate the model based on offset
-                        Vector3 localAngle = p1.localEulerAngles;
-                        localAngle.y -= rotateSpeed * touchZero.deltaPosition.x;
-                        p1.localEulerAngles = localAngle;
-                    }
-
-                    //Vertical
-                    if (Input.touches.Length > 0 && Ymove)
-                    {
-                        if (Input.GetTouch(0).phase == TouchPhase.Moved)
-                        {
-                            swipeUpDuration = swipeUpDuration + Time.deltaTime * 7;
-                            /*if (swipeUpDuration > 1)
-                            {*/
-                            Touch touchZero = Input.GetTouch(0);
-                            if (touchZero.deltaPosition.y > 30)
-                            {
-                                jump();
-                            }
-
-                            //}
-                        }
-                        else
-                        {
-                            swipeUpDuration = 0;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                if (!GameOverTrriggered) 
-                {
-                    GameOverTrriggered = true;
-                    StartCoroutine(endGame());
-                }
-            }
-        }
+        HandleInput(dt);
+        yaw = Mathf.LerpAngle(yaw, targetYaw, 1f - Mathf.Exp(-C.rotationSmoothing * dt));
+        var e = p1.localEulerAngles; e.y = yaw; p1.localEulerAngles = e;
+        if (jumpCooldown > 0) jumpCooldown -= dt;
     }
 
-    IEnumerator endGame()
+    void HandleInput(float dt)
     {
-        yield return new WaitForSeconds(2f);
-        gameManager.Instance.totalCoins = PlayerPrefs.GetInt("coins", 0);
-        gameManager.Instance.TotalcoinsText.text = gameManager.Instance.totalCoins.ToString();
-        finalscore.text = ((int) currentScore).ToString();
-        if (currentScore >= PlayerPrefs.GetInt("highscore"))
+        float degPerPixel = C.dragDegreesPerScreenWidth / Mathf.Max(1, Screen.width) * TCSave.Sensitivity;
+
+        // Keyboard (editor / desktop)
+        float k = Input.GetAxisRaw("Horizontal");
+        if (Mathf.Abs(k) > 0.1f) { targetYaw -= k * C.keyboardTurnSpeed * TCSave.Sensitivity * dt; OnTurned?.Invoke(); }
+        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)) jump();
+
+        // Touch, falling back to mouse in the editor
+        bool down, held, up; Vector2 p;
+        if (Input.touchCount > 0)
         {
-            PlayerPrefs.SetInt("highscore", (int) currentScore);
+            var t = Input.GetTouch(0); p = t.position;
+            down = t.phase == TouchPhase.Began; up = t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled; held = !down && !up;
+        }
+        else
+        {
+            p = Input.mousePosition; down = Input.GetMouseButtonDown(0); up = Input.GetMouseButtonUp(0); held = Input.GetMouseButton(0) && !down;
         }
 
-        highscore.text = PlayerPrefs.GetInt("highscore").ToString();
-        //Time.timeScale = 0;
-
-        //Show InterStitial ad
-        AdsManager.Instance.RunInterstitialAd();
-
-        //GA Event
-        FirebaseAnalytics.LogEvent("Player_Score_" + finalscore);
+        if (down)
+        {
+            if (UnityEngine.EventSystems.EventSystem.current && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(Input.touchCount > 0 ? Input.GetTouch(0).fingerId : -1)) return;
+            dragging = true; swipeUsed = false; passedDeadZone = false; touchStart = lastPos = p; touchStartTime = Time.unscaledTime;
+        }
+        else if (dragging && (held || up))
+        {
+            Vector2 total = p - touchStart;
+            if (!passedDeadZone && total.magnitude > C.deadZonePixels) passedDeadZone = true;
+            // Swipe up = jump (fast, mostly vertical)
+            if (!swipeUsed && total.y > C.swipeUpThreshold * Screen.height && total.y > Mathf.Abs(total.x) * 1.3f && Time.unscaledTime - touchStartTime < 0.35f)
+            { swipeUsed = true; jump(); }
+            if (passedDeadZone && !swipeUsed)
+            {
+                float dx = p.x - lastPos.x;
+                if (Mathf.Abs(dx) > 0.01f) { targetYaw -= dx * degPerPixel; OnTurned?.Invoke(); }
+            }
+            lastPos = p;
+            if (up) dragging = false;
+        }
     }
 
     public void jump()
     {
-        if (jumpAllowed)
-        {
-            anim.SetTrigger("jump");
-            anim.GetComponent<playerInteract>().jump();
-            jumpAllowed = false;
-            StartCoroutine(readyJump());
-        }
-    }
-
-    IEnumerator readyJump()
-    {
-        yield return new WaitForSeconds(0.5f);
-        jumpAllowed = true;
-    }
-
-    void checkSwipe()
-    {
-        //Check if Vertical swipe
-        if (verticalMove() > SWIPE_THRESHOLD && verticalMove() > horizontalValMove())
-        {
-            if (fingerDown.y - fingerUp.y > 0) //up swipe
-            {
-                OnSwipeUp();
-            }
-            else if (fingerDown.y - fingerUp.y < 0) //Down swipe
-            {
-                OnSwipeDown();
-            }
-
-            fingerUp = fingerDown;
-        }
-
-        //Check if Horizontal swipe
-        else if (horizontalValMove() > SWIPE_THRESHOLD && horizontalValMove() > verticalMove())
-        {
-            if (fingerDown.x - fingerUp.x > 0) //Right swipe
-            {
-                OnSwipeRight();
-            }
-            else if (fingerDown.x - fingerUp.x < 0) //Left swipe
-            {
-                OnSwipeLeft();
-            }
-
-            fingerUp = fingerDown;
-        }
-
-        //No Movement at-all
-        else
-        {
-            Xmove = false;
-            Ymove = false;
-        }
-    }
-
-    float verticalMove()
-    {
-        return Mathf.Abs(fingerDown.y - fingerUp.y);
-    }
-
-    float horizontalValMove()
-    {
-        return Mathf.Abs(fingerDown.x - fingerUp.x);
-    }
-
-    //////////////////////////////////CALLBACK FUNCTIONS/////////////////////////////
-    void OnSwipeUp()
-    {
-        Xmove = false;
-        Ymove = true;
-    }
-
-    void OnSwipeDown()
-    {
-        Xmove = false;
-        Ymove = true;
-    }
-
-    void OnSwipeLeft()
-    {
-        Xmove = true;
-        Ymove = false;
-    }
-
-    void OnSwipeRight()
-    {
-        Xmove = true;
-        Ymove = false;
+        if (paused || GameOver || jumpCooldown > 0) return;
+        jumpCooldown = 0.55f;
+        if (anim) anim.SetTrigger("jump");
+        if (spider) spider.jump();
+        OnJumped?.Invoke();
     }
 }
