@@ -13,6 +13,7 @@ public class player : MonoBehaviour
     public bool jumpAllowed = true;
 
     public static System.Action OnJumped, OnTurned;
+    public static float DebugSteer; // used by the automated screenshot tour
 
     TCConfig C;
     Animator camAnim;
@@ -57,7 +58,7 @@ public class player : MonoBehaviour
         float degPerPixel = C.dragDegreesPerScreenWidth / Mathf.Max(1, Screen.width) * TCSave.Sensitivity;
 
         // Keyboard (editor / desktop)
-        float k = Input.GetAxisRaw("Horizontal");
+        float k = Input.GetAxisRaw("Horizontal") + DebugSteer;
         if (Mathf.Abs(k) > 0.1f) { targetYaw -= k * C.keyboardTurnSpeed * TCSave.Sensitivity * dt; OnTurned?.Invoke(); }
         if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)) jump();
 

@@ -16,12 +16,13 @@ public class UnityIAP : MonoBehaviour, IStoreListener
     }
     private void Awake()
     {
-        if (UnityIAP.Instance != null)
+        if (UnityIAP.Instance != null && UnityIAP.Instance != this)
         {
-            UnityEngine.Object.DontDestroyOnLoad(base.gameObject);
+            Destroy(gameObject); // keep the first instance alive across scenes
             return;
         }
         UnityIAP.Instance = this;
+        DontDestroyOnLoad(gameObject);
 
     }
     public string[] kProductIDs;

@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 860de91b1fc4defadb3ce7ca38d51437, type: 3}
+  m_Name: TCConfig
+  m_EditorClassIdentifier: 
+  startSpeed: 1.6
+  maxSpeed: 4.2
+  metresToMaxSpeed: 3000
+  boostMultiplier: 2.2
+  metresPerUnit: 20
+  trunkChunkHeight: 1.4
+  chunksAhead: 8
+  safeStartHeight: 5
+  rowGapEasy: 2.2
+  rowGapHard: 1.15
+  openWindowEasy: 170
+  openWindowHard: 95
+  maxTurnEasy: 80
+  maxTurnHard: 150
+  breatherEvery: 7
+  beeChance: 0.18
+  beeMinMetres: 250
+  coinTrailChance: 0.55
+  heartChance: 0.06
+  boostChance: 0.05
+  defaultSensitivity: 1
+  dragDegreesPerScreenWidth: 300
+  deadZonePixels: 6
+  rotationSmoothing: 18
+  keyboardTurnSpeed: 220
+  swipeUpThreshold: 0.06
+  baseHearts: 3
+  coinValue: 1
+  coinsPerHundredMetres: 2
+  reviveCostGems: 5
+  startingCoins: 150
+  dailyRewards: 320000004b0000006400000096000000c80000002c01000002000000
+  interstitialEveryNRuns: 3
+  upgradeCosts: 96000000900100008403000008070000ac0d0000
