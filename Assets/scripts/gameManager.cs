@@ -33,7 +33,39 @@ public class gameManager : MonoBehaviour
         p.paused = true;
         int stage = bgImage != null && bgImage.Length > 0 ? Random.Range(0, bgImage.Length) : 0;
         if (camera && bgImage != null && bgImage.Length > 0) { var sb = camera.GetComponent<Skybox>(); if (sb) sb.material = bgImage[stage]; }
-        if (Sun) Sun.SetActive(stage != 2);
+        if (Sun)
+        {
+            Sun.SetActive(true);
+            var anim = Sun.GetComponent<Animator>();
+            if (anim) anim.enabled = false;
+            Sun.transform.rotation = Quaternion.Euler(50f, -35f, 0f);
+
+            var sunLight = Sun.GetComponent<Light>();
+            if (sunLight)
+            {
+                sunLight.enabled = true;
+                if (stage == 2) // Midnight sky
+                {
+                    sunLight.color = new Color(0.72f, 0.82f, 1f);
+                    sunLight.intensity = 0.95f;
+                }
+                else if (stage == 3 || stage == 4) // Sunset / Evening
+                {
+                    sunLight.color = new Color(1f, 0.88f, 0.72f);
+                    sunLight.intensity = 1.25f;
+                }
+                else // Midday / Daybreak
+                {
+                    sunLight.color = new Color(1f, 0.98f, 0.92f);
+                    sunLight.intensity = 1.3f;
+                }
+            }
+        }
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor = new Color(0.65f, 0.68f, 0.74f);
+        RenderSettings.ambientEquatorColor = new Color(0.48f, 0.50f, 0.54f);
+        RenderSettings.ambientGroundColor = new Color(0.35f, 0.35f, 0.38f);
+        RenderSettings.ambientIntensity = 1.15f;
         if (music && BGM != null && BGM.Length > 0)
         {
             music.clip = BGM[stage == 2 && BGM.Length > 1 ? 1 : 0]; music.loop = true;
@@ -76,8 +108,17 @@ public class gameManager : MonoBehaviour
     {
         revivedThisRun = true;
         p.GameOver = false;
+        p.paused = true;
         spider.Revive();
+        StartCoroutine(ReviveRoutine());
         TCServices.Log("player_revived");
+    }
+
+    IEnumerator ReviveRoutine()
+    {
+        // Don't move the spider until the getting up animation is completed
+        yield return new WaitForSeconds(1.25f);
+        if (!runEnded) p.paused = false;
     }
 
     /// Banks the run: coins + distance bonus, best score, achievements, interstitial cadence.

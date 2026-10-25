@@ -13,9 +13,11 @@ public class TCTrack : MonoBehaviour
     TCPool trunkPool, branchPool, beePool, coinPool, heartPool, boostPool;
     readonly List<TCPooled> live = new List<TCPooled>(256);
     readonly List<float> angles = new List<float>(8);
-    float nextTrunkY, nextRowY, safeAngle;
+    float nextTrunkY, nextRowY, safeAngle, lastCoinY = -999f;
     int rowIndex;
     TCConfig C;
+
+    const float MinCoinSpacing = 0.55f;
 
     void Start()
     {
@@ -23,15 +25,19 @@ public class TCTrack : MonoBehaviour
         trunkPool = new TCPool(trunkPrefab, stemParent, C.chunksAhead + 4);
         branchPool = new TCPool(branchPrefab, hazardParent, 24);
         beePool = new TCPool(beesPrefab, hazardParent, 3);
-        coinPool = new TCPool(coinPrefab, bonusParent, 40);
+        coinPool = new TCPool(coinPrefab, bonusParent, 48);
         heartPool = new TCPool(heartPrefab, bonusParent, 2);
         boostPool = new TCPool(boostPrefab, bonusParent, 2);
+
         float py = player.position.y;
-        nextTrunkY = py - 2 * C.trunkChunkHeight;
+        float chunkH = C.trunkChunkHeight;
+        nextTrunkY = Mathf.Floor((py - 2f * chunkH) / chunkH) * chunkH;
         nextRowY = py + C.safeStartHeight;
         safeAngle = TCPlayerAngle();
-        // Safe start: welcome coin trail straight up
-        for (int i = 0; i < 6; i++) Spawn(coinPool, "coin", py + 1.2f + i * 0.5f, safeAngle);
+        lastCoinY = -999f;
+
+        // Safe start: welcome coin trail straight up with zero overlap
+        SpawnCoinTrail(py + 1.2f, py + 4.2f, safeAngle, safeAngle);
         Tick();
     }
 
@@ -75,9 +81,11 @@ public class TCTrack : MonoBehaviour
 
         if (breather)
         {
-            // Breather: coin spiral and maybe a power-up
-            for (int i = 0; i < 6; i++) Spawn(coinPool, "coin", y + i * gap / 6f, safeAngle + i * 20f);
-            safeAngle += 120;
+            // Breather: coin spiral and maybe a power-up with guaranteed spacing
+            float spiralStartY = y + 0.2f;
+            float spiralEndY = y + gap * 1.1f;
+            SpawnCoinTrail(spiralStartY, spiralEndY, safeAngle, safeAngle + 90f);
+            safeAngle += 90f;
             if (Random.value < C.heartChance * 4) Spawn(heartPool, "heart", y + gap * 0.9f, safeAngle);
             nextRowY += gap * 1.3f;
             return;
@@ -105,24 +113,40 @@ public class TCTrack : MonoBehaviour
             float a = newSafe + window * 0.5f + 20 + (blocked - 40) * ((k + Random.Range(0.2f, 0.8f)) / count);
             angles.Add(a);
             var b = Spawn(branchPool, "branch", y, a);
-            b.transform.rotation = Quaternion.Euler(0, a, Random.Range(0, 360));
+            b.transform.rotation = Quaternion.Euler(0, a, 0);
         }
 
         // Coins along the safe path between this row and the previous one
         if (Random.value < C.coinTrailChance)
         {
-            int n = Random.Range(3, 6);
-            for (int i = 0; i < n; i++)
-            {
-                float t = (i + 1f) / (n + 1f);
-                Spawn(coinPool, "coin", y - gap * 0.85f + t * gap * 0.7f, Mathf.LerpAngle(safeAngle, newSafe, t));
-            }
+            float trailStartY = y - gap + 0.35f;
+            float trailEndY = y - 0.25f;
+            SpawnCoinTrail(trailStartY, trailEndY, safeAngle, newSafe);
         }
         else if (Random.value < C.heartChance) Spawn(heartPool, "heart", y + gap * 0.5f, newSafe);
         else if (Random.value < C.boostChance) Spawn(boostPool, "boost", y + gap * 0.5f, newSafe);
 
         safeAngle = newSafe;
         nextRowY += gap;
+    }
+
+    void SpawnCoinTrail(float startY, float endY, float fromAngle, float toAngle)
+    {
+        float minY = Mathf.Max(startY, lastCoinY + MinCoinSpacing);
+        float span = endY - minY;
+        if (span < MinCoinSpacing * 0.7f) return;
+
+        int count = Mathf.Max(1, Mathf.RoundToInt(span / MinCoinSpacing));
+        float step = span / count;
+
+        for (int i = 0; i < count; i++)
+        {
+            float cy = minY + (i + 0.5f) * step;
+            float t = (count <= 1) ? 0.5f : (float)i / (count - 1);
+            float ca = Mathf.LerpAngle(fromAngle, toAngle, t);
+            Spawn(coinPool, "coin", cy, ca);
+            lastCoinY = cy;
+        }
     }
 
     TCPooled Spawn(TCPool pool, string kind, float y, float angle)

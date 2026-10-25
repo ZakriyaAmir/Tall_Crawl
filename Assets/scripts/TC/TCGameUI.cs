@@ -199,16 +199,24 @@ public class TCGameUI : MonoBehaviour
     // ---------------- Revive ----------------
     void BuildRevive()
     {
-        revivePanel = TCUI.Panel("Revive", safe.parent, out var card, new Vector2(820, 900), "SECOND CHANCE?");
-        reviveTimer = TCUI.Label("Timer", card, "5", 160, TCUI.Peach); TCUI.Place(reviveTimer.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 200), new Vector2(300, 200));
+        revivePanel = TCUI.Panel("Revive", safe.parent, out var card, new Vector2(840, 940), "SECOND CHANCE?");
+        var timerBg = TCUI.Img("TimerBg", card, new Color(1f, 0.92f, 0.85f, 0.95f), TCUI.Circle);
+        TCUI.Place(timerBg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(160, 160));
+        reviveTimer = TCUI.Label("Timer", timerBg.transform, "5", 100, TCUI.Peach);
+        TCUI.Stretch(reviveTimer.rectTransform);
         TCUI.Outline(reviveTimer, 0.2f);
-        TCUI.Place((RectTransform)TCUI.Btn("Ad", card, "REVIVE (AD)", TCUI.Mint, () => TCServices.Rewarded(DoRevive, "revive"), 54, TCUI.Icon("play")).transform, new Vector2(0.5f, 0.5f), new Vector2(0, 10), new Vector2(620, 140));
-        reviveGemBtn = TCUI.Btn("Gems", card, "REVIVE  " + TCConfig.I.reviveCostGems, TCUI.Sky, () =>
+
+        var adBtn = TCUI.Btn("Ad", card, "REVIVE (WATCH AD)", TCUI.Mint, () => TCServices.Rewarded(DoRevive, "revive"), 50, TCUI.Icon("play"));
+        TCUI.Place((RectTransform)adBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 50), new Vector2(680, 130));
+
+        reviveGemBtn = TCUI.Btn("Gems", card, "REVIVE (" + TCConfig.I.reviveCostGems + " GEMS)", TCUI.Sky, () =>
         {
             if (TCSave.Gems >= TCConfig.I.reviveCostGems) { TCSave.Gems -= TCConfig.I.reviveCostGems; DoRevive(); }
-        }, 54, TCUI.Icon("gem"));
-        TCUI.Place((RectTransform)reviveGemBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -170), new Vector2(620, 130));
-        TCUI.Place((RectTransform)TCUI.Btn("Skip", card, "NO THANKS", TCUI.Grey, SkipRevive, 44).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -330), new Vector2(420, 100));
+        }, 48, TCUI.Icon("gem"));
+        TCUI.Place((RectTransform)reviveGemBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -100), new Vector2(680, 120));
+
+        var skipBtn = TCUI.Btn("Skip", card, "NO THANKS", TCUI.Grey, SkipRevive, 42);
+        TCUI.Place((RectTransform)skipBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -240), new Vector2(440, 95));
     }
     Coroutine reviveCo;
     public void ShowGameOver(bool canRevive)
@@ -231,36 +239,67 @@ public class TCGameUI : MonoBehaviour
     // ---------------- Results ----------------
     void BuildResults()
     {
-        resultPanel = TCUI.Panel("Results", safe.parent, out var card, new Vector2(880, 1250), "GAME OVER");
-        resMetres = TCUI.Label("Metres", card, "0M", 140, TCUI.Cocoa); TCUI.Place(resMetres.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 400), new Vector2(800, 170));
-        resBest = TCUI.Label("Best", card, "BEST 0M", 48, TCUI.Peach); TCUI.Place(resBest.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 290), new Vector2(800, 70));
-        resCoins = Row(card, "Coins collected", 180); resBonus = Row(card, "Distance bonus", 100); resTotal = Row(card, "Total", 10);
-        resTotal.fontSize = 60;
-        doubleBtn = TCUI.Btn("Double", card, "x2 COINS (AD)", TCUI.Butter, () => TCServices.Rewarded(() =>
+        resultPanel = TCUI.Panel("Results", safe.parent, out var card, new Vector2(860, 1320), "GAME OVER");
+
+        var caption = TCUI.Label("Caption", card, "DISTANCE CLIMBED", 32, new Color(0.24f, 0.19f, 0.27f, 0.65f));
+        TCUI.Place(caption.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 465), new Vector2(600, 38));
+
+        resMetres = TCUI.Label("Metres", card, "0 M", 92, TCUI.Cocoa);
+        resMetres.enableAutoSizing = true; resMetres.fontSizeMin = 56; resMetres.fontSizeMax = 92;
+        TCUI.Place(resMetres.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 390), new Vector2(760, 95));
+
+        var bestBadge = TCUI.Img("BestBadge", card, new Color(1f, 0.93f, 0.86f, 0.95f), TCUI.Round);
+        TCUI.Place(bestBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 295), new Vector2(380, 58));
+        resBest = TCUI.Label("Best", bestBadge.transform, "BEST 0 M", 34, TCUI.Peach);
+        TCUI.Stretch(resBest.rectTransform, 14, 14, 4, 4);
+
+        resCoins = Row(card, "Coins Gathered", 195, false);
+        resBonus = Row(card, "Distance Bonus", 95, false);
+        resTotal = Row(card, "Total Coins Earned", -10, true);
+
+        doubleBtn = TCUI.Btn("Double", card, "x2 COINS (WATCH AD)", TCUI.Butter, () => TCServices.Rewarded(() =>
         {
-            int before = gm.RunReward; TCSave.Coins += before; TCSave.LifetimeCoins += before; resTotal.text = (before * 2).ToString();
+            int before = gm.RunReward; TCSave.Coins += before; TCSave.LifetimeCoins += before; resTotal.text = (before * 2).ToString("N0");
             doubleBtn.interactable = false; StartCoroutine(TCUI.Punch(resTotal.transform, 0.4f, 0.4f)); TCAudio.Play(TCAssets.I.purchase);
-        }, "double_coins"), 54, TCUI.Icon("play"));
-        TCUI.Place((RectTransform)doubleBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -150), new Vector2(660, 140));
-        TCUI.Place((RectTransform)TCUI.Btn("Again", card, "PLAY AGAIN", TCUI.Mint, () => gm.Restart(), 58).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -330), new Vector2(660, 150));
-        TCUI.Place((RectTransform)TCUI.Btn("Home", card, "HOME", TCUI.Sky, () => gm.Home(), 48).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -500), new Vector2(420, 110));
+        }, "double_coins"), 48, TCUI.Icon("play"));
+        TCUI.Place((RectTransform)doubleBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -155), new Vector2(700, 120));
+
+        var againBtn = TCUI.Btn("Again", card, "PLAY AGAIN", TCUI.Mint, () => gm.Restart(), 54);
+        TCUI.Place((RectTransform)againBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -295), new Vector2(700, 125));
+
+        var homeBtn = TCUI.Btn("Home", card, "MAIN MENU", TCUI.Sky, () => gm.Home(), 44);
+        TCUI.Place((RectTransform)homeBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -430), new Vector2(700, 100));
     }
-    TextMeshProUGUI Row(RectTransform card, string label, float y)
+
+    TextMeshProUGUI Row(RectTransform card, string label, float y, bool isTotal)
     {
-        var row = TCUI.Img(label, card, new Color(1, 1, 1, 0.9f)); TCUI.Place(row.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, y), new Vector2(720, 76));
-        var l = TCUI.Label("L", row.transform, label, 42, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Stretch(l.rectTransform, 30, 200, 0, 0);
-        var ic = TCUI.Img("I", row.transform, Color.white, TCUI.Icon("coin")); TCUI.Place(ic.rectTransform, new Vector2(1, 0.5f), new Vector2(-40, 0), new Vector2(54, 54));
-        var v = TCUI.Label("V", row.transform, "0", 48, TCUI.Cocoa, TextAlignmentOptions.Right); TCUI.Stretch(v.rectTransform, 300, 80, 0, 0);
+        Color bgCol = isTotal ? new Color(1f, 0.95f, 0.88f, 0.98f) : new Color(1f, 1f, 1f, 0.92f);
+        var row = TCUI.Img(label, card, bgCol);
+        TCUI.Place(row.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, y), new Vector2(740, isTotal ? 94 : 84));
+
+        var l = TCUI.Label("L", row.transform, label, isTotal ? 36 : 32, TCUI.Cocoa, TextAlignmentOptions.Left);
+        l.enableWordWrapping = false;
+        TCUI.Stretch(l.rectTransform, 32, 260, 0, 0);
+
+        var ic = TCUI.Img("I", row.transform, Color.white, TCUI.Icon("coin"));
+        TCUI.Place(ic.rectTransform, new Vector2(1, 0.5f), new Vector2(-42, 0), new Vector2(isTotal ? 54 : 46, isTotal ? 54 : 46));
+
+        var v = TCUI.Label("V", row.transform, "0", isTotal ? 46 : 40, isTotal ? TCUI.Hex("#E07A5F") : TCUI.Cocoa, TextAlignmentOptions.Right);
+        v.enableWordWrapping = false;
+        TCUI.Stretch(v.rectTransform, 340, 84, 0, 0);
         return v;
     }
+
     void ShowResults()
     {
         int prevBest = TCSave.Best;
         int total = gm.EndRun(false);
-        resMetres.text = gm.Metres + "M";
+        resMetres.text = gm.Metres.ToString("N0") + " M";
         bool newBest = gm.Metres > prevBest;
-        resBest.text = newBest ? "NEW BEST!" : "BEST " + TCSave.Best + "M";
-        resCoins.text = gm.coinsCollected.ToString(); resBonus.text = gm.DistanceBonus.ToString(); resTotal.text = total.ToString();
+        resBest.text = newBest ? "NEW BEST SCORE!" : "BEST  " + TCSave.Best.ToString("N0") + " M";
+        resCoins.text = gm.coinsCollected.ToString("N0");
+        resBonus.text = gm.DistanceBonus.ToString("N0");
+        resTotal.text = total.ToString("N0");
         doubleBtn.interactable = total > 0;
         TCUI.Show(this, resultPanel);
         if (newBest) StartCoroutine(TCUI.Punch(resBest.transform, 0.35f, 0.5f));

@@ -17,7 +17,7 @@ MonoBehaviour:
   metresToMaxSpeed: 3000
   boostMultiplier: 2.2
   metresPerUnit: 20
-  trunkChunkHeight: 1.4
+  trunkChunkHeight: 2
   chunksAhead: 8
   safeStartHeight: 5
   rowGapEasy: 2.2

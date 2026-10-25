@@ -190,7 +190,12 @@ public static class TCSetup
         var pl = Object.FindObjectOfType<player>(); pl.p1 = pl.transform; EditorUtility.SetDirty(pl);
         foreach (var l in Object.FindObjectsOfType<Light>(true))
         {
-            if (l.type == LightType.Directional) { l.shadows = LightShadows.Hard; l.shadowStrength = 0.6f; }
+            if (l.type == LightType.Directional)
+            {
+                l.shadows = LightShadows.Soft; l.shadowStrength = 0.5f; l.intensity = 1.25f;
+                l.transform.rotation = Quaternion.Euler(50f, -35f, 0f);
+                var anim = l.GetComponent<Animator>(); if (anim) anim.enabled = false;
+            }
             else { l.shadows = LightShadows.None; l.renderMode = LightRenderMode.ForceVertex; }
         }
         foreach (var smr in Object.FindObjectsOfType<SkinnedMeshRenderer>(true)) { smr.quality = SkinQuality.Bone2; smr.updateWhenOffscreen = false; }

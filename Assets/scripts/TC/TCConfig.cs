@@ -12,7 +12,7 @@ public class TCConfig : ScriptableObject
     public float metresPerUnit = 20f;
 
     [Header("Track generation")]
-    public float trunkChunkHeight = 1.4f;
+    public float trunkChunkHeight = 2f;
     public int chunksAhead = 8;
     public float safeStartHeight = 5f;
     [Tooltip("Vertical gap between hurdle rows at start / at max difficulty")] public float rowGapEasy = 2.2f;
