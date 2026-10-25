@@ -1,4 +1,4 @@
-﻿/*using System;
+/*using System;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
@@ -35,6 +35,13 @@ public class MediationManager : MonoBehaviour
     private int rewardedInterstitialRetryAttempt;
     public static MediationManager instance;
     private AdsManager _AdsManager;
+
+    void LogFirebaseEvent(string eventName)
+    {
+#if !UNITY_EDITOR
+        LogFirebaseEvent(eventName);
+#endif
+    }
 
     private void Awake()
     {
@@ -107,13 +114,13 @@ public class MediationManager : MonoBehaviour
             Debug.Log("Max Log = " + "Showing Interstitial");
             MaxSdk.ShowInterstitial(InterstitialAdUnitId);
             // send ad event
-            FirebaseAnalytics.LogEvent("Applovin" + "_Intersitial" + "_success");
+            LogFirebaseEvent("Applovin" + "_Intersitial" + "_success");
         }
         else
         {
             Debug.Log("Max Log = " + "Ad not ready");
             // send ad event
-            FirebaseAnalytics.LogEvent("Applovin" + "_Intersitial" + "_failed");
+            LogFirebaseEvent("Applovin" + "_Intersitial" + "_failed");
         }
     }
 
@@ -203,13 +210,13 @@ public class MediationManager : MonoBehaviour
             //rewardedStatusText.text = "Showing";
             MaxSdk.ShowRewardedAd(RewardedAdUnitId);
             // send ad event
-            FirebaseAnalytics.LogEvent("Applovin" + "_Rewarded" + "_success");
+            LogFirebaseEvent("Applovin" + "_Rewarded" + "_success");
         }
         else
         {
             Debug.Log("Max Interstitial Ad not ready");
             // send ad event
-            FirebaseAnalytics.LogEvent("Applovin" + "_Rewarded" + "_failed");
+            LogFirebaseEvent("Applovin" + "_Rewarded" + "_failed");
         }
     }
 
@@ -316,14 +323,14 @@ public class MediationManager : MonoBehaviour
         {
             MaxSdk.ShowRewardedInterstitialAd(RewardedInterstitialAdUnitId);
             // send ad event
-            FirebaseAnalytics.LogEvent("Applovin" + "_RewardedInterstitial" + "_success");
+            LogFirebaseEvent("Applovin" + "_RewardedInterstitial" + "_success");
 
         }
         else
         {
             Debug.Log("Ad not ready");
             // send ad event
-            FirebaseAnalytics.LogEvent("Applovin" + "_RewardedInterstitial" + "_failed");
+            LogFirebaseEvent("Applovin" + "_RewardedInterstitial" + "_failed");
         }
     }
 
@@ -432,7 +439,7 @@ public class MediationManager : MonoBehaviour
     {
         MaxSdk.ShowBanner(BannerAdUnitId);
         // send ad event
-        FirebaseAnalytics.LogEvent("Applovin" + "_Banner" + "_success");
+        LogFirebaseEvent("Applovin" + "_Banner" + "_success");
     }
     public void HideBannerMax()
     {
@@ -514,7 +521,7 @@ public class MediationManager : MonoBehaviour
         // MRECs are automatically sized to 300x250.
         MaxSdk.CreateMRec(MRecAdUnitId, AdsManager.Instance.MRecPosition);
         // send ad event
-        FirebaseAnalytics.LogEvent("Applovin" + "_MREC" + "_success");
+        LogFirebaseEvent("Applovin" + "_MREC" + "_success");
     }
     public void HideMRectangleMax()
     {

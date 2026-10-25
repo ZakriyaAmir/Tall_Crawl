@@ -7,12 +7,14 @@ public static class TCServices
 {
     public static void Log(string evt, string param = null, long value = 0)
     {
+#if !UNITY_EDITOR
         try
         {
             if (param == null) Firebase.Analytics.FirebaseAnalytics.LogEvent(evt);
             else Firebase.Analytics.FirebaseAnalytics.LogEvent(evt, param, value);
         }
         catch (Exception) { }
+#endif
     }
 
     /// Shows a rewarded ad; reward is granted on completion. In the editor / when no ad is

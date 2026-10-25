@@ -1,4 +1,4 @@
-﻿using Firebase.Analytics;
+using Firebase.Analytics;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -88,12 +88,19 @@ public class UnityIAP : MonoBehaviour, IStoreListener
             Debug.Log("BuyProductID FAIL. Not initialized.");
         }
     }
+    void LogFirebaseEvent(string eventName)
+    {
+#if !UNITY_EDITOR
+        FirebaseAnalytics.LogEvent(eventName);
+#endif
+    }
+
     public void RestorePurchases()
     {
         if (!IsInitialized())
         {
             //GA Event
-            FirebaseAnalytics.LogEvent("Restore" + "_Purchase" + "_failed");
+            LogFirebaseEvent("Restore" + "_Purchase" + "_failed");
 
             Debug.Log("RestorePurchases FAIL. Not initialized.");
             //return;
@@ -105,7 +112,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
         //
 
         //GA Event
-        FirebaseAnalytics.LogEvent("Restore" + "_Purchase" + "_success");
+        LogFirebaseEvent("Restore" + "_Purchase" + "_success");
 
         if (Application.platform == RuntimePlatform.IPhonePlayer ||
              Application.platform == RuntimePlatform.OSXPlayer)
@@ -113,16 +120,16 @@ public class UnityIAP : MonoBehaviour, IStoreListener
             Debug.Log("RestorePurchases started ...");
 
             var apple = m_StoreExtensionProvider.GetExtension<IAppleExtensions>();
-            apple.RestoreTransactions((result) =>
+            apple.RestoreTransactions((result, error) =>
             {
-                Debug.Log("RestorePurchases continuing: " + result + ". If no further messages, no purchases available to restore.");
+                Debug.Log("RestorePurchases continuing: " + result + (string.IsNullOrEmpty(error) ? "" : $", error: {error}") + ". If no further messages, no purchases available to restore.");
             });
         }
         else
         {
             Debug.Log("RestorePurchases FAIL. Not supported on this platform. Current = " + Application.platform);
             //GA Event
-            FirebaseAnalytics.LogEvent("Restore" + "_Purchase" + "_failed");
+            LogFirebaseEvent("Restore" + "_Purchase" + "_failed");
         }
     }
     /****** Unity IAP Callback Events ******/
@@ -295,7 +302,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
         {
             economyManager.Instance.addMoney(5000000);
             //GA Event
-            FirebaseAnalytics.LogEvent("IAP_5000Coins" + "_Bought");
+            LogFirebaseEvent("IAP_5000Coins" + "_Bought");
         };
         GeneralFunctionl(inAppProductIdIndex);
     }
@@ -308,7 +315,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
             AdsManager.Instance.HideBanner();
             AdsManager.Instance.HideMRecAd();
             //GA Event
-            FirebaseAnalytics.LogEvent("IAP_NoAds" + "_Bought");
+            LogFirebaseEvent("IAP_NoAds" + "_Bought");
         };
         GeneralFunctionl(inAppProductIdIndex);
     }
@@ -324,7 +331,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
             PlayerPrefs.SetInt("levelsCompleted", 10);
 
             //GA Event
-            FirebaseAnalytics.LogEvent("IAP_PremiumBundle" + "_Bought");
+            LogFirebaseEvent("IAP_PremiumBundle" + "_Bought");
 
             AdsManager.Instance.HideBanner();
             AdsManager.Instance.HideMRecAd();

@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Firebase.Analytics;
@@ -8,16 +8,15 @@ public class FireBaseInit : MonoBehaviour
 {
     void Start()
     {
+#if !UNITY_EDITOR
         // Initialize Firebase
         Firebase.FirebaseApp.CheckAndFixDependenciesAsync().ContinueWith(task =>
         {
             var dependencyStatus = task.Result;
             if (dependencyStatus == Firebase.DependencyStatus.Available)
             {
-
                 Firebase.FirebaseApp app = Firebase.FirebaseApp.DefaultInstance;
                 Debug.Log("FirebaseInitialized");
-
             }
             else
             {
@@ -25,11 +24,16 @@ public class FireBaseInit : MonoBehaviour
                   "Could not resolve all Firebase dependencies: {0}", dependencyStatus));
             }
         });
+#else
+        Debug.Log("[FireBaseInit] Firebase disabled in Editor to prevent native runtime deadlock.");
+#endif
     }
 
     public void SendCustomEvent(string logString)
     {
+#if !UNITY_EDITOR
         FirebaseAnalytics.LogEvent(name: logString);
-        Debug.Log("FireBase Log Sent");
+#endif
+        Debug.Log("FireBase Log Sent: " + logString);
     }
 }

@@ -28,6 +28,13 @@ public class AdmobManager : MonoBehaviour
 
     private AdsManager _AdsManager;
 
+    void LogFirebaseEvent(string eventName)
+    {
+#if !UNITY_EDITOR
+        LogFirebaseEvent(eventName);
+#endif
+    }
+
     public void Awake()
     {
         Instance = this;
@@ -88,14 +95,14 @@ public class AdmobManager : MonoBehaviour
                     Debug.LogError("app open ad failed to load an ad " +
                                    "with error : " + error);
                     // send ad event
-                    FirebaseAnalytics.LogEvent("Admob" + "_OpenApp" + "_success");
+                    LogFirebaseEvent("Admob" + "_OpenApp" + "_success");
                     return;
                 }
 
                 Debug.Log("App open ad loaded with response : "
                           + ad.GetResponseInfo());
                 // send ad event
-                FirebaseAnalytics.LogEvent("Admob" + "_OpenApp" + "_failed");
+                LogFirebaseEvent("Admob" + "_OpenApp" + "_failed");
 
 
                 appOpenAd = ad;
@@ -187,14 +194,14 @@ public class AdmobManager : MonoBehaviour
                 // TODO: Reward the user.
                 //Debug.Log(String.Format(rewardMsg, reward.Type, reward.Amount));
                 // send ad event
-                FirebaseAnalytics.LogEvent("Admob" + "_RewardedInterstitial" + "_success");
+                LogFirebaseEvent("Admob" + "_RewardedInterstitial" + "_success");
             });
         }
         else
         {
             available = false;
             // send ad event
-            FirebaseAnalytics.LogEvent("Admob" + "_RewardedInterstitial" + "_failed");
+            LogFirebaseEvent("Admob" + "_RewardedInterstitial" + "_failed");
         }
         return available;
     }
@@ -249,14 +256,14 @@ public class AdmobManager : MonoBehaviour
                 //Debug.Log(String.Format(rewardMsg, reward.Type, reward.Amount));
 
                 // send ad event
-                FirebaseAnalytics.LogEvent("Admob" + "_Rewarded" + "_success");
+                LogFirebaseEvent("Admob" + "_Rewarded" + "_success");
             });
         }
         else
         {
             available = false;
             // send ad event
-            FirebaseAnalytics.LogEvent("Admob" + "_Rewarded" + "_failed");
+            LogFirebaseEvent("Admob" + "_Rewarded" + "_failed");
         }
         return available;
     }
@@ -332,14 +339,14 @@ public class AdmobManager : MonoBehaviour
             RegisterReloadHandler(_interstitialAd);
             available = true;
             // send ad event
-            FirebaseAnalytics.LogEvent("Admob" + "_Interstitial" + "_success");
+            LogFirebaseEvent("Admob" + "_Interstitial" + "_success");
         }
         else
         {
             Debug.LogError("Interstitial ad is not ready yet.");
             available = false;
             // send ad event
-            FirebaseAnalytics.LogEvent("Admob" + "_Interstitial" + "_failed");
+            LogFirebaseEvent("Admob" + "_Interstitial" + "_failed");
         }
         return available;
     }
@@ -413,13 +420,13 @@ public class AdmobManager : MonoBehaviour
             _bannerView.LoadAd(request);
             available = true;
             // send ad event
-            FirebaseAnalytics.LogEvent("Admob" + "_Banner" + "_success");
+            LogFirebaseEvent("Admob" + "_Banner" + "_success");
         }
         else
         {
             available = false;
             // send ad event
-            FirebaseAnalytics.LogEvent("Admob" + "_Banner" + "_failed");
+            LogFirebaseEvent("Admob" + "_Banner" + "_failed");
         }
         return available;
     }
