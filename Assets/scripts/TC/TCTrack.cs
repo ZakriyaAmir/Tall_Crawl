@@ -14,10 +14,13 @@ public class TCTrack : MonoBehaviour
     readonly List<TCPooled> live = new List<TCPooled>(256);
     readonly List<float> angles = new List<float>(8);
     float nextTrunkY, nextRowY, safeAngle, lastCoinY = -999f;
+    float lastHazardY = -999f, lastBonusY = -999f;
     int rowIndex;
     TCConfig C;
 
     const float MinCoinSpacing = 0.55f;
+    const float MinHazardSpacing = 1.0f;
+    const float MinBonusSpacing = 1.2f;
 
     void Start()
     {
@@ -35,6 +38,8 @@ public class TCTrack : MonoBehaviour
         nextRowY = py + C.safeStartHeight;
         safeAngle = TCPlayerAngle();
         lastCoinY = -999f;
+        lastHazardY = -999f;
+        lastBonusY = -999f;
 
         // Safe start: welcome coin trail straight up with zero overlap
         SpawnCoinTrail(py + 1.2f, py + 4.2f, safeAngle, safeAngle);
@@ -74,28 +79,42 @@ public class TCTrack : MonoBehaviour
     void GenerateRow(float metres)
     {
         float d = C.Difficulty(metres);
-        float y = nextRowY;
+        float y = Mathf.Max(nextRowY, lastHazardY + MinHazardSpacing);
         rowIndex++;
-        float gap = Mathf.Lerp(C.rowGapEasy, C.rowGapHard, d) * Random.Range(0.9f, 1.15f);
+        float gap = Mathf.Lerp(C.rowGapEasy, C.rowGapHard, d) * Random.Range(0.95f, 1.15f);
         bool breather = C.breatherEvery > 0 && rowIndex % C.breatherEvery == 0;
 
         if (breather)
         {
-            // Breather: coin spiral and maybe a power-up with guaranteed spacing
-            float spiralStartY = y + 0.2f;
-            float spiralEndY = y + gap * 1.1f;
-            SpawnCoinTrail(spiralStartY, spiralEndY, safeAngle, safeAngle + 90f);
+            // Breather: clear row with no hazards.
+            float bonusY = y + gap * 0.5f;
             safeAngle += 90f;
-            if (Random.value < C.heartChance * 4) Spawn(heartPool, "heart", y + gap * 0.9f, safeAngle);
-            nextRowY += gap * 1.3f;
+
+            if (bonusY > lastBonusY + MinBonusSpacing && Random.value < C.heartChance * 4f)
+            {
+                // Standalone heart pickup on breather row
+                Spawn(heartPool, "heart", bonusY, safeAngle);
+                lastBonusY = bonusY;
+            }
+            else
+            {
+                // Coin spiral that guarantees no overlap with hazards or powerups
+                float spiralStartY = Mathf.Max(y + 0.3f, lastCoinY + MinCoinSpacing);
+                float spiralEndY = y + gap - 0.3f;
+                SpawnCoinTrail(spiralStartY, spiralEndY, safeAngle - 90f, safeAngle);
+            }
+
+            nextRowY = y + gap * 1.3f;
             return;
         }
 
         if (metres > C.beeMinMetres && Random.value < C.beeChance * d + 0.04f)
         {
-            // Bee swarm row: no branches, needs a jump. Extra spacing before & after.
-            Spawn(beePool, "bees", y + gap * 0.3f, 0);
-            nextRowY += gap * 1.6f;
+            // Bee swarm row: full 360 jump ring hazard. Never spawns coins or pickups directly inside it.
+            float beeY = y + gap * 0.4f;
+            Spawn(beePool, "bees", beeY, 0);
+            lastHazardY = beeY + 0.3f;
+            nextRowY = beeY + gap * 1.5f;
             return;
         }
 
@@ -115,19 +134,30 @@ public class TCTrack : MonoBehaviour
             var b = Spawn(branchPool, "branch", y, a);
             b.transform.rotation = Quaternion.Euler(0, a, 0);
         }
+        lastHazardY = y;
 
-        // Coins along the safe path between this row and the previous one
-        if (Random.value < C.coinTrailChance)
+        // In the safe gap between rows, spawn strictly ONE item type (coins, heart, or boost) with proper margins
+        float bonusYPos = y + gap * 0.5f;
+        if (bonusYPos > lastBonusY + MinBonusSpacing && Random.value < C.heartChance)
         {
-            float trailStartY = y - gap + 0.35f;
-            float trailEndY = y - 0.25f;
+            Spawn(heartPool, "heart", bonusYPos, newSafe);
+            lastBonusY = bonusYPos;
+        }
+        else if (bonusYPos > lastBonusY + MinBonusSpacing && Random.value < C.boostChance)
+        {
+            Spawn(boostPool, "boost", bonusYPos, newSafe);
+            lastBonusY = bonusYPos;
+        }
+        else if (Random.value < C.coinTrailChance)
+        {
+            // Coin trail along the safe passage strictly separated from branch rows
+            float trailStartY = y + 0.35f;
+            float trailEndY = y + gap - 0.35f;
             SpawnCoinTrail(trailStartY, trailEndY, safeAngle, newSafe);
         }
-        else if (Random.value < C.heartChance) Spawn(heartPool, "heart", y + gap * 0.5f, newSafe);
-        else if (Random.value < C.boostChance) Spawn(boostPool, "boost", y + gap * 0.5f, newSafe);
 
         safeAngle = newSafe;
-        nextRowY += gap;
+        nextRowY = y + gap;
     }
 
     void SpawnCoinTrail(float startY, float endY, float fromAngle, float toAngle)
