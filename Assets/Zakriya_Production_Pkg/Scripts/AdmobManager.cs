@@ -56,6 +56,7 @@ public class AdmobManager : MonoBehaviour
     }
     public void Start()
     {
+        if (!Application.isMobilePlatform && !Application.isEditor) return; // SDK has no desktop client (threw on desktop test builds)
         // Initialize the Google Mobile Ads SDK.
         MobileAds.Initialize((InitializationStatus initStatus) =>
         {

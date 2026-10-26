@@ -115,7 +115,7 @@ public class TCPlaytest : MonoBehaviour
             Click("TC_GameUI/Safe/Start");
             int coinsStart = TCSave.Coins, gemsStart = TCSave.Gems;
             bool skilled = run % 3 != 2; // every third run plays badly (random) to test deaths early
-            float t = 0, fpsMin = 999, steerSign = 1; int frames = 0; float lastScore = 0, stuck = 0; int gc0 = System.GC.CollectionCount(0);
+            float fpsSum = 0; float t = 0, fpsMin = 999, steerSign = 1; int frames = 0; float lastScore = 0, stuck = 0; int gc0 = System.GC.CollectionCount(0);
             float lastAngle = Ang(sp.transform.position), lastSteer = 0; bool paused = false, revived = false; int nan = 0;
             Time.timeScale = scale;
             while (true)
@@ -123,6 +123,7 @@ public class TCPlaytest : MonoBehaviour
                 t += Time.unscaledDeltaTime; frames++;
                 if (Time.unscaledDeltaTime > 0) fpsMin = Mathf.Min(fpsMin, 1f / Time.unscaledDeltaTime);
                 if (pl.GameOver) break;
+                fpsSum += Time.unscaledDeltaTime;
                 var pos = sp.transform.position;
                 if (float.IsNaN(pos.x + pos.y + pos.z)) nan++;
                 float a = Ang(pos);
@@ -142,7 +143,7 @@ public class TCPlaytest : MonoBehaviour
                 player.DebugSteer = steer; lastSteer = steer;
                 if (!pl.paused && Time.timeScale > 0)
                 {
-                    if (pl.currentScore <= lastScore + 0.0001f) stuck += Time.unscaledDeltaTime; else stuck = 0;
+                    if (pl.currentScore <= lastScore + 0.0001f) stuck += Time.deltaTime; else stuck = 0; // game time, not wall time (slow CI frames)
                     lastScore = pl.currentScore;
                     if (stuck > 1.5f) { L("FAIL player stuck at " + pl.currentScore); fails++; stuck = -999; }
                 }
@@ -160,11 +161,12 @@ public class TCPlaytest : MonoBehaviour
             }
             player.DebugSteer = 0; Time.timeScale = 1;
             float metres = pl.currentScore;
-            L($"run {run} {(skilled ? "bot" : "random")}: {metres:0} m in {t:0.0}s, coins {gm.coinsCollected}, fpsMin {fpsMin:0}, gc0 {System.GC.CollectionCount(0) - gc0}, live {tr.LiveCount}, NaN {nan}, rows {rows.Count} bees {beeRows.Count}");
+            L($"run {run} {(skilled ? "bot" : "random")}: {metres:0} m in {t:0.0}s, coins {gm.coinsCollected}, fpsMin {fpsMin:0} fpsAvg {frames / Mathf.Max(0.01f, fpsSum):0}, gc0 {System.GC.CollectionCount(0) - gc0}, live {tr.LiveCount}, NaN {nan}, rows {rows.Count} bees {beeRows.Count}");
             var pools = tr.Pools; var sb = new StringBuilder("   pools created: ");
             foreach (var p in pools) sb.Append(p.Created + "/" + p.FreeCount + " ");
             L(sb.ToString());
-            yield return W(1.8f);
+            { float w = 0; while (w < 8 && !GameObject.Find("TC_GameUI/Revive") && !GameObject.Find("TC_GameUI/Results")) { w += Time.unscaledDeltaTime; yield return null; } }
+            yield return W(0.5f);
             // revive flow
             var revive = GameObject.Find("TC_GameUI/Revive");
             Check(revive && revive.activeSelf, "revive offered on first death");
@@ -179,7 +181,7 @@ public class TCPlaytest : MonoBehaviour
                 while (!pl.GameOver && tt < 30) { tt += Time.unscaledDeltaTime; player.DebugSteer = Mathf.Sin(tt * 2.3f); yield return null; }
                 player.DebugSteer = 0; Time.timeScale = 1;
                 if (!pl.GameOver) sp.death();
-                yield return W(1.8f);
+                yield return W(3f);
                 Check(!GameObject.Find("TC_GameUI/Revive"), "no 2nd revive in a run");
             }
             else yield return W(6.5f); // let the timer expire

@@ -47,6 +47,7 @@ public class TCMenuUI : MonoBehaviour
         bestText.text = "BEST  " + TCSave.Best + "M";
         dailyBadge.gameObject.SetActive(TCSave.DailyAvailable(out _));
         foreach (var r in refreshers) r();
+        ApplyMenuMusic(); // keep bgm in sync with the saved setting whatever changed it
     }
 
     // ---------- Background (pastel gradient + floating leaves) ----------

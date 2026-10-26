@@ -168,9 +168,11 @@ public class TCTrack : MonoBehaviour
             // Coin trail along the safe passage strictly separated from branch rows
             // Placed BEFORE the row so it leads the player from the previous opening into this one
             // (it used to start at the old angle after the row, luring players the wrong way).
-            float trailStartY = Mathf.Max(prevRowY + 0.35f, y - gap + 0.35f);
-            float trailEndY = y - 0.45f;
-            SpawnCoinTrail(trailStartY, trailEndY, safeAngle, newSafe);
+            // Coins sit in the line of the upcoming opening, so steering to safety also collects them
+            // (playtest: diagonal trails were almost never collected, ~8 coins per 1,500 m).
+            float trailStartY = Mathf.Max(prevRowY + 0.45f, y - gap * 0.7f);
+            float trailEndY = y - 0.4f;
+            SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.75f), newSafe);
         }
 
         safeAngle = newSafe;
