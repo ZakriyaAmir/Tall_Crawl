@@ -26,6 +26,7 @@ MonoBehaviour:
   openWindowHard: 95
   maxTurnEasy: 80
   maxTurnHard: 150
+  maxTurnRate: 240
   breatherEvery: 7
   beeChance: 0.18
   beeMinMetres: 250
@@ -40,9 +41,10 @@ MonoBehaviour:
   swipeUpThreshold: 0.06
   baseHearts: 3
   coinValue: 1
-  coinsPerHundredMetres: 2
+  coinsPerHundredMetres: 5
+  gemEveryMetres: 1000
   reviveCostGems: 5
   startingCoins: 150
   dailyRewards: 320000004b0000006400000096000000c80000002c01000002000000
   interstitialEveryNRuns: 3
-  upgradeCosts: 96000000900100008403000008070000ac0d0000
+  upgradeCosts: 64000000fa00000058020000b004000060090000

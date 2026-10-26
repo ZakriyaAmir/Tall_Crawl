@@ -14,6 +14,8 @@ public class gameManager : MonoBehaviour
     public int coinsCollected;
     public bool revivedThisRun, runEnded;
     public int RunReward { get; private set; }
+    public int RunGems { get; private set; }
+    bool doubledClaimed;
     player p; AudioSource music; playerInteract spider;
 
     void Awake()
@@ -80,13 +82,16 @@ public class gameManager : MonoBehaviour
     {
         p.paused = false;
         if (p.anim) p.anim.SetBool("started", true);
-        if (TCSave.Upgrade(4) > 0 && spider) { spider.boostDuration = 1.5f + TCSave.Upgrade(4); }
+        if (TCSave.Upgrade(4) > 0 && spider) spider.StartBoost(1.5f + 1.5f * TCSave.Upgrade(4)); // Head Start (was invisible: no anim/FX)
     }
 
     public void addCoin()
     {
-        coinsCollected += TCConfig.I.coinValue * (1 + TCSave.Upgrade(3));
+        coinsCollected += CoinValue;
     }
+
+    public static int CoinValue => TCConfig.I.coinValue * (1 + TCSave.Upgrade(3));
+    public void SetMusic(bool on) { if (music) music.mute = !on; }
 
     public void Pause(bool on)
     {
@@ -106,6 +111,7 @@ public class gameManager : MonoBehaviour
 
     public void Revive()
     {
+        if (revivedThisRun || runEnded || !p.GameOver) return; // guard: ad callback + timer race could revive twice / after results
         revivedThisRun = true;
         p.GameOver = false;
         p.paused = true;
@@ -129,6 +135,8 @@ public class gameManager : MonoBehaviour
         int metres = (int)p.currentScore;
         int bonus = metres / 100 * TCConfig.I.coinsPerHundredMetres;
         RunReward = (coinsCollected + bonus) * (doubled ? 2 : 1);
+        RunGems = TCConfig.I.gemEveryMetres > 0 ? metres / TCConfig.I.gemEveryMetres : 0;
+        if (RunGems > 0) TCSave.Gems += RunGems;
         TCSave.Coins += RunReward;
         TCSave.LifetimeCoins += RunReward;
         TCSave.Runs++;
@@ -136,6 +144,13 @@ public class gameManager : MonoBehaviour
         TCSkins.CheckAchievements();
         TCServices.Log("run_end", "metres", metres);
         return RunReward;
+    }
+
+    /// x2 coins reward: may only be granted once per run, after the run is banked.
+    public bool ClaimDouble()
+    {
+        if (!runEnded || doubledClaimed || RunReward <= 0) return false;
+        doubledClaimed = true; TCSave.Coins += RunReward; TCSave.LifetimeCoins += RunReward; return true;
     }
 
     public int DistanceBonus => (int)p.currentScore / 100 * TCConfig.I.coinsPerHundredMetres;

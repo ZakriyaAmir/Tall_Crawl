@@ -250,6 +250,7 @@ public static class TCUI
     // ---------- Transitions ----------
     public static void Show(MonoBehaviour host, CanvasGroup cg, bool pop = true)
     {
+        hiding.Remove(cg);
         cg.gameObject.SetActive(true); cg.transform.SetAsLastSibling();
         host.StartCoroutine(Anim(cg, true, pop));
     }
@@ -258,10 +259,15 @@ public static class TCUI
         try { var m = t.fontMaterial; m.EnableKeyword("OUTLINE_ON"); m.SetFloat("_OutlineWidth", w); m.SetColor("_OutlineColor", Cocoa); }
         catch (Exception) { }
     }
+    // Panels currently animating out: a second Hide (double tap, timer + button) used to run the
+    // close callback twice (e.g. results shown twice) and fight the first animation.
+    static readonly System.Collections.Generic.HashSet<CanvasGroup> hiding = new System.Collections.Generic.HashSet<CanvasGroup>();
+    public static bool IsOpen(CanvasGroup cg) => cg && cg.gameObject.activeSelf && !hiding.Contains(cg);
     public static void Hide(MonoBehaviour host, CanvasGroup cg, Action done = null)
     {
         if (!cg.gameObject.activeSelf) { done?.Invoke(); return; }
-        host.StartCoroutine(Anim(cg, false, true, done));
+        if (!hiding.Add(cg)) return;
+        host.StartCoroutine(Anim(cg, false, true, () => { hiding.Remove(cg); done?.Invoke(); }));
     }
     static IEnumerator Anim(CanvasGroup cg, bool show, bool pop, Action done = null)
     {
@@ -270,11 +276,13 @@ public static class TCUI
         float dur = show ? 0.32f : 0.18f;
         for (float t = 0; t < dur; t += Time.unscaledDeltaTime)
         {
+            if (!show && !hiding.Contains(cg)) yield break; // re-opened mid-close
             float k = t / dur;
             cg.alpha = show ? EaseOut(k) : 1 - k;
             if (card && pop) card.localScale = Vector3.one * (show ? Mathf.LerpUnclamped(0.8f, 1f, EaseOutBack(k)) : Mathf.Lerp(1f, 0.9f, k));
             yield return null;
         }
+        if (!show && !hiding.Contains(cg)) yield break;
         cg.alpha = show ? 1 : 0; if (card) card.localScale = Vector3.one;
         cg.interactable = show; cg.blocksRaycasts = show;
         if (!show) cg.gameObject.SetActive(false);

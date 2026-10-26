@@ -18,7 +18,7 @@ public class player : MonoBehaviour
     TCConfig C;
     Animator camAnim;
     bool camBoost;
-    float targetYaw, yaw, startY, jumpCooldown;
+    float targetYaw, yaw, startY, jumpCooldown, yawAtTouch;
     Vector2 touchStart, lastPos; float touchStartTime; bool dragging, swipeUsed, passedDeadZone;
     playerInteract spider;
 
@@ -77,7 +77,7 @@ public class player : MonoBehaviour
         if (down)
         {
             if (UnityEngine.EventSystems.EventSystem.current && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(Input.touchCount > 0 ? Input.GetTouch(0).fingerId : -1)) return;
-            dragging = true; swipeUsed = false; passedDeadZone = false; touchStart = lastPos = p; touchStartTime = Time.unscaledTime;
+            dragging = true; swipeUsed = false; passedDeadZone = false; touchStart = lastPos = p; touchStartTime = Time.unscaledTime; yawAtTouch = targetYaw;
         }
         else if (dragging && (held || up))
         {
@@ -85,7 +85,7 @@ public class player : MonoBehaviour
             if (!passedDeadZone && total.magnitude > C.deadZonePixels) passedDeadZone = true;
             // Swipe up = jump (fast, mostly vertical)
             if (!swipeUsed && total.y > C.swipeUpThreshold * Screen.height && total.y > Mathf.Abs(total.x) * 1.3f && Time.unscaledTime - touchStartTime < 0.35f)
-            { swipeUsed = true; jump(); }
+            { swipeUsed = true; targetYaw = yawAtTouch; jump(); } // undo the sideways drift the swipe caused
             if (passedDeadZone && !swipeUsed)
             {
                 float dx = p.x - lastPos.x;

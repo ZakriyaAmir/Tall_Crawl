@@ -94,9 +94,7 @@ public class playerInteract : MonoBehaviour
         {
             other.gameObject.SetActive(false);
             Play(boostSound);
-            if (animator) animator.SetBool("boost", true);
-            boostDuration = 3f + 0.75f * TCSave.Upgrade(1);
-            OnEvent?.Invoke("boost", transform.position);
+            StartBoost(3f + 0.75f * TCSave.Upgrade(1));
             TCFx.Shake(0.12f);
         }
     }
@@ -130,6 +128,13 @@ public class playerInteract : MonoBehaviour
         SetVisible(true);
         OnEvent?.Invoke("death", transform.position);
         gameManager.Instance?.OnPlayerDied();
+    }
+
+    public void StartBoost(float secs)
+    {
+        boostDuration = Mathf.Max(boostDuration, secs);
+        if (animator) animator.SetBool("boost", true);
+        OnEvent?.Invoke("boost", transform.position);
     }
 
     public void jump() { jumpTimer = 0.6f; Play(jumpSound); }

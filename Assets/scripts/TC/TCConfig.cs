@@ -21,6 +21,7 @@ public class TCConfig : ScriptableObject
     public float openWindowHard = 95f;
     [Tooltip("Max yaw change (deg) required between consecutive rows, easy -> hard")] public float maxTurnEasy = 80f;
     public float maxTurnHard = 150f;
+    [Tooltip("Fastest steering (deg/sec) the generator may ever demand between two rows")] public float maxTurnRate = 240f;
     [Tooltip("Every N rows a breather (no hurdles, coin trail) is inserted")] public int breatherEvery = 7;
     [Range(0, 1)] public float beeChance = 0.18f;
     public float beeMinMetres = 250f;
@@ -39,12 +40,13 @@ public class TCConfig : ScriptableObject
 
     [Header("Economy")]
     public int coinValue = 1;
-    public int coinsPerHundredMetres = 2;
+    public int coinsPerHundredMetres = 5;
+    [Tooltip("Gems awarded per this many metres in one run (0 = off)")] public int gemEveryMetres = 1000;
     public int reviveCostGems = 5;
     public int startingCoins = 150;
     public int[] dailyRewards = { 50, 75, 100, 150, 200, 300, 2 /*gems*/ };
     public int interstitialEveryNRuns = 3;
-    public int[] upgradeCosts = { 150, 400, 900, 1800, 3500 };
+    public int[] upgradeCosts = { 100, 250, 600, 1200, 2400 };
 
     static TCConfig _inst;
     public static TCConfig I

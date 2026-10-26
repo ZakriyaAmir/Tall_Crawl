@@ -15,7 +15,10 @@ public class TCTrack : MonoBehaviour
     readonly List<float> angles = new List<float>(8);
     float nextTrunkY, nextRowY, safeAngle, lastCoinY = -999f;
     float lastHazardY = -999f, lastBonusY = -999f;
-    int rowIndex;
+    int rowIndex; bool lastWasBee; player pl;
+    public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
+    public int LiveCount => live.Count;
+    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool };
     TCConfig C;
 
     const float MinCoinSpacing = 0.55f;
@@ -25,6 +28,7 @@ public class TCTrack : MonoBehaviour
     void Start()
     {
         C = TCConfig.I;
+        pl = player.GetComponentInParent<global::player>() ?? FindObjectOfType<global::player>();
         trunkPool = new TCPool(trunkPrefab, stemParent, C.chunksAhead + 4);
         branchPool = new TCPool(branchPrefab, hazardParent, 24);
         beePool = new TCPool(beesPrefab, hazardParent, 3);
@@ -58,7 +62,7 @@ public class TCTrack : MonoBehaviour
     void Tick()
     {
         float py = player.position.y;
-        float metres = Mathf.Max(0, py * C.metresPerUnit);
+        float metres = pl ? pl.currentScore : 0f; // same distance the HUD/difficulty uses
         while (nextTrunkY < py + C.chunksAhead * C.trunkChunkHeight)
         {
             Spawn(trunkPool, "trunk", nextTrunkY, 0);
@@ -71,7 +75,9 @@ public class TCTrack : MonoBehaviour
         for (int i = live.Count - 1; i >= 0; i--)
         {
             var p = live[i];
-            if (!p || !p.gameObject.activeSelf) { live.RemoveAt(i); continue; }
+            if (!p) { live.RemoveAt(i); continue; }
+            // collected / smashed items are hidden by gameplay: return them to their pool (was leaking)
+            if (!p.gameObject.activeSelf) { p.Release(); live.RemoveAt(i); continue; }
             if (p.y < cut) { p.Release(); live.RemoveAt(i); }
         }
     }
@@ -88,7 +94,9 @@ public class TCTrack : MonoBehaviour
         {
             // Breather: clear row with no hazards.
             float bonusY = y + gap * 0.5f;
-            safeAngle += 90f;
+            float from = safeAngle;
+            safeAngle += Random.value < 0.5f ? -60f : 60f;
+            lastWasBee = false;
 
             if (bonusY > lastBonusY + MinBonusSpacing && Random.value < C.heartChance * 4f)
             {
@@ -101,24 +109,29 @@ public class TCTrack : MonoBehaviour
                 // Coin spiral that guarantees no overlap with hazards or powerups
                 float spiralStartY = Mathf.Max(y + 0.3f, lastCoinY + MinCoinSpacing);
                 float spiralEndY = y + gap - 0.3f;
-                SpawnCoinTrail(spiralStartY, spiralEndY, safeAngle - 90f, safeAngle);
+                SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
             }
 
             nextRowY = y + gap * 1.3f;
             return;
         }
 
-        if (metres > C.beeMinMetres && Random.value < C.beeChance * d + 0.04f)
+        if (!lastWasBee && metres > C.beeMinMetres && Random.value < C.beeChance * d + 0.04f)
         {
             // Bee swarm row: full 360 jump ring hazard. Never spawns coins or pickups directly inside it.
             float beeY = y + gap * 0.4f;
             Spawn(beePool, "bees", beeY, 0);
             lastHazardY = beeY + 0.3f;
+            lastWasBee = true;
+            OnRow?.Invoke(beeY, safeAngle, 0, 360, gap / Mathf.Lerp(C.startSpeed, C.maxSpeed, d), metres);
             nextRowY = beeY + gap * 1.5f;
             return;
         }
 
-        float turn = Mathf.Lerp(C.maxTurnEasy, C.maxTurnHard, d);
+        lastWasBee = false;
+        // Fairness: the turn between rows can never exceed what a player can steer in the time available.
+        float secs = Mathf.Max(0.1f, Mathf.Min(y - lastHazardY, gap * 3f) / Mathf.Lerp(C.startSpeed, C.maxSpeed, d));
+        float turn = Mathf.Min(Mathf.Lerp(C.maxTurnEasy, C.maxTurnHard, d), C.maxTurnRate * secs);
         float newSafe = safeAngle + Random.Range(-turn, turn);
         float window = Mathf.Lerp(C.openWindowEasy, C.openWindowHard, d);
 
@@ -134,7 +147,9 @@ public class TCTrack : MonoBehaviour
             var b = Spawn(branchPool, "branch", y, a);
             b.transform.rotation = Quaternion.Euler(0, a, 0);
         }
+        float prevRowY = lastHazardY;
         lastHazardY = y;
+        OnRow?.Invoke(y, newSafe, Mathf.Abs(Mathf.DeltaAngle(safeAngle, newSafe)), window, secs, metres);
 
         // In the safe gap between rows, spawn strictly ONE item type (coins, heart, or boost) with proper margins
         float bonusYPos = y + gap * 0.5f;
@@ -151,8 +166,10 @@ public class TCTrack : MonoBehaviour
         else if (Random.value < C.coinTrailChance)
         {
             // Coin trail along the safe passage strictly separated from branch rows
-            float trailStartY = y + 0.35f;
-            float trailEndY = y + gap - 0.35f;
+            // Placed BEFORE the row so it leads the player from the previous opening into this one
+            // (it used to start at the old angle after the row, luring players the wrong way).
+            float trailStartY = Mathf.Max(prevRowY + 0.35f, y - gap + 0.35f);
+            float trailEndY = y - 0.45f;
             SpawnCoinTrail(trailStartY, trailEndY, safeAngle, newSafe);
         }
 

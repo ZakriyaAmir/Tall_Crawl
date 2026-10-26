@@ -23,11 +23,22 @@ public class TCMenuUI : MonoBehaviour
         BuildPreview();
         BuildMain(); BuildSkins(); BuildShop(); BuildSettings(); BuildDaily(); BuildConsent(); BuildToast();
         TCSave.Changed += Refresh; Refresh();
+        ApplyMenuMusic();
         TCSkins.CheckAchievements();
         if (PlayerPrefs.GetInt("consent", 0) == 0) TCUI.Show(this, consentPanel);
         else { TCServices.Banner(true); if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(0.6f, () => OpenDaily())); }
     }
     void OnDestroy() { TCSave.Changed -= Refresh; if (rt) rt.Release(); }
+    // The saved Music setting was only applied when toggled, so menu music always played on launch.
+    static void ApplyMenuMusic() { var m = GameObject.Find("bgm"); if (m) { var a = m.GetComponent<AudioSource>(); if (a) a.mute = !TCSave.Music; } }
+
+    // Android back button: close the top-most open panel (it did nothing before).
+    void Update()
+    {
+        if (!Input.GetKeyDown(KeyCode.Escape)) return;
+        foreach (var cg in new[] { dailyPanel, skinsPanel, shopPanel, settingsPanel })
+            if (cg && cg.gameObject.activeSelf && cg.alpha > 0.5f) { TCUI.Hide(this, cg); return; }
+    }
     IEnumerator Delay(float t, System.Action a) { yield return new WaitForSecondsRealtime(t); a(); }
 
     void Refresh()
@@ -250,7 +261,7 @@ public class TCMenuUI : MonoBehaviour
     {
         settingsPanel = TCUI.Panel("Settings", safe, out var card, new Vector2(900, 1240), "SETTINGS");
         TCGameUI.Toggle(card, "Sound", 380, () => TCSave.Sound, v => TCSave.Sound = v, 700);
-        TCGameUI.Toggle(card, "Music", 270, () => TCSave.Music, v => { TCSave.Music = v; var m = GameObject.Find("bgm"); if (m) { var a = m.GetComponent<AudioSource>(); if (a) a.mute = !v; } }, 700);
+        TCGameUI.Toggle(card, "Music", 270, () => TCSave.Music, v => { TCSave.Music = v; ApplyMenuMusic(); }, 700);
         TCGameUI.Toggle(card, "Vibration", 160, () => TCSave.Vibration, v => TCSave.Vibration = v, 700);
         var sl = TCUI.Label("SensL", card, "Control sensitivity", 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Place(sl.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 50), new Vector2(700, 70));
         var slider = BuildSlider(card, new Vector2(0, -30)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity; slider.onValueChanged.AddListener(v => TCSave.Sensitivity = v);
