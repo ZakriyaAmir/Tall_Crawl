@@ -184,6 +184,8 @@ public class TCMenuUI : MonoBehaviour
         skinActionText = skinAction.GetComponentInChildren<TextMeshProUGUI>();
         TCUI.Place((RectTransform)TCUI.Btn("Close", card, "BACK", TCUI.Grey, () => { ApplyPreview(TCSave.SelectedSkin); TCUI.Hide(this, skinsPanel); }, 46).transform, new Vector2(0.5f, 0), new Vector2(300, 120), new Vector2(240, 120));
         selectedCard = TCSave.SelectedSkin;
+        refreshers.Add(() => { if (skinsPanel.gameObject.activeSelf) RefreshSkinGrid(); });
+        RefreshSkinGrid(); // grid showed every skin as equipped/unlocked until first tap
     }
     void RefreshSkinGrid()
     {

@@ -166,7 +166,10 @@ public static class TCUI
     {
         var go = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         var c = go.GetComponent<Canvas>(); c.renderMode = RenderMode.ScreenSpaceOverlay; c.sortingOrder = order;
-        var s = go.GetComponent<CanvasScaler>(); s.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize; s.referenceResolution = new Vector2(1080, 1920); s.matchWidthOrHeight = 0.5f;
+        var s = go.GetComponent<CanvasScaler>(); s.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize; s.referenceResolution = new Vector2(1080, 1920);
+        // Expand: the 1080x1920 design always fits. match=0.5 made panels wider than the screen on
+        // tall 9:20+ phones and taller than the screen on 3:4 tablets.
+        s.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
         if (!UnityEngine.Object.FindObjectOfType<EventSystem>()) new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
         return c;
     }
