@@ -207,14 +207,14 @@ public class AdsManager : MonoBehaviour
             else if (maxRewarded)
             {
                 Debug.Log("Max Rewarded Ran");
-                available = true;
+                available = false; // MAX not integrated: report unavailable so caller can fall back
                 //MediationManager.instance.ShowRewardedAdMax();
             }
         }
         else if (maxRewarded)
         {
             Debug.Log("Max Rewarded Ran");
-            available = true;
+            available = false; // MAX not integrated
             //MediationManager.instance.ShowRewardedAdMax();
         }
         return available;

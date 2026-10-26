@@ -38,9 +38,7 @@ public class MediationManager : MonoBehaviour
 
     void LogFirebaseEvent(string eventName)
     {
-#if !UNITY_EDITOR
-        LogFirebaseEvent(eventName);
-#endif
+        TCServices.Log(eventName); // was infinite self-recursion (stack overflow on device)
     }
 
     private void Awake()

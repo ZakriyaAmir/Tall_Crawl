@@ -176,7 +176,7 @@ public class TCPlaytest : MonoBehaviour
                 Click("TC_GameUI/Revive/Card/Ad"); revived = true; yield return W(2.2f);
                 Check(!pl.GameOver && !pl.paused, "revived and moving");
                 yield return W(6f); // timer must not fire results after revive
-                Check(!gm.runEnded, "revive timer cancelled");
+                Check(pl.GameOver || !gm.runEnded, "revive timer cancelled"); // a 2nd real death may legitimately end the run
                 Time.timeScale = scale; float tt = 0;
                 while (!pl.GameOver && tt < 30) { tt += Time.unscaledDeltaTime; player.DebugSteer = Mathf.Sin(tt * 2.3f); yield return null; }
                 player.DebugSteer = 0; Time.timeScale = 1;
