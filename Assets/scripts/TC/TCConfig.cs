@@ -36,6 +36,9 @@ public class TCConfig : ScriptableObject
     public float rotationSmoothing = 18f;
     public float keyboardTurnSpeed = 220f;
     public float swipeUpThreshold = 0.06f; // fraction of screen height
+    [Tooltip("Max seconds between two taps for a double-tap jump")] public float doubleTapWindow = 0.3f;
+    [Tooltip("A tap must be released within this many seconds")] public float doubleTapMaxHold = 0.22f;
+    [Tooltip("Max distance between the two taps, fraction of screen height")] public float doubleTapMaxDistance = 0.12f;
     public int baseHearts = 3;
 
     [Header("Economy")]

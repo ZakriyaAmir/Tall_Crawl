@@ -7,7 +7,7 @@ Unity **6000.3.26f1**, built-in render pipeline. Open the project, then play `As
 
 ## Controls
 - Drag left/right (touch or mouse) or A/D / arrows – circle the trunk
-- Swipe up / Space / W – jump over bees
+- Swipe up, double-tap, Space or W – jump over bees
 - Sensitivity slider in Settings
 
 ## Features

@@ -19,7 +19,7 @@ public class player : MonoBehaviour
     Animator camAnim;
     bool camBoost;
     float targetYaw, yaw, startY, jumpCooldown, yawAtTouch;
-    Vector2 touchStart, lastPos; float touchStartTime; bool dragging, swipeUsed, passedDeadZone;
+    Vector2 touchStart, lastPos, lastTapPos; float touchStartTime, lastTapTime = -1f; bool dragging, swipeUsed, passedDeadZone;
     playerInteract spider;
 
     void Awake()
@@ -92,7 +92,20 @@ public class player : MonoBehaviour
                 if (Mathf.Abs(dx) > 0.01f) { targetYaw -= dx * degPerPixel; OnTurned?.Invoke(); }
             }
             lastPos = p;
-            if (up) dragging = false;
+            if (up)
+            {
+                // Double tap = jump (two quick taps close together, neither one a drag or swipe)
+                bool isTap = !swipeUsed && !passedDeadZone && (Time.unscaledTime - touchStartTime) < C.doubleTapMaxHold;
+                if (isTap)
+                {
+                    bool second = lastTapTime > 0 && (Time.unscaledTime - lastTapTime) < C.doubleTapWindow
+                        && Vector2.Distance(p, lastTapPos) < C.doubleTapMaxDistance * Screen.height;
+                    if (second) { lastTapTime = -1f; jump(); }
+                    else { lastTapTime = Time.unscaledTime; lastTapPos = p; }
+                }
+                else lastTapTime = -1f;
+                dragging = false;
+            }
         }
     }
 

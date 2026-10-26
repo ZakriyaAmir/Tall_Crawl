@@ -159,7 +159,7 @@ public class TCGameUI : MonoBehaviour
         hintText.text = "DRAG LEFT / RIGHT\nto dodge branches";
         float t = 0; while (!turnedOnce && t < 6) { t += Time.deltaTime; yield return null; }
         yield return new WaitForSeconds(1.5f);
-        hintText.text = "SWIPE UP to jump\nover bee swarms!";
+        hintText.text = "SWIPE UP or DOUBLE-TAP\nto jump over bee swarms!";
         hand.gameObject.SetActive(false);
         t = 0; while (!jumpedOnce && t < 6) { t += Time.deltaTime; yield return null; }
         hintText.text = "Grab coins, hearts\nand chilli boosts!";
