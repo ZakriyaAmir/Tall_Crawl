@@ -249,7 +249,7 @@ public class TCGameUI : MonoBehaviour
     // ---------------- Results ----------------
     void BuildResults()
     {
-        resultPanel = TCUI.Panel("Results", safe.parent, out var card, new Vector2(860, 1320), "GAME OVER");
+        resultPanel = TCUI.Panel("Results", safe.parent, out var card, new Vector2(860, 1200), "GAME OVER");
 
         var caption = TCUI.Label("Caption", card, "DISTANCE CLIMBED", 32, new Color(0.24f, 0.19f, 0.27f, 0.65f));
         TCUI.Place(caption.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 465), new Vector2(600, 38));

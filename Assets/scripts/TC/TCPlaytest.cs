@@ -115,7 +115,7 @@ public class TCPlaytest : MonoBehaviour
             Click("TC_GameUI/Safe/Start");
             int coinsStart = TCSave.Coins, gemsStart = TCSave.Gems;
             bool skilled = run % 3 != 2; // every third run plays badly (random) to test deaths early
-            float fpsSum = 0; float t = 0, fpsMin = 999, steerSign = 1; int frames = 0; float lastScore = 0, stuck = 0; int gc0 = System.GC.CollectionCount(0);
+            float fpsSum = 0; int shotsTaken = 0; float t = 0, fpsMin = 999, steerSign = 1; int frames = 0; float lastScore = 0, stuck = 0; int gc0 = System.GC.CollectionCount(0);
             float lastAngle = Ang(sp.transform.position), lastSteer = 0; bool paused = false, revived = false; int nan = 0;
             Time.timeScale = scale;
             while (true)
@@ -155,7 +155,7 @@ public class TCPlaytest : MonoBehaviour
                     Click("TC_GameUI/Pause/Card/Resume"); yield return W(0.5f);
                     Check(Time.timeScale == 1, "resume restores time"); Time.timeScale = scale;
                 }
-                if (run == 0 && (frames == 400 || frames == 900)) yield return Shot("gameplay");
+                if (run == 0 && shotsTaken < 3 && t > 3f + shotsTaken * 9f) { shotsTaken++; yield return Shot("gameplay"); }
                 if (t > 75f) { L("run capped at 75s, forcing death"); sp.death(); }
                 yield return null;
             }
