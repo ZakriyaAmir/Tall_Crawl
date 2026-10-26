@@ -204,7 +204,7 @@ public class TCGameUI : MonoBehaviour
     // ---------------- Revive ----------------
     void BuildRevive()
     {
-        revivePanel = TCUI.Panel("Revive", safe.parent, out var card, new Vector2(840, 940), "SECOND CHANCE?");
+        revivePanel = TCUI.Panel("Revive", safe.parent, out var card, new Vector2(840, 940), "KEEP CLIMBING?");
         var timerBg = TCUI.Img("TimerBg", card, new Color(1f, 0.92f, 0.85f, 0.95f), TCUI.Circle);
         TCUI.Place(timerBg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(160, 160));
         reviveTimer = TCUI.Label("Timer", timerBg.transform, "5", 100, TCUI.Peach);
@@ -261,6 +261,7 @@ public class TCGameUI : MonoBehaviour
         var bestBadge = TCUI.Img("BestBadge", card, new Color(1f, 0.93f, 0.86f, 0.95f), TCUI.Round);
         TCUI.Place(bestBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 295), new Vector2(380, 58));
         resBest = TCUI.Label("Best", bestBadge.transform, "BEST 0 M", 34, TCUI.Peach);
+        resBest.enableWordWrapping = false; resBest.enableAutoSizing = true; resBest.fontSizeMin = 20; resBest.fontSizeMax = 34;
         TCUI.Stretch(resBest.rectTransform, 14, 14, 4, 4);
 
         resCoins = Row(card, "Coins Gathered", 195, false);
@@ -296,8 +297,8 @@ public class TCGameUI : MonoBehaviour
         TCUI.Place(ic.rectTransform, new Vector2(1, 0.5f), new Vector2(-42, 0), new Vector2(isTotal ? 54 : 46, isTotal ? 54 : 46));
 
         var v = TCUI.Label("V", row.transform, "0", isTotal ? 46 : 40, isTotal ? TCUI.Hex("#E07A5F") : TCUI.Cocoa, TextAlignmentOptions.Right);
-        v.enableWordWrapping = false;
-        TCUI.Stretch(v.rectTransform, 340, 84, 0, 0);
+        v.enableWordWrapping = false; v.enableAutoSizing = true; v.fontSizeMin = 22; v.fontSizeMax = isTotal ? 46 : 40;
+        TCUI.Stretch(v.rectTransform, 300, 84, 0, 0);
         return v;
     }
 
@@ -307,7 +308,7 @@ public class TCGameUI : MonoBehaviour
         int total = gm.EndRun(false);
         resMetres.text = gm.Metres.ToString("N0") + " M";
         bool newBest = gm.Metres > prevBest;
-        resBest.text = newBest ? "NEW BEST SCORE!" : "BEST  " + TCSave.Best.ToString("N0") + " M";
+        resBest.text = newBest ? "NEW BEST!" : "BEST  " + TCSave.Best.ToString("N0") + " M";
         resCoins.text = gm.coinsCollected.ToString("N0");
         resBonus.text = gm.DistanceBonus.ToString("N0") + (gm.RunGems > 0 ? "  <color=#5FA8D3>+" + gm.RunGems + " GEM" + (gm.RunGems > 1 ? "S" : "") + "</color>" : "");
         resTotal.text = total.ToString("N0");

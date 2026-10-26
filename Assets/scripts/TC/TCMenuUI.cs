@@ -116,7 +116,7 @@ public class TCMenuUI : MonoBehaviour
 
         if (TCAssets.I.logo)
         {
-            var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.82f), Vector2.zero, new Vector2(620, 420));
+            var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.8f), Vector2.zero, new Vector2(360, 360)); // was overlapping the currency bar
             StartCoroutine(Bob(logo.rectTransform, 12, 1.6f));
         }
         else { var t = TCUI.Label("Title", safe, "TALL CRAWL", 120, TCUI.Cocoa); TCUI.Place(t.rectTransform, new Vector2(0.5f, 0.82f), Vector2.zero, new Vector2(1000, 200)); }

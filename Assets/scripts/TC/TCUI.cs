@@ -140,7 +140,7 @@ public static class TCUI
             {
                 var b = new Vector2(Mathf.Abs(p.x) - 0.62f, Mathf.Abs(p.y + 0.2f) - 0.55f);
                 float handle = Mathf.Abs(Vector2.Distance(p, new Vector2(0, 0.38f)) - 0.3f) - 0.08f; if (p.y < 0.38f) handle = 9;
-                return Over(Fill(handle, Cocoa), Fill(Mathf.Max(b.x, b.y), Hex("#FFB494")));
+                return Over(Fill(handle, Cocoa), Over(Fill(Mathf.Max(b.x, b.y) - 0.06f, Cocoa), Fill(Mathf.Max(b.x, b.y) + 0.0f, Hex("#FFF6EC"))));
             }
             case "shirt":
             {
@@ -242,7 +242,7 @@ public static class TCUI
         card = Img("Card", root, Cream).rectTransform; Place(card, new Vector2(0.5f, 0.5f), new Vector2(0, 0), size);
         card.GetComponent<Image>().raycastTarget = true;
         var head = Img("Header", card, Peach); var hr = head.rectTransform; hr.anchorMin = new Vector2(0.5f, 1); hr.anchorMax = new Vector2(0.5f, 1); hr.sizeDelta = new Vector2(size.x * 0.7f, 120); hr.anchoredPosition = new Vector2(0, 0);
-        var ht = Label("Title", hr, title, 64, Cocoa); Stretch(ht.rectTransform);
+        var ht = Label("Title", hr, title, 64, Cocoa); Stretch(ht.rectTransform, 24, 24, 0, 0); ht.enableWordWrapping = false; ht.enableAutoSizing = true; ht.fontSizeMin = 30; ht.fontSizeMax = 64;
         root.gameObject.SetActive(false);
         return cg;
     }
