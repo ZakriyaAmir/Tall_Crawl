@@ -31,7 +31,7 @@ public class playerInteract : MonoBehaviour
         MaxLife = TCConfig.I.baseHearts + Mathf.Min(2, TCSave.Upgrade(2));
         life = MaxLife;
         TCSkins.Apply(gameObject, TCSave.SelectedSkin);
-        renderers = GetComponentsInChildren<Renderer>(true);
+        renderers = System.Array.FindAll(GetComponentsInChildren<Renderer>(true), r => r.enabled); // skip the hidden realistic mesh
     }
 
     void Update()
@@ -78,6 +78,7 @@ public class playerInteract : MonoBehaviour
         }
         else if (other.CompareTag("points"))
         {
+            if (!other.gameObject.activeSelf) return; // already collected this physics step (several colliders on the spider)
             other.gameObject.SetActive(false);
             Play(coinSound, 0.7f);
             gameManager.Instance?.addCoin();
@@ -85,6 +86,7 @@ public class playerInteract : MonoBehaviour
         }
         else if (other.CompareTag("health"))
         {
+            if (!other.gameObject.activeSelf) return;
             other.gameObject.SetActive(false);
             Play(healthSound);
             if (life < MaxLife) life++;
@@ -92,8 +94,8 @@ public class playerInteract : MonoBehaviour
         }
         else if (other.CompareTag("boost"))
         {
-            other.gameObject.SetActive(false);
-            Play(boostSound);
+            if (!other.gameObject.activeSelf) return;
+            other.gameObject.SetActive(false); // no boost sfx: the slow-motion whoosh was removed on request
             StartBoost(3f + 0.75f * TCSave.Upgrade(1));
             TCFx.Shake(0.12f);
         }
@@ -112,7 +114,7 @@ public class playerInteract : MonoBehaviour
 
     public void Revive()
     {
-        life = Mathf.Max(1, MaxLife - 1);
+        life = 1; // revive (ad or gems) gives exactly one life
         if (animator) { animator.SetBool("death", false); animator.SetTrigger("respawn"); }
         invulnTimer = 2.5f;
     }

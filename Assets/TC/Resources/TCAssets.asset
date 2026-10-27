@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: TCAssets
   m_EditorClassIdentifier: 
   font: {fileID: 11400000, guid: 1f9eeb0296548ff49811028f1be676d4, type: 2}
-  logo: {fileID: 21300000, guid: 0ee32ea9a6215a0458323db382e7c2a6, type: 3}
+  logo: {fileID: 4592696516646909484, guid: 6e5f8978aaa57cf9f9ec06a64a5ec19e, type: 3}
   spiderModel: {fileID: 919132149155446097, guid: 221c7918cc5248341a0fb1d858f80e89,
     type: 3}
   spiderAnimator: {fileID: 9100000, guid: f0196592d7a0b294e87db6f09d2b6c45, type: 2}
   click: {fileID: 0}
   coin: {fileID: 8300000, guid: cf0694312a43dfa4daef3a3c8a24d9d8, type: 3}
   purchase: {fileID: 8300000, guid: b8ed081ebfb61cf4aaa9dc23a1757ac4, type: 3}
-  whoosh: {fileID: 8300000, guid: 934e478dac1903242a0c62e93d3dac76, type: 3}
+  whoosh: {fileID: 0}
   privacyUrl: https://sites.google.com/view/zakriya-production-privacy

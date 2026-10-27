@@ -98,13 +98,12 @@ public class TCMenuUI : MonoBehaviour
             float size = b.size.magnitude;
             previewCam.transform.position = b.center + new Vector3(0, size * 0.55f, -size * 1.5f);
             previewCam.transform.LookAt(b.center);
-            TCHatFollow.UpOverride = Vector3.up;
         }
         ApplyPreview(TCSave.SelectedSkin);
     }
     void ApplyPreview(int i) { if (previewSpider && previewSkin != i) { previewSkin = i; TCSkins.Apply(previewSpider, i); } }
     void LateUpdate() { if (previewSpider) previewSpider.transform.Rotate(0, 35 * Time.unscaledDeltaTime, 0, Space.World); }
-    void OnDisable() { TCHatFollow.UpOverride = Vector3.zero; }
+    public void PreviewSkin(int i) => ApplyPreview(i); // used by the screenshot harness
 
     // ---------- Main ----------
     void BuildMain()
@@ -117,7 +116,7 @@ public class TCMenuUI : MonoBehaviour
 
         if (TCAssets.I.logo)
         {
-            var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.8f), Vector2.zero, new Vector2(360, 360)); // was overlapping the currency bar
+            var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.805f), Vector2.zero, new Vector2(470, 440)); // cute app logo + title
             StartCoroutine(Bob(logo.rectTransform, 12, 1.6f));
         }
         else { var t = TCUI.Label("Title", safe, "TALL CRAWL", 120, TCUI.Cocoa); TCUI.Place(t.rectTransform, new Vector2(0.5f, 0.82f), Vector2.zero, new Vector2(1000, 200)); }
@@ -128,7 +127,7 @@ public class TCMenuUI : MonoBehaviour
         var bestPill = TCUI.Img("Best", safe, new Color(1, 1, 1, 0.85f)); TCUI.Place(bestPill.rectTransform, new Vector2(0.5f, 0.31f), Vector2.zero, new Vector2(480, 90));
         bestText = TCUI.Label("Value", bestPill.transform, "", 46, TCUI.Cocoa); TCUI.Stretch(bestText.rectTransform);
 
-        var play = TCUI.Btn("Play", safe, "PLAY", TCUI.Mint, () => { TCAudio.Play(TCAssets.I.whoosh); StartCoroutine(LoadGame()); }, 96, TCUI.Icon("play"));
+        var play = TCUI.Btn("Play", safe, "PLAY", TCUI.Mint, () => StartCoroutine(LoadGame()), 96, TCUI.Icon("play")); // no game-start sound
         TCUI.Place((RectTransform)play.transform, new Vector2(0.5f, 0), new Vector2(0, 330), new Vector2(640, 200));
         StartCoroutine(Pulse(play.transform));
 
@@ -215,12 +214,12 @@ public class TCMenuUI : MonoBehaviour
     }
 
     // ---------- Shop ----------
-    static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Coin Value", "Head Start" };
+    static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Climb Bonus", "Head Start" };
     static readonly int[] upgMax = { 0, 5, 2, 3, 3 };
     public CanvasGroup GetPanel(string n) => n == "Skins" ? skinsPanel : n == "Shop" ? shopPanel : n == "Settings" ? settingsPanel : n == "Daily" ? dailyPanel : consentPanel;
     void BuildShop()
     {
-        shopPanel = TCUI.Panel("Shop", safe, out var card, new Vector2(980, 1520), "SHOP");
+        shopPanel = TCUI.Panel("Shop", safe, out var card, new Vector2(980, 1680), "SHOP");
         var h1 = TCUI.Label("H", card, "UPGRADES", 46, TCUI.Peach); TCUI.Place(h1.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -130), new Vector2(800, 60));
         for (int id = 1; id <= 4; id++)
         {
@@ -243,12 +242,27 @@ public class TCMenuUI : MonoBehaviour
                 if (bt) bt.text = max ? "MAX" : cost.ToString(); buy.interactable = !max && TCSave.Coins >= cost;
             });
         }
-        var h2 = TCUI.Label("H2", card, "COIN & GEM PACKS", 46, TCUI.Peach); TCUI.Place(h2.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -800), new Vector2(800, 60));
-        Pack(card, new Vector2(-225, -930), "1,000 coins", "BUY", 0, () => TCSave.Coins += 1000);
-        Pack(card, new Vector2(225, -930), "No Ads + 20 gems", "BUY", 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
-        Pack(card, new Vector2(-225, -1080), "Premium: 5,000\ncoins + 50 gems", "BUY", 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
-        var free = TCUI.Btn("FreeCoins", card, "FREE 100 (AD)", TCUI.Mint, () => TCServices.Rewarded(() => { TCSave.Coins += 100; Toast("+100 coins"); }, "shop_coins"), 40, TCUI.Icon("play"));
-        TCUI.Place((RectTransform)free.transform, new Vector2(0.5f, 1), new Vector2(225, -1080), new Vector2(420, 130));
+        // Standalone gem packs: exactly 10 gems per USD.
+        var hg = TCUI.Label("HG", card, "GEMS  (10 GEMS = $1)", 46, TCUI.Peach); TCUI.Place(hg.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -770), new Vector2(860, 60));
+        for (int g = 0; g < UnityIAP.GemProductIDs.Length; g++)
+        {
+            int pack = g, gems = UnityIAP.GemPackAmounts[g];
+            string price = "$" + UnityIAP.GemPackUsd[g].ToString("0");
+            var gb = TCUI.Btn("Gems" + g, card, gems + "\n" + price, TCUI.Sky, () => TCServices.BuyGems(pack, () =>
+            {
+                TCSave.Gems += gems; TCAudio.Play(TCAssets.I.purchase); Toast("+" + gems + " gems!"); TCServices.Log("iap_gems", "gems", gems);
+            }), 40, TCUI.Icon("gem"));
+            TCUI.Place((RectTransform)gb.transform, new Vector2(0.5f, 1), new Vector2(-342 + g * 228, -880), new Vector2(212, 140));
+            var gt = gb.GetComponentInChildren<TextMeshProUGUI>();
+            refreshers.Add(() => { var lp = UnityIAP.Instance ? UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[pack]) : null; if (gt && !string.IsNullOrEmpty(lp)) gt.text = gems + "\n" + lp; });
+        }
+        var h2 = TCUI.Label("H2", card, "COIN PACKS & MORE", 46, TCUI.Peach); TCUI.Place(h2.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -1000), new Vector2(800, 60));
+        Pack(card, new Vector2(-225, -1110), "1,000 coins", "BUY", 0, () => TCSave.Coins += 1000);
+        Pack(card, new Vector2(225, -1110), "No Ads + 20 gems", "BUY", 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
+        Pack(card, new Vector2(-225, -1260), "Premium: 5,000\ncoins + 50 gems", "BUY", 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
+        int adCoins = TCConfig.I.adCoinReward;
+        var free = TCUI.Btn("FreeCoins", card, "FREE " + adCoins + " (AD)", TCUI.Mint, () => TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); }, "shop_coins"), 40, TCUI.Icon("play"));
+        TCUI.Place((RectTransform)free.transform, new Vector2(0.5f, 1), new Vector2(225, -1260), new Vector2(420, 130));
         var restore = TCUI.Btn("Restore", card, "RESTORE", TCUI.Lilac, () => { try { UnityIAP.Instance?.RestorePurchases(); } catch { } Toast("Restoring purchases..."); }, 38);
         TCUI.Place((RectTransform)restore.transform, new Vector2(0.5f, 0), new Vector2(-200, 110), new Vector2(340, 110));
         TCUI.Place((RectTransform)TCUI.Btn("Close", card, "BACK", TCUI.Grey, () => TCUI.Hide(this, shopPanel), 46).transform, new Vector2(0.5f, 0), new Vector2(200, 110), new Vector2(340, 110));

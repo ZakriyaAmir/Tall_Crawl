@@ -540,8 +540,8 @@ AudioSource:
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 8300000, guid: 8eb16018ce6ffdf49b7b90bf7fbd3d91, type: 3}
-  m_PlayOnAwake: 1
+  m_audioClip: {fileID: 0}
+  m_PlayOnAwake: 0
   m_Volume: 1
   m_Pitch: 1
   Loop: 0
@@ -1773,7 +1773,7 @@ MonoBehaviour:
   woodImpactSound: {fileID: 8300000, guid: 4b7da8606ef67e44bae0954af87c070b, type: 3}
   beesImpactSound: {fileID: 8300000, guid: 7c9e08a0253fe1e40b090d800946bad3, type: 3}
   deathSound: {fileID: 8300000, guid: 36cd5bf6173d1f24ab231171e5fb3aa2, type: 3}
-  boostSound: {fileID: 8300000, guid: 934e478dac1903242a0c62e93d3dac76, type: 3}
+  boostSound: {fileID: 0}
   coinSound: {fileID: 8300000, guid: cf0694312a43dfa4daef3a3c8a24d9d8, type: 3}
   healthSound: {fileID: 8300000, guid: b8ed081ebfb61cf4aaa9dc23a1757ac4, type: 3}
   jumpSound: {fileID: 8300000, guid: 71ebc9e18638aa3468bfc3bfa1ecd018, type: 3}

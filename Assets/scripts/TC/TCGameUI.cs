@@ -268,10 +268,11 @@ public class TCGameUI : MonoBehaviour
         resBonus = Row(card, "Distance Bonus", 95, false);
         resTotal = Row(card, "Total Coins Earned", -10, true);
 
-        doubleBtn = TCUI.Btn("Double", card, "x2 COINS (WATCH AD)", TCUI.Butter, () => TCServices.Rewarded(() =>
+        doubleBtn = TCUI.Btn("Double", card, "x2 BONUS (WATCH AD)", TCUI.Butter, () => TCServices.Rewarded(() =>
         {
             if (!gm.ClaimDouble()) return; // reward callbacks can fire twice; never double-pay
-            resTotal.text = (gm.RunReward * 2).ToString("N0");
+            resBonus.text = (gm.DistanceBonus * 2).ToString("N0") + GemSuffix();
+            resTotal.text = gm.RunReward.ToString("N0");
             doubleBtn.interactable = false; StartCoroutine(TCUI.Punch(resTotal.transform, 0.4f, 0.4f)); TCAudio.Play(TCAssets.I.purchase);
         }, "double_coins"), 48, TCUI.Icon("play"));
         TCUI.Place((RectTransform)doubleBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -155), new Vector2(700, 120));
@@ -302,6 +303,8 @@ public class TCGameUI : MonoBehaviour
         return v;
     }
 
+    string GemSuffix() => gm.RunGems > 0 ? "  <color=#5FA8D3>+" + gm.RunGems + " GEM" + (gm.RunGems > 1 ? "S" : "") + "</color>" : "";
+
     void ShowResults()
     {
         int prevBest = TCSave.Best;
@@ -310,9 +313,9 @@ public class TCGameUI : MonoBehaviour
         bool newBest = gm.Metres > prevBest;
         resBest.text = newBest ? "NEW BEST!" : "BEST  " + TCSave.Best.ToString("N0") + " M";
         resCoins.text = gm.coinsCollected.ToString("N0");
-        resBonus.text = gm.DistanceBonus.ToString("N0") + (gm.RunGems > 0 ? "  <color=#5FA8D3>+" + gm.RunGems + " GEM" + (gm.RunGems > 1 ? "S" : "") + "</color>" : "");
+        resBonus.text = gm.DistanceBonus.ToString("N0") + GemSuffix();
         resTotal.text = total.ToString("N0");
-        doubleBtn.interactable = total > 0;
+        doubleBtn.interactable = gm.DistanceBonus > 0;
         TCUI.Show(this, resultPanel);
         if (newBest) StartCoroutine(TCUI.Punch(resBest.transform, 0.35f, 0.5f));
     }

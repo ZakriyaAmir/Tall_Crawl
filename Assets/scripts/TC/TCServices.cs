@@ -50,6 +50,14 @@ public static class TCServices
         UnityIAP.Instance.GeneralFunctionl(productIndex);
     }
 
+    /// Standalone gem pack purchase (pack index into UnityIAP.GemProductIDs, 10 gems per USD).
+    public static void BuyGems(int pack, Action onSuccess)
+    {
+        if (UnityIAP.Instance == null) { Debug.Log("IAP not initialised – granting in editor"); if (Application.isEditor) onSuccess?.Invoke(); return; }
+        UnityIAP.Instance.onPurchaseComplete = onSuccess;
+        UnityIAP.Instance.BuyGemPack(pack);
+    }
+
     public static void Haptic()
     {
 #if UNITY_ANDROID || UNITY_IOS

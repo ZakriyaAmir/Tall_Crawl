@@ -18,8 +18,22 @@ public static class TCSelfTest
         for (int i = 1; i < C.upgradeCosts.Length; i++) Check(C.upgradeCosts[i] > C.upgradeCosts[i - 1], "upgrade cost rises " + i);
         Check(C.dailyRewards.Length == 7, "7 daily rewards");
         Check(C.coinsPerHundredMetres > 0 && C.reviveCostGems > 0, "economy values positive");
-        int avgRun = 600 / 100 * C.coinsPerHundredMetres + 30; // ~600 m run with ~30 coins
-        Check(C.upgradeCosts[0] / (float)avgRun <= 4f, $"first upgrade within 4 runs ({C.upgradeCosts[0] / (float)avgRun:0.0})");
+        // Pacing simulation (docs/ECONOMY.md): an average run is ~600 m with ~30 collected coins.
+        // One collected coin = exactly one wallet coin; only the distance bonus scales with upgrades.
+        Check(gameManager.CoinValue == 1, "one collected coin = one coin");
+        int Run(int climbLvl) => 30 + 600 / 100 * (C.coinsPerHundredMetres + climbLvl);
+        int firstRuns = Mathf.CeilToInt(C.upgradeCosts[0] / (float)Run(0));
+        Check(firstRuns >= 5 && firstRuns <= 12, $"first upgrade after {firstRuns} runs (target 5-12)");
+        int[] maxLvl = { 0, 5, 2, 3, 3 };
+        int upgTotal = 0; for (int u = 1; u <= 4; u++) for (int l = 0; l < maxLvl[u]; l++) upgTotal += C.upgradeCosts[l];
+        int skinTotal = 0; foreach (var d in TCSkins.All) if (d.unlock == SkinUnlock.Coins) skinTotal += d.amount;
+        int daily = 0; for (int i = 0; i < 6; i++) daily += C.dailyRewards[i]; float dailyPerDay = daily / 6f;
+        const int runsPerDay = 20, adsPerDay = 3;
+        float perDay = runsPerDay * Run(1) + dailyPerDay + adsPerDay * C.adCoinReward;
+        float days = (upgTotal + skinTotal - C.startingCoins) / perDay;
+        Debug.Log($"SELFTEST pacing: run ~{Run(0)} coins, {perDay:0} coins/day (20 runs), upgrades {upgTotal} + coin skins {skinTotal} = {upgTotal + skinTotal} -> {days:0.0} days");
+        Check(days >= 21, $"full coin unlock takes >= 3 weeks ({days:0.0} days)");
+        Check(perDay < Mathf.Min(C.upgradeCosts[C.upgradeCosts.Length - 1], 4000), "one day cannot buy a top-tier item");
         // Save round trip
         var keep = PlayerPrefs.GetInt("tc_coins");
         TCSave.Coins = 1234; Check(TCSave.Coins == 1234, "coins round trip");

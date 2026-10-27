@@ -42,14 +42,17 @@ public class TCConfig : ScriptableObject
     public int baseHearts = 3;
 
     [Header("Economy")]
-    public int coinValue = 1;
-    public int coinsPerHundredMetres = 5;
-    [Tooltip("Gems awarded per this many metres in one run (0 = off)")] public int gemEveryMetres = 1000;
+    // Pacing target (see docs/ECONOMY.md, verified by TCSelfTest): first upgrade after ~8 runs,
+    // everything bought with coins only after ~4-5 weeks of a 20-runs-a-day player.
+    [Tooltip("Legacy, ignored: one collected coin always adds exactly 1 coin")] public int coinValue = 1;
+    [Tooltip("Distance bonus coins per 100 m (Climb Bonus upgrade adds +1 per level)")] public int coinsPerHundredMetres = 1;
+    [Tooltip("Gems awarded per this many metres in one run (0 = off)")] public int gemEveryMetres = 2000;
     public int reviveCostGems = 5;
-    public int startingCoins = 150;
-    public int[] dailyRewards = { 50, 75, 100, 150, 200, 300, 2 /*gems*/ };
+    public int startingCoins = 50;
+    public int[] dailyRewards = { 15, 20, 25, 30, 40, 60, 1 /*gems*/ };
     public int interstitialEveryNRuns = 3;
-    public int[] upgradeCosts = { 100, 250, 600, 1200, 2400 };
+    public int[] upgradeCosts = { 250, 600, 1200, 2200, 3500 };
+    [Tooltip("Coins from the shop's free rewarded ad")] public int adCoinReward = 20;
 
     static TCConfig _inst;
     public static TCConfig I

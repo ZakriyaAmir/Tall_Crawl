@@ -26,6 +26,10 @@ public class UnityIAP : MonoBehaviour, IStoreListener
 
     }
     public string[] kProductIDs;
+    /// Standalone gem packs (consumable, 10 gems per USD). Dummy IDs: replace with the real Play Console IDs.
+    public static readonly string[] GemProductIDs = { "com.zakriya.tallcrawl.gems_10", "com.zakriya.tallcrawl.gems_50", "com.zakriya.tallcrawl.gems_100", "com.zakriya.tallcrawl.gems_200" };
+    public static readonly int[] GemPackAmounts = { 10, 50, 100, 200 };
+    public static readonly float[] GemPackUsd = { 1f, 5f, 10f, 20f };
     void Start()
     {
         if (m_StoreController == null)
@@ -44,6 +48,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
         builder.AddProduct(kProductIDs[0], ProductType.Consumable);                               //Ahmad
         builder.AddProduct(kProductIDs[1], ProductType.NonConsumable);
         builder.AddProduct(kProductIDs[2], ProductType.NonConsumable);
+        foreach (var gemId in GemProductIDs) builder.AddProduct(gemId, ProductType.Consumable);
         /*builder.AddProduct(kProductIDs[3], ProductType.NonConsumable);
         builder.AddProduct(kProductIDs[4], ProductType.Consumable);
         builder.AddProduct(kProductIDs[5], ProductType.Consumable);
@@ -63,6 +68,12 @@ public class UnityIAP : MonoBehaviour, IStoreListener
     private bool IsInitialized()
     {
         return m_StoreController != null && m_StoreExtensionProvider != null;
+    }
+    public void BuyGemPack(int pack) { BuyProductID(GemProductIDs[pack]); }
+    /// Store-localised price string, or null before the store is initialised.
+    public string LocalizedPrice(string id)
+    {
+        try { var p = m_StoreController?.products.WithID(id); return p != null ? p.metadata.localizedPriceString : null; } catch { return null; }
     }
     public void GeneralFunctionl(int id)
     {
@@ -146,6 +157,11 @@ public class UnityIAP : MonoBehaviour, IStoreListener
     }
     public PurchaseProcessingResult ProcessPurchase(PurchaseEventArgs args)
     {
+        if (Array.IndexOf(GemProductIDs, args.purchasedProduct.definition.id) >= 0)
+        {
+            var cb = onPurchaseComplete; onPurchaseComplete = null; cb?.Invoke();
+            return PurchaseProcessingResult.Complete;
+        }
         if (String.Equals(args.purchasedProduct.definition.id, kProductIDs[0], StringComparison.Ordinal))       //Ahmad
         {
             if (this.onPurchaseComplete != null)

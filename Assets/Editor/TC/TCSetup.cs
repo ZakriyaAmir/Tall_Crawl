@@ -14,7 +14,7 @@ public static class TCSetup
     public static void All()
     {
         Directory.CreateDirectory(Res + "/Skins");
-        Textures(); Materials(); Skins(); ConfigAssets(); Prefabs(); MenuScene(); GameScene(); Quality(); Player();
+        Textures(); Materials(); Skins(); ConfigAssets(); Prefabs(); MenuScene(); GameScene(); Quality(); Player(); Icons();
         AssetDatabase.SaveAssets();
         Debug.Log("TCSetup done");
     }
@@ -31,21 +31,69 @@ public static class TCSetup
         LoadOrCreate<TCConfig>(Res + "/TCConfig.asset");
         var a = LoadOrCreate<TCAssets>(Res + "/TCAssets.asset");
         a.font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/UI/Montserrat-SemiBold SDF.asset");
-        var logoTi = (TextureImporter)AssetImporter.GetAtPath("Assets/resources/Logo.png");
-        if (logoTi.textureType != TextureImporterType.Sprite) { logoTi.textureType = TextureImporterType.Sprite; logoTi.mipmapEnabled = false; logoTi.SaveAndReimport(); }
-        a.logo = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/resources/Logo.png");
+        a.logo = MenuLogo();
         a.spiderModel = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/objects/models/spider/source/6daad4c45bdc412cba2ed00f2983c7bd.fbx.fbx");
         a.spiderAnimator = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/animations/spider.controller");
         EditorUtility.SetDirty(a); AssetDatabase.SaveAssets();
         var scene = EditorSceneManager.OpenScene("Assets/Scenes/gameplay.unity");
         a = AssetDatabase.LoadAssetAtPath<TCAssets>(Res + "/TCAssets.asset");
         var pi = Object.FindObjectOfType<playerInteract>();
-        if (pi) { a.coin = pi.coinSound; a.purchase = pi.healthSound; a.whoosh = pi.boostSound; }
+        if (pi) { a.coin = pi.coinSound; a.purchase = pi.healthSound; a.whoosh = null; } // no start whoosh
         var menu = File.ReadAllText("Assets/Scenes/MainMenu.unity");
         // click sound: the clip used on the menu "click" AudioSource
         var clickClip = AssetDatabase.FindAssets("t:AudioClip").Select(AssetDatabase.GUIDToAssetPath).FirstOrDefault(p => p.ToLower().Contains("click"));
         if (clickClip != null) a.click = AssetDatabase.LoadAssetAtPath<AudioClip>(clickClip);
         EditorUtility.SetDirty(a);
+    }
+
+    const string IconDir = "Assets/TC/Icon";
+    static Sprite MenuLogo()
+    {
+        var p = IconDir + "/MenuLogo.png";
+        AssetDatabase.ImportAsset(p);
+        var ti = (TextureImporter)AssetImporter.GetAtPath(p);
+        if (ti.textureType != TextureImporterType.Sprite || ti.maxTextureSize != 1024) { ti.textureType = TextureImporterType.Sprite; ti.mipmapEnabled = false; ti.alphaIsTransparency = true; ti.maxTextureSize = 1024; ti.SaveAndReimport(); }
+        return AssetDatabase.LoadAssetAtPath<Sprite>(p);
+    }
+
+    /// App icon (all Android sizes + legacy/round/adaptive) from Assets/TC/Icon/AppIcon.png.
+    [MenuItem("Tools/Tall Crawl/Apply App Icon")]
+    public static void Icons()
+    {
+        var icon = AssetDatabase.LoadAssetAtPath<Texture2D>(IconDir + "/AppIcon.png");
+        var fg = AssetDatabase.LoadAssetAtPath<Texture2D>(IconDir + "/AppIconFg.png");
+        foreach (var path in new[] { IconDir + "/AppIcon.png", IconDir + "/AppIconFg.png" })
+        {
+            var ti = (TextureImporter)AssetImporter.GetAtPath(path); if (!ti) continue;
+            ti.textureType = TextureImporterType.Default; ti.mipmapEnabled = false; ti.maxTextureSize = 1024; ti.textureCompression = TextureImporterCompression.Uncompressed; ti.alphaIsTransparency = true; ti.SaveAndReimport();
+        }
+        icon = AssetDatabase.LoadAssetAtPath<Texture2D>(IconDir + "/AppIcon.png"); fg = AssetDatabase.LoadAssetAtPath<Texture2D>(IconDir + "/AppIconFg.png");
+        PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
+        var android = UnityEditor.Build.NamedBuildTarget.Android;
+        foreach (var kind in PlayerSettings.GetSupportedIconKinds(android))
+        {
+            var icons = PlayerSettings.GetPlatformIcons(android, kind);
+            foreach (var pi in icons)
+            {
+                if (pi.maxLayerCount >= 2) pi.SetTextures(icon, fg); // adaptive: background = full art, empty foreground
+                else pi.SetTexture(icon);
+            }
+            PlayerSettings.SetPlatformIcons(android, kind, icons);
+        }
+        AssetDatabase.SaveAssets();
+        Debug.Log("TCSetup icons applied");
+    }
+
+    /// v3 pass: regenerate skin materials, menu logo, app icon (no scene rebuild).
+    public static void RefreshV3()
+    {
+        Directory.CreateDirectory(Res + "/Skins");
+        Skins();
+        var a = AssetDatabase.LoadAssetAtPath<TCAssets>(Res + "/TCAssets.asset");
+        a.logo = MenuLogo(); a.whoosh = null; EditorUtility.SetDirty(a);
+        Icons();
+        AssetDatabase.SaveAssets();
+        Debug.Log("TCSetup RefreshV3 done");
     }
 
     static void Textures()
@@ -102,9 +150,8 @@ public static class TCSetup
             if (d.emission > 0) { mat.EnableKeyword("_EMISSION"); mat.SetColor("_EmissionColor", d.accent * d.emission); mat.SetTexture("_EmissionMap", mat.mainTexture); mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive; }
             else mat.DisableKeyword("_EMISSION");
             mat.enableInstancing = true;
-            var hat = Mat($"{Res}/Skins/Hat_{i}.mat", std); hat.color = d.hatColor; hat.SetFloat("_Glossiness", 0.6f); hat.enableInstancing = true;
-            if (d.hat == SkinHat.Halo || d.emission > 0.5f) { hat.EnableKeyword("_EMISSION"); hat.SetColor("_EmissionColor", d.hatColor * 0.8f); }
-            EditorUtility.SetDirty(mat); EditorUtility.SetDirty(hat);
+            EditorUtility.SetDirty(mat);
+            AssetDatabase.DeleteAsset($"{Res}/Skins/Hat_{i}.mat"); // hats/props removed: skins are colour + spikes + shape only
         }
         var trail = Mat($"{Res}/Skins/Trail.mat", Shader.Find("Sprites/Default"));
         EditorUtility.SetDirty(trail);

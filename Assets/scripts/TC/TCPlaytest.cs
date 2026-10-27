@@ -114,6 +114,7 @@ public class TCPlaytest : MonoBehaviour
             rows.Clear(); beeRows.Clear();
             Click("TC_GameUI/Safe/Start");
             int coinsStart = TCSave.Coins, gemsStart = TCSave.Gems;
+            int pickups = 0; System.Action<string, Vector3> onEv = (e, _) => { if (e == "coin") pickups++; }; playerInteract.OnEvent += onEv;
             bool skilled = run % 3 != 2; // every third run plays badly (random) to test deaths early
             float fpsSum = 0; int shotsTaken = 0; float t = 0, fpsMin = 999, steerSign = 1; int frames = 0; float lastScore = 0, stuck = 0; int gc0 = System.GC.CollectionCount(0);
             float lastAngle = Ang(sp.transform.position), lastSteer = 0; bool paused = false, revived = false; int nan = 0;
@@ -175,6 +176,7 @@ public class TCPlaytest : MonoBehaviour
             {
                 Click("TC_GameUI/Revive/Card/Ad"); revived = true; yield return W(2.2f);
                 Check(!pl.GameOver && !pl.paused, "revived and moving");
+                Check(sp.life <= 1, $"revive gives exactly one life (life {sp.life})");
                 yield return W(6f); // timer must not fire results after revive
                 Check(pl.GameOver || !gm.runEnded, "revive timer cancelled"); // a 2nd real death may legitimately end the run
                 Time.timeScale = scale; float tt = 0;
@@ -187,14 +189,16 @@ public class TCPlaytest : MonoBehaviour
             else yield return W(6.5f); // let the timer expire
             yield return W(1.5f);
             Check(gm.runEnded, "results shown / run banked");
-            int expected = gm.coinsCollected + (int)pl.currentScore / 100 * TCConfig.I.coinsPerHundredMetres;
+            playerInteract.OnEvent -= onEv;
+            Check(gm.coinsCollected == pickups, $"one pickup = one coin ({pickups} pickups -> {gm.coinsCollected} coins)");
+            int expected = gm.coinsCollected + (int)pl.currentScore / 100 * gameManager.BonusPerHundred;
             Check(TCSave.Coins == coinsStart + expected, $"run reward banked once: +{TCSave.Coins - coinsStart} expected +{expected}");
             Check(TCSave.Gems == gemsStart + gm.RunGems, "run gems");
             if (run == 0) yield return Shot("game_over");
             int cb = TCSave.Coins;
             Click("TC_GameUI/Results/Card/Double"); Click("TC_GameUI/Results/Card/Double");
             gm.ClaimDouble();
-            Check(TCSave.Coins == cb + gm.RunReward, $"x2 paid exactly once (+{TCSave.Coins - cb}, reward {gm.RunReward})");
+            Check(TCSave.Coins == cb + gm.DistanceBonus, $"x2 bonus paid exactly once, bonus only (+{TCSave.Coins - cb}, bonus {gm.DistanceBonus})");
             if (run == 0) yield return Shot("game_over_doubled");
             if (run == 1) { long m = System.GC.GetTotalMemory(true); mem0 = m; created0 = System.Array.ConvertAll(tr.Pools, p => p.Created); }
             if (run == runs - 1 && created0 != null)

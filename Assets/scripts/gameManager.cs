@@ -85,12 +85,15 @@ public class gameManager : MonoBehaviour
         if (TCSave.Upgrade(4) > 0 && spider) spider.StartBoost(1.5f + 1.5f * TCSave.Upgrade(4)); // Head Start (was invisible: no anim/FX)
     }
 
+    /// One collected coin = exactly one coin in the wallet (no multipliers, no doubling).
     public void addCoin()
     {
         coinsCollected += CoinValue;
     }
 
-    public static int CoinValue => TCConfig.I.coinValue * (1 + TCSave.Upgrade(3));
+    public const int CoinValue = 1;
+    /// Distance bonus per 100 m: base + "Climb Bonus" upgrade level.
+    public static int BonusPerHundred => TCConfig.I.coinsPerHundredMetres + TCSave.Upgrade(3);
     public void SetMusic(bool on) { if (music) music.mute = !on; }
 
     public void Pause(bool on)
@@ -133,8 +136,9 @@ public class gameManager : MonoBehaviour
         if (runEnded) return RunReward;
         runEnded = true;
         int metres = (int)p.currentScore;
-        int bonus = metres / 100 * TCConfig.I.coinsPerHundredMetres;
-        RunReward = (coinsCollected + bonus) * (doubled ? 2 : 1);
+        int bonus = metres / 100 * BonusPerHundred;
+        // Collected coins are banked 1:1. The ad doubler only ever doubles the distance bonus.
+        RunReward = coinsCollected + bonus * (doubled ? 2 : 1);
         RunGems = TCConfig.I.gemEveryMetres > 0 ? metres / TCConfig.I.gemEveryMetres : 0;
         if (RunGems > 0) TCSave.Gems += RunGems;
         TCSave.Coins += RunReward;
@@ -146,14 +150,15 @@ public class gameManager : MonoBehaviour
         return RunReward;
     }
 
-    /// x2 coins reward: may only be granted once per run, after the run is banked.
+    /// x2 bonus reward: doubles the distance bonus only (never the collected coins), once per run, after banking.
     public bool ClaimDouble()
     {
-        if (!runEnded || doubledClaimed || RunReward <= 0) return false;
-        doubledClaimed = true; TCSave.Coins += RunReward; TCSave.LifetimeCoins += RunReward; return true;
+        int extra = DistanceBonus;
+        if (!runEnded || doubledClaimed || extra <= 0) return false;
+        doubledClaimed = true; RunReward += extra; TCSave.Coins += extra; TCSave.LifetimeCoins += extra; return true;
     }
 
-    public int DistanceBonus => (int)p.currentScore / 100 * TCConfig.I.coinsPerHundredMetres;
+    public int DistanceBonus => (int)p.currentScore / 100 * BonusPerHundred;
     public int Metres => p ? (int)p.currentScore : 0;
 
     public void Restart() { MaybeInterstitial(); Time.timeScale = 1; SceneManager.LoadScene("gameplay"); }
