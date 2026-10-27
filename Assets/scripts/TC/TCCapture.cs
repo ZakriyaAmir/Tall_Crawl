@@ -32,7 +32,11 @@ public class TCCapture : MonoBehaviour
             var cg = Panel(p); TCUI.Show(menu, cg); yield return new WaitForSecondsRealtime(0.9f);
             yield return Shot(p.ToLower()); TCUI.Hide(menu, cg); yield return new WaitForSecondsRealtime(0.6f);
         }
+        menu.PreviewSkin(3); yield return new WaitForSecondsRealtime(0.5f);
         yield return Shot("main_menu_skin");
+        // Skin tour: every skin in the menu preview (colour + spikes + body shape only).
+        for (int i = 0; i < TCSkins.All.Length; i++) { menu.PreviewSkin(i); yield return new WaitForSecondsRealtime(0.6f); yield return Shot("skin_" + i + "_" + TCSkins.All[i].name.Replace(" ", "")); }
+        TCSave.SelectedSkin = 6; // play the gameplay part with a spiky skin
         SceneManager.LoadScene("gameplay");
         yield return new WaitForSecondsRealtime(2.5f);
         yield return Shot("tap_to_start_tutorial");

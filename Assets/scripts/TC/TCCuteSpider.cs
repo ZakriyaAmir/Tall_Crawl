@@ -36,8 +36,10 @@ public class TCCuteSpider : MonoBehaviour
         if (upW.sqrMagnitude < 0.01f) upW = Vector3.up;
         Vector3 up = st.InverseTransformDirection(upW).normalized;
         var head = TCSkins.FindDeep(st, "Spider_Head");
-        Vector3 fwd = head ? st.InverseTransformPoint(head.position) - center : Vector3.forward;
-        if (!head && spider.GetComponentInParent<player>()) fwd = st.InverseTransformDirection(Vector3.up); // climbing direction
+        bool inGame = spider.GetComponentInParent<player>();
+        // Face: in game the spider looks up the trunk (climb direction); in menu previews it faces the preview camera (-Z).
+        Vector3 fwdW = Vector3.up;
+        Vector3 fwd = inGame ? st.InverseTransformDirection(fwdW) : Vector3.back; // menu preview camera sits at -Z
         fwd = Vector3.ProjectOnPlane(fwd, up); if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.ProjectOnPlane(Vector3.forward, up);
         fwd.Normalize();
 

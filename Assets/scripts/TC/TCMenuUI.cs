@@ -86,7 +86,7 @@ public class TCMenuUI : MonoBehaviour
         var camGo = new GameObject("PreviewCam"); camGo.transform.SetParent(root.transform, false);
         previewCam = camGo.AddComponent<Camera>(); previewCam.clearFlags = CameraClearFlags.SolidColor; previewCam.backgroundColor = new Color(0, 0, 0, 0);
         previewCam.targetTexture = rt; previewCam.fieldOfView = 30; previewCam.cullingMask = 1 << 0; previewCam.nearClipPlane = 0.01f;
-        var light = new GameObject("PreviewLight").AddComponent<Light>(); light.type = LightType.Directional; light.transform.SetParent(root.transform); light.transform.rotation = Quaternion.Euler(40, 150, 0); light.intensity = 1.1f; light.shadows = LightShadows.None;
+        var light = new GameObject("PreviewLight").AddComponent<Light>(); light.type = LightType.Directional; light.transform.SetParent(root.transform); light.transform.rotation = Quaternion.Euler(35, -25, 0); light.intensity = 1.25f; // key light from the camera side (face lit) light.shadows = LightShadows.None;
         if (a.spiderModel)
         {
             previewSpider = Instantiate(a.spiderModel, root.transform);
@@ -102,7 +102,7 @@ public class TCMenuUI : MonoBehaviour
         ApplyPreview(TCSave.SelectedSkin);
     }
     void ApplyPreview(int i) { if (previewSpider && previewSkin != i) { previewSkin = i; TCSkins.Apply(previewSpider, i); } }
-    void LateUpdate() { if (previewSpider) previewSpider.transform.Rotate(0, 35 * Time.unscaledDeltaTime, 0, Space.World); }
+    void LateUpdate() { if (previewSpider) previewSpider.transform.localRotation = Quaternion.Euler(0, Mathf.Sin(Time.unscaledTime * 1.3f) * 28f, 0); } // gentle sway, face stays visible
     public void PreviewSkin(int i) => ApplyPreview(i); // used by the screenshot harness
 
     // ---------- Main ----------

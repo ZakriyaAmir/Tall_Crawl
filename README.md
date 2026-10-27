@@ -31,3 +31,10 @@ Unity **6000.3.26f1**, built-in render pipeline. Open the project, then play `As
 - Firebase `google-services.json`
 - Privacy policy URL (`TCAssets.asset`)
 - Release keystore (debug-signed now)
+
+## v3 (Oct 2026)
+- Economy rebalanced, see `docs/ECONOMY.md` (pacing checked by `TCSelfTest.Run`): 1 collected coin = 1 coin, full coin unlock ~25 days.
+- Round, cute hypercasual spider (`TCCuteSpider`) used by every skin; skins differ only by colour/pattern, back spikes and body shape (no hats/props).
+- Standalone gem packs (dummy IDs, 10 gems per $1): 10/$1, 50/$5, 100/$10, 200/$20.
+- New app icon + menu logo (`Assets/TC/Icon`, applied by `TCSetup.Icons`).
+- No game-start whoosh, no boost/slow-motion sound; revive (gems or ad) gives exactly one life.

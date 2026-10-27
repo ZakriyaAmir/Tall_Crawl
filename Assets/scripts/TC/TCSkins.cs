@@ -42,7 +42,7 @@ public static class TCSkins
     public static readonly SkinDef[] All =
     {
         //          name         body       accent     pattern               emis   trail        shape             spikes len    unlock               amount
-        new SkinDef("Classic",   "#4A4350", "#6E6478", SkinPattern.Solid,    0f,   "#FFFFFF00", SkinShape.Round,  0, 0f,    SkinUnlock.Free, 0),
+        new SkinDef("Classic",   "#5E5868", "#837A8E", SkinPattern.Solid,    0f,   "#FFFFFF00", SkinShape.Round,  0, 0f,    SkinUnlock.Free, 0),
         new SkinDef("Mint Drop", "#8EE3C8", "#4FB99A", SkinPattern.Dots,     0f,   "#BFF5E3",   SkinShape.Round,  0, 0f,    SkinUnlock.Coins, 800),
         new SkinDef("Peachy",    "#FFB38A", "#FF8A73", SkinPattern.Stripes,  0f,   "#FFD9C4",   SkinShape.Chubby, 0, 0f,    SkinUnlock.Coins, 1500),
         new SkinDef("Sky Bee",   "#FFE074", "#4A4350", SkinPattern.Stripes,  0f,   "#FFF2B3",   SkinShape.Tall,   3, 0.35f, SkinUnlock.Ads, 3),

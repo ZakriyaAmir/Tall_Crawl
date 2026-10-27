@@ -73,7 +73,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
     /// Store-localised price string, or null before the store is initialised.
     public string LocalizedPrice(string id)
     {
-        try { var p = m_StoreController?.products.WithID(id); return p != null ? p.metadata.localizedPriceString : null; } catch { return null; }
+        try { var p = m_StoreController?.products.WithID(id); return p != null && p.metadata.localizedPrice > 0.05m ? p.metadata.localizedPriceString : null; /* fake store reports $0.01 */ } catch { return null; }
     }
     public void GeneralFunctionl(int id)
     {
