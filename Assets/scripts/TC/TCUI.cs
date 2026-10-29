@@ -9,8 +9,8 @@ using UnityEngine.UI;
 /// feedback, and fade/slide/pop panel transitions (unscaled time, so they work while paused).
 public static class TCUI
 {
-    public static readonly Color Cream = Hex("#FFF7EE"), Cocoa = Hex("#4A3B3F"), Mint = Hex("#8FDCC4"), Peach = Hex("#FFB494"),
-        Blush = Hex("#FFC2D1"), Sky = Hex("#9FD3FF"), Butter = Hex("#FFE08A"), Lilac = Hex("#CFC6F5"), White = Color.white,
+    public static readonly Color Cream = Hex("#FFF7EE"), Cocoa = Hex("#4A3B3F"), Mint = Hex("#5EE0A8"), Peach = Hex("#FF9F7A"),
+        Blush = Hex("#FF9EC0"), Sky = Hex("#6FC3FF"), Butter = Hex("#FFD54F"), Lilac = Hex("#CFC6F5"), White = Color.white,
         Dim = new Color(0.16f, 0.12f, 0.14f, 0.55f), Grey = Hex("#D9D2CC");
     public static Color Hex(string h) { ColorUtility.TryParseHtmlString(h, out var c); return c; }
 
@@ -214,6 +214,7 @@ public static class TCUI
         var rt = Rect(name, parent);
         var shadow = Img("Shadow", rt, Color.Lerp(face, Cocoa, 0.35f)); Stretch(shadow.rectTransform, 0, 0, 10, -10);
         var img = rt.gameObject.AddComponent<Image>(); img.sprite = Round; img.type = Image.Type.Sliced; img.color = face;
+        var rim = rt.gameObject.AddComponent<UnityEngine.UI.Outline>(); rim.effectColor = Color.Lerp(face, Cocoa, 0.6f); rim.effectDistance = new Vector2(5, -5); // thick hypercasual rim
         var b = rt.gameObject.AddComponent<Button>(); b.targetGraphic = img;
         var cb = b.colors; cb.pressedColor = new Color(0.92f, 0.92f, 0.92f); cb.disabledColor = new Color(0.8f, 0.8f, 0.8f, 0.7f); b.colors = cb;
         shadow.transform.SetAsFirstSibling();
@@ -229,7 +230,7 @@ public static class TCUI
         }
         if (!string.IsNullOrEmpty(text))
         {
-            var l = Label("Text", rt, text, fontSize, Cocoa); Stretch(l.rectTransform, icon ? fontSize * 1.9f : 16, 16, 6, 6);
+            var l = Label("Text", rt, text, fontSize, Color.white); Stretch(l.rectTransform, icon ? fontSize * 1.9f : 16, 16, 6, 6); Outline(l, 0.28f);
             l.enableAutoSizing = true; l.fontSizeMax = fontSize; l.fontSizeMin = fontSize * 0.5f;
         }
         rt.gameObject.AddComponent<TCPress>();
@@ -244,8 +245,10 @@ public static class TCUI
         var dim = Img("Dim", root, Dim); Stretch(dim.rectTransform); dim.raycastTarget = true; dim.sprite = null; dim.type = Image.Type.Simple;
         card = Img("Card", root, Cream).rectTransform; Place(card, new Vector2(0.5f, 0.5f), new Vector2(0, 0), size);
         card.GetComponent<Image>().raycastTarget = true;
+        { var o = card.gameObject.AddComponent<UnityEngine.UI.Outline>(); o.effectColor = Hex("#E8CDBF"); o.effectDistance = new Vector2(7, -7); var sh = card.gameObject.AddComponent<UnityEngine.UI.Shadow>(); sh.effectColor = new Color(0, 0, 0, 0.18f); sh.effectDistance = new Vector2(0, -18); }
         var head = Img("Header", card, Peach); var hr = head.rectTransform; hr.anchorMin = new Vector2(0.5f, 1); hr.anchorMax = new Vector2(0.5f, 1); hr.sizeDelta = new Vector2(size.x * 0.7f, 120); hr.anchoredPosition = new Vector2(0, 0);
-        var ht = Label("Title", hr, title, 64, Cocoa); Stretch(ht.rectTransform, 24, 24, 0, 0); ht.enableWordWrapping = false; ht.enableAutoSizing = true; ht.fontSizeMin = 30; ht.fontSizeMax = 64;
+        head.gameObject.AddComponent<UnityEngine.UI.Outline>().effectColor = Color.Lerp(Peach, Cocoa, 0.5f); head.GetComponent<UnityEngine.UI.Outline>().effectDistance = new Vector2(5, -5);
+        var ht = Label("Title", hr, title, 64, Color.white); Outline(ht, 0.3f); Stretch(ht.rectTransform, 24, 24, 0, 0); ht.enableWordWrapping = false; ht.enableAutoSizing = true; ht.fontSizeMin = 30; ht.fontSizeMax = 64;
         root.gameObject.SetActive(false);
         return cg;
     }

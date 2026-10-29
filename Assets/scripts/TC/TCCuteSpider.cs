@@ -2,7 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// Round, cute hypercasual spider built from simple meshes on top of the original rig:
-/// a ball body (shape per skin), big shiny eyes, blush, a small smile and 8 short stubby legs.
+/// modelled on the 3D-printed chibi toy spiders: big round abdomen, smaller round head, two big glossy eyes
+/// (+2 tiny side eyes), tiny fangs and 8 short chunky bent legs.
 /// Skins only change colours/pattern, back spikes and the body shape. The old realistic mesh is hidden,
 /// its rig/animator still drives jump/death motion which we follow (position) and stylise (squash, flip).
 public class TCCuteSpider : MonoBehaviour
@@ -10,7 +11,8 @@ public class TCCuteSpider : MonoBehaviour
     const string RootName = "__cute";
     public Transform bone; Vector3 boneRest; Animator anim; playerInteract pi;
     Transform body; readonly List<Transform> legs = new List<Transform>(); readonly List<Quaternion> legRest = new List<Quaternion>();
-    Vector3 bodyRest, bodyScale; float flip, t;
+    Vector3 bodyRest, bodyScale; float flip, t, blink = 2.5f;
+    Transform head; Vector3 headRest; readonly List<Transform> eyes = new List<Transform>(); readonly List<Vector3> eyeRest = new List<Vector3>();
 
     static readonly Dictionary<string, Material> mats = new Dictionary<string, Material>();
     static Mesh cone;
@@ -46,53 +48,71 @@ public class TCCuteSpider : MonoBehaviour
         var root = new GameObject(RootName).transform; root.SetParent(st, false);
         root.localPosition = center - up * Vector3.Dot(center, up) + up * Mathf.Min(Vector3.Dot(center, up), R * 0.2f);
         root.localRotation = Quaternion.LookRotation(fwd, up);
-        cs.legs.Clear(); cs.legRest.Clear();
+        cs.legs.Clear(); cs.legRest.Clear(); cs.eyeRest.Clear();
 
         var bodyMat = Resources.Load<Material>("Skins/Skin_" + skin);
-        if (!bodyMat) bodyMat = Flat(def.body, null);
-        var legMat = Flat(Color.Lerp(def.body, def.accent, 0.55f) * 0.92f, bodyMat);
-        var spikeMat = Flat(def.accent, bodyMat, def.emission);
-        var white = Flat(Color.white, bodyMat); var black = Flat(new Color(0.13f, 0.11f, 0.12f), bodyMat);
-        var blush = Flat(new Color(1f, 0.55f, 0.6f), bodyMat); var mouth = Flat(new Color(0.55f, 0.18f, 0.22f), bodyMat);
+        if (!bodyMat) bodyMat = Flat(def.body, null, 0, def.metallic, def.gloss);
+        // Photo look (3D-printed chibi spider): one solid plastic colour for head + legs, the abdomen carries the skin pattern.
+        var plain = Flat(def.body, bodyMat, 0, def.metallic, def.gloss);
+        var legMat = Flat(def.body * 0.93f, bodyMat, 0, def.metallic, def.gloss);
+        var spikeMat = Flat(def.accent, bodyMat, def.emission, def.metallic, def.gloss);
+        var eyeMat = Flat(def.eye, bodyMat, def.eyeGlow, 0.1f, 0.92f);
+        var shine = Flat(Color.white, bodyMat, 0.6f, 0, 0.9f);
+        var fangMat = Flat(def.body * 0.8f, bodyMat, 0, def.metallic, def.gloss);
 
-        Vector3 s = def.BodyScale; Vector3 radii = s * R;
-        var bodyT = new GameObject("body").transform; bodyT.SetParent(root, false); bodyT.localPosition = new Vector3(0, radii.y * 0.95f, 0);
+        Vector3 s = def.BodyScale;
+        float pivotY = R * 0.95f;
+        var bodyT = new GameObject("body").transform; bodyT.SetParent(root, false); bodyT.localPosition = new Vector3(0, pivotY, 0);
         cs.body = bodyT; cs.bodyRest = bodyT.localPosition; cs.bodyScale = Vector3.one;
-        var ball = Part(PrimitiveType.Sphere, bodyT, Vector3.zero, radii * 2f, bodyMat);
-        ball.name = "ball";
-        Vector3 Surf(Vector3 dir, float lift = 0) { dir.Normalize(); var p = Vector3.Scale(dir, radii); return p + dir * lift * R; }
-
-        // Eyes: big whites, dark pupils, tiny highlights.
+        Vector3 P(float x, float y, float z) => new Vector3(x * R, y * R - pivotY, z * R);
+        // Big round abdomen at the back (shape per skin), smaller round head in front.
+        Vector3 ab = Vector3.Scale(new Vector3(1.02f, 0.95f, 1.0f), s) * R;
+        var abd = Part(PrimitiveType.Sphere, bodyT, P(0, 1.08f, -0.55f) , ab * 2f, bodyMat).transform; abd.name = "abdomen";
+        abd.localRotation = Quaternion.Euler(-12, 0, 0);
+        float hr = 0.8f * Mathf.Lerp(1f, s.x, 0.35f);
+        var headT = Part(PrimitiveType.Sphere, bodyT, P(0, 0.80f, 0.55f), new Vector3(2f, 1.85f, 1.9f) * hr * R, plain).transform; headT.name = "head";
+        cs.head = headT; cs.headRest = headT.localPosition;
+        Vector3 HS(Vector3 dir, float lift) { dir.Normalize(); return headT.localPosition + Vector3.Scale(dir, new Vector3(1f, 0.925f, 0.95f) * hr * R) + dir * lift * R; }
+        cs.eyes.Clear();
         for (int sgn = -1; sgn <= 1; sgn += 2)
         {
-            var d = new Vector3(0.36f * sgn, 0.32f, 0.88f);
-            var e = Part(PrimitiveType.Sphere, bodyT, Surf(d, -0.08f), Vector3.one * R * 0.62f, white).transform;
-            e.localRotation = Quaternion.LookRotation(d.normalized, Vector3.up);
-            Part(PrimitiveType.Sphere, e, new Vector3(0, 0, 0.28f), new Vector3(0.62f, 0.66f, 0.5f), black);
-            Part(PrimitiveType.Sphere, e, new Vector3(0.14f, 0.18f, 0.48f), Vector3.one * 0.2f, white);
-            // blush
-            var bd = new Vector3(0.62f * sgn, -0.02f, 0.78f);
-            var bl = Part(PrimitiveType.Sphere, bodyT, Surf(bd, -0.03f), new Vector3(0.3f, 0.17f, 0.08f) * R, blush).transform;
-            bl.localRotation = Quaternion.LookRotation(bd.normalized, Vector3.up);
+            // two very big glossy round eyes with a small white highlight
+            var d = new Vector3(0.42f * sgn, 0.14f, 0.9f).normalized;
+            var e = Part(PrimitiveType.Sphere, bodyT, HS(d, -0.05f), new Vector3(0.52f, 0.52f, 0.22f) * R, eyeMat).transform;
+            e.localRotation = Quaternion.LookRotation(d, Vector3.up); e.name = "eye";
+            Part(PrimitiveType.Sphere, e, new Vector3(0.22f, 0.24f, 0.42f), new Vector3(0.24f, 0.24f, 0.3f), shine);
+            cs.eyes.Add(e); cs.eyeRest.Add(e.localScale);
+            // tiny side eye
+            var sd = new Vector3(0.86f * sgn, 0.22f, 0.46f).normalized;
+            var se = Part(PrimitiveType.Sphere, bodyT, HS(sd, -0.02f), new Vector3(0.15f, 0.15f, 0.08f) * R, eyeMat).transform;
+            se.localRotation = Quaternion.LookRotation(sd, Vector3.up);
+            cs.eyes.Add(se); cs.eyeRest.Add(se.localScale);
+            // tiny fangs / pedipalps under the face
+            var f = Part(PrimitiveType.Capsule, bodyT, P(0.17f * sgn, 0.22f, 1.10f), new Vector3(0.17f, 0.15f, 0.17f) * R, fangMat).transform;
+            f.localRotation = Quaternion.Euler(18, 0, -8 * sgn);
         }
-        // Smile
-        var md = new Vector3(0, 0.02f, 1f);
-        var m = Part(PrimitiveType.Sphere, bodyT, Surf(md, -0.02f), new Vector3(0.26f, 0.13f, 0.08f) * R, mouth).transform;
-        m.localRotation = Quaternion.LookRotation(md, Vector3.up);
 
-        // 8 short stubby legs (4 per side)
+        // 8 short, chunky, rounded legs with a slight bend (two capsules + rounded knee), 4 per side.
         for (int sgn = -1; sgn <= 1; sgn += 2)
             for (int k = 0; k < 4; k++)
             {
-                float z = Mathf.Lerp(0.55f, -0.6f, k / 3f);
-                var hip = new GameObject("leg").transform; hip.SetParent(root, false);
-                hip.localPosition = new Vector3(sgn * radii.x * 0.78f, radii.y * 0.55f, z * radii.z);
-                hip.localRotation = Quaternion.Euler(0, sgn * (90 - 25 * (k - 1.5f)), 0) * Quaternion.Euler(0, 0, 0);
-                var seg = Part(PrimitiveType.Capsule, hip, new Vector3(0, -R * 0.12f, R * 0.32f), new Vector3(0.3f, 0.3f, 0.3f) * R, legMat).transform;
-                seg.localRotation = Quaternion.Euler(110, 0, 0); seg.localScale = new Vector3(0.32f, 0.38f, 0.32f) * R;
-                var foot = Part(PrimitiveType.Sphere, hip, new Vector3(0, -R * 0.36f, R * 0.56f), Vector3.one * R * 0.36f, legMat);
+                float z = Mathf.Lerp(0.85f, -0.55f, k / 3f);
+                var hip = new GameObject("leg").transform; hip.SetParent(bodyT, false);
+                hip.localPosition = P(sgn * 0.55f, 0.62f, z);
+                hip.localRotation = Quaternion.Euler(0, sgn * (90 - 32 * (k - 1.5f)), 0);
+                float th = 0.36f;
+                // upper: out and slightly up
+                var up1 = Part(PrimitiveType.Capsule, hip, new Vector3(0, 0.08f * R, 0.26f * R), new Vector3(th, 0.32f, th) * R, legMat).transform;
+                up1.localRotation = Quaternion.Euler(72, 0, 0);
+                Part(PrimitiveType.Sphere, hip, new Vector3(0, 0.15f * R, 0.55f * R), Vector3.one * th * 1.04f * R, legMat);
+                // lower: down to the ground, chunky rounded foot
+                var lo = Part(PrimitiveType.Capsule, hip, new Vector3(0, -0.15f * R, 0.68f * R), new Vector3(th * 1.08f, 0.34f, th * 1.08f) * R, legMat).transform;
+                lo.localRotation = Quaternion.Euler(-20, 0, 0);
                 cs.legs.Add(hip); cs.legRest.Add(hip.localRotation);
             }
+        Vector3 radii = ab; // spikes sit on the abdomen
+        Vector3 abC = abd.localPosition;
+        Vector3 Surf(Vector3 dir, float lift = 0) { dir.Normalize(); return abC + Vector3.Scale(dir, radii) + dir * lift * R; }
 
         // Spikes along the back ridge (skin feature)
         if (def.spikes > 0)
@@ -100,7 +120,7 @@ public class TCCuteSpider : MonoBehaviour
             if (!cone) cone = MakeCone();
             for (int k = 0; k < def.spikes; k++)
             {
-                float a = Mathf.Lerp(-35f, 120f, def.spikes == 1 ? 0.5f : k / (float)(def.spikes - 1)) * Mathf.Deg2Rad; // from forehead over the back
+                float a = Mathf.Lerp(-10f, 125f, def.spikes == 1 ? 0.5f : k / (float)(def.spikes - 1)) * Mathf.Deg2Rad; // from forehead over the back
                 var n = new Vector3(0, Mathf.Cos(a), -Mathf.Sin(a));
                 float sideJ = def.spikes > 5 ? ((k % 2) * 2 - 1) * 0.18f : 0f;
                 n.x = sideJ; n.Normalize();
@@ -122,6 +142,7 @@ public class TCCuteSpider : MonoBehaviour
         cs.restRoot = root.localPosition; cs.root = root; cs.flip = 0;
     }
 
+    [System.NonSerialized] public float wave; // 0..1, menu wave (front leg up)
     public Bounds cachedBounds; Transform root; Vector3 restRoot;
 
     void LateUpdate()
@@ -134,15 +155,24 @@ public class TCCuteSpider : MonoBehaviour
         if (off.magnitude > 5f) off = Vector3.zero;
         root.localPosition = restRoot + off;
         float hop = Mathf.Clamp01(off.magnitude * 4f);
-        // Squash & stretch + idle bounce
-        float bob = Mathf.Sin(t * 12f) * 0.04f;
+        // Squash & stretch + scuttle bounce
+        float bob = Mathf.Sin(t * 24f) * 0.035f;
         body.localScale = new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f);
-        // Wiggle legs (scuttle)
+        if (head) head.localPosition = headRest + new Vector3(Mathf.Sin(t * 12f) * 0.02f, Mathf.Abs(Mathf.Sin(t * 12f)) * 0.03f, 0) * head.localScale.y;
+        // Legs: alternating tetrapod gait (scuttle / climb): swing forward-back, lift on the swing phase.
         for (int i = 0; i < legs.Count; i++)
         {
-            float ph = t * 14f + i * 1.7f;
-            legs[i].localRotation = legRest[i] * Quaternion.Euler(Mathf.Sin(ph) * 14f, Mathf.Cos(ph) * 10f, 0);
+            int side = i < 4 ? 0 : 1, k = i % 4;
+            float ph = t * 12f + (((k + side) & 1) == 0 ? 0 : Mathf.PI);
+            float swing = Mathf.Sin(ph) * 22f, lift = Mathf.Max(0, Mathf.Cos(ph)) * 18f;
+            legs[i].localRotation = Quaternion.Euler(0, swing, 0) * legRest[i] * Quaternion.Euler(-lift, 0, 0);
+            if (i == 4 && wave > 0) legs[i].localRotation = legRest[i] * Quaternion.Euler(-70f * wave, 0, Mathf.Sin(t * 16f) * 25f * wave); // hi!
         }
+        // Eyes: blink every few seconds
+        blink -= Time.deltaTime;
+        if (blink < -0.14f) blink = Random.Range(1.8f, 4f);
+        float lid = blink < 0 ? 0.12f : 1f;
+        for (int i = 0; i < eyes.Count; i++) if (eyes[i]) { var r = eyeRest[i]; eyes[i].localScale = new Vector3(r.x, r.y * lid, r.z); }
         // Death: roll on the back, cartoon style
         bool dead = pi ? pi.life <= 0 : anim && anim.isActiveAndEnabled && HasBool(anim, "death") && anim.GetBool("death");
         flip = Mathf.MoveTowards(flip, dead ? 1 : 0, Time.deltaTime * 3f);
@@ -151,13 +181,14 @@ public class TCCuteSpider : MonoBehaviour
 
     static bool HasBool(Animator a, string n) { foreach (var p in a.parameters) if (p.name == n) return true; return false; }
 
-    static Material Flat(Color c, Material src, float emission = 0)
+    static Material Flat(Color c, Material src, float emission = 0, float metallic = 0, float gloss = 0.55f)
     {
-        string key = ColorUtility.ToHtmlStringRGBA(c) + emission.ToString("0.00");
+        string key = ColorUtility.ToHtmlStringRGBA(c) + emission.ToString("0.00") + metallic.ToString("0.00") + gloss.ToString("0.00");
         if (mats.TryGetValue(key, out var m) && m) return m;
         m = src ? new Material(src) : new Material(Shader.Find("Standard"));
         m.mainTexture = null; m.color = c;
-        if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.55f);
+        if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", gloss);
+        if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metallic);
         if (emission > 0) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", c * emission); m.SetTexture("_EmissionMap", null); }
         else m.DisableKeyword("_EMISSION");
         mats[key] = m; return m;

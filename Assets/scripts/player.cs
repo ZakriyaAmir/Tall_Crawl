@@ -17,7 +17,7 @@ public class player : MonoBehaviour
 
     TCConfig C;
     Animator camAnim;
-    bool camBoost;
+    bool camBoost; [HideInInspector] public float camHoldUntil;
     float targetYaw, yaw, startY, jumpCooldown, yawAtTouch;
     Vector2 touchStart, lastPos, lastTapPos; float touchStartTime, lastTapTime = -1f; bool dragging, swipeUsed, passedDeadZone;
     playerInteract spider;
@@ -45,7 +45,8 @@ public class player : MonoBehaviour
         var pos = p1.position; pos.y += calcSpeed * dt; p1.position = pos;
         currentScore = (pos.y - startY) * C.metresPerUnit;
 
-        if (camAnim && camBoost != boost) { camBoost = boost; camAnim.SetBool("boost", boost); }
+        bool camB = boost && Time.time > camHoldUntil; // keep the default camera at game start (no Head Start zoom)
+        if (camAnim && camBoost != camB) { camBoost = camB; camAnim.SetBool("boost", camB); }
 
         HandleInput(dt);
         yaw = Mathf.LerpAngle(yaw, targetYaw, 1f - Mathf.Exp(-C.rotationSmoothing * dt));

@@ -146,7 +146,7 @@ public static class TCSetup
             ti.SaveAndReimport();
             var mat = Mat($"{Res}/Skins/Skin_{i}.mat", std);
             mat.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
-            mat.color = Color.white; mat.SetFloat("_Glossiness", 0.45f); mat.SetFloat("_Metallic", 0f);
+            mat.color = Color.white; mat.SetFloat("_Glossiness", d.gloss); mat.SetFloat("_Metallic", d.metallic);
             if (d.emission > 0) { mat.EnableKeyword("_EMISSION"); mat.SetColor("_EmissionColor", d.accent * d.emission); mat.SetTexture("_EmissionMap", mat.mainTexture); mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive; }
             else mat.DisableKeyword("_EMISSION");
             mat.enableInstancing = true;
@@ -178,7 +178,8 @@ public static class TCSetup
                 case SkinPattern.Gradient: k = v; break;
             }
             Color c = d.pattern == SkinPattern.Gradient ? Color.Lerp(d.body, d.accent, k) : acc ? d.accent : d.body;
-            if (d.pattern == SkinPattern.Solid) c = Color.Lerp(d.body, d.accent, Mathf.PerlinNoise(u * 6, v * 6) * 0.35f);
+            if (d.pattern == SkinPattern.Solid) c = d.body;
+            c *= 1f - 0.07f * Mathf.Pow(Mathf.Abs(Mathf.Sin(v * Mathf.PI * 34f)), 6f); // faint 3D-print layer lines
             c.a = 1; t.SetPixel(x, y, c);
         }
         t.Apply(); return t;

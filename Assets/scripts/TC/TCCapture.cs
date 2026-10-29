@@ -20,7 +20,10 @@ public class TCCapture : MonoBehaviour
     CanvasGroup Panel(string n) { var mu = FindObjectOfType<TCMenuUI>(); if (mu && mu.GetPanel(n)) return mu.GetPanel(n); var g = GameObject.Find("TC_MenuUI/Safe/" + n) ?? GameObject.Find(n); if (!g) foreach (var cg in Resources.FindObjectsOfTypeAll<CanvasGroup>()) if (cg.name == n && cg.gameObject.scene.IsValid()) return cg; return g ? g.GetComponent<CanvasGroup>() : null; }
     IEnumerator Start()
     {
-        yield return new WaitForSecondsRealtime(3f);
+        // Menu entrance frames (drop on silk, somersault, landing, wave, UI pop-in)
+        yield return new WaitForSecondsRealtime(0.15f);
+        for (int f = 0; f < 16; f++) { yield return Shot("menu_anim_" + f.ToString("00")); }
+        yield return new WaitForSecondsRealtime(1.5f);
         var menu = FindObjectOfType<TCMenuUI>();
         yield return Shot("daily_reward");
         TCUI.Hide(menu, Panel("Daily")); yield return new WaitForSecondsRealtime(0.8f);
@@ -36,7 +39,7 @@ public class TCCapture : MonoBehaviour
         yield return Shot("main_menu_skin");
         // Skin tour: every skin in the menu preview (colour + spikes + body shape only).
         for (int i = 0; i < TCSkins.All.Length; i++) { menu.PreviewSkin(i); yield return new WaitForSecondsRealtime(0.6f); yield return Shot("skin_" + i + "_" + TCSkins.All[i].name.Replace(" ", "")); }
-        TCSave.SelectedSkin = 6; // play the gameplay part with a spiky skin
+        TCSave.SelectedSkin = 2; // gameplay part with the Widow skin (black, red eyes)
         SceneManager.LoadScene("gameplay");
         yield return new WaitForSecondsRealtime(2.5f);
         yield return Shot("tap_to_start_tutorial");

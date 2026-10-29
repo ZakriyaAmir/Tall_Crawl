@@ -63,7 +63,7 @@ public class playerInteract : MonoBehaviour
         if (other.CompareTag("branch"))
         {
             TCFx.Spawn(impactParticle, other.transform.position);
-            Play(woodImpactSound);
+            Play(TCSfx.Get("hit") ?? woodImpactSound, 0.8f);
             if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);
             if (Invulnerable) { OnEvent?.Invoke("smash", transform.position); TCFx.Shake(0.08f); }
             else Damage();
@@ -72,7 +72,7 @@ public class playerInteract : MonoBehaviour
         {
             if (jumpTimer > 0 || Invulnerable) return; // jumped over / boosting
             TCFx.Spawn(BeesimpactParticle, transform.position);
-            Play(beesImpactSound);
+            Play(TCSfx.Get("bees") ?? beesImpactSound, 0.8f);
             if (pooled) pooled.Release();
             Damage();
         }
@@ -80,7 +80,7 @@ public class playerInteract : MonoBehaviour
         {
             if (!other.gameObject.activeSelf) return; // already collected this physics step (several colliders on the spider)
             other.gameObject.SetActive(false);
-            Play(coinSound, 0.7f);
+            Play(TCSfx.Get("coin") ?? coinSound, 0.55f);
             gameManager.Instance?.addCoin();
             OnEvent?.Invoke("coin", other.transform.position);
         }
@@ -88,14 +88,15 @@ public class playerInteract : MonoBehaviour
         {
             if (!other.gameObject.activeSelf) return;
             other.gameObject.SetActive(false);
-            Play(healthSound);
+            Play(TCSfx.Get("heart") ?? healthSound, 0.8f);
             if (life < MaxLife) life++;
             OnEvent?.Invoke("heart", transform.position);
         }
         else if (other.CompareTag("boost"))
         {
             if (!other.gameObject.activeSelf) return;
-            other.gameObject.SetActive(false); // no boost sfx: the slow-motion whoosh was removed on request
+            other.gameObject.SetActive(false); // short cute "nom-nom-yip" (no slow-motion whoosh)
+            Play(TCSfx.Get("chilli"), 0.8f);
             StartBoost(3f + 0.75f * TCSave.Upgrade(1));
             TCFx.Shake(0.12f);
         }
@@ -117,6 +118,7 @@ public class playerInteract : MonoBehaviour
         life = 1; // revive (ad or gems) gives exactly one life
         if (animator) { animator.SetBool("death", false); animator.SetTrigger("respawn"); }
         invulnTimer = 2.5f;
+        Play(TCSfx.Get("revive"), 0.8f);
     }
 
     public IEnumerator Invincible() { invulnTimer = 1.2f; yield break; }
@@ -125,7 +127,7 @@ public class playerInteract : MonoBehaviour
     {
         life = 0;
         if (animator) { animator.SetTrigger("death"); animator.SetBool("death", true); }
-        Play(deathSound);
+        Play(TCSfx.Get("death") ?? deathSound, 0.85f);
         p.GameOver = true; p.boost = false; boostDuration = 0;
         SetVisible(true);
         OnEvent?.Invoke("death", transform.position);
@@ -139,5 +141,5 @@ public class playerInteract : MonoBehaviour
         OnEvent?.Invoke("boost", transform.position);
     }
 
-    public void jump() { jumpTimer = 0.6f; Play(jumpSound); }
+    public void jump() { jumpTimer = 0.6f; Play(TCSfx.Get("jump") ?? jumpSound, 0.7f); }
 }

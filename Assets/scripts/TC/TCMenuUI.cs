@@ -23,10 +23,12 @@ public class TCMenuUI : MonoBehaviour
         BuildPreview();
         BuildMain(); BuildSkins(); BuildShop(); BuildSettings(); BuildDaily(); BuildConsent(); BuildToast();
         TCSave.Changed += Refresh; Refresh();
+        StartCoroutine(Entrance());
+        { float d = 0.9f; foreach (Transform c in safe) { if (c.GetComponent<CanvasGroup>() || c.name == "Preview" || c.name.StartsWith("Shadow")) continue; StartCoroutine(PopIn(c, d)); d += 0.06f; } }
         ApplyMenuMusic();
         TCSkins.CheckAchievements();
         if (PlayerPrefs.GetInt("consent", 0) == 0) TCUI.Show(this, consentPanel);
-        else { TCServices.Banner(true); if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(0.6f, () => OpenDaily())); }
+        else { TCServices.Banner(true); if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(3.4f, () => OpenDaily())) /* after the spider entrance */; }
     }
     void OnDestroy() { TCSave.Changed -= Refresh; if (rt) rt.Release(); }
     // The saved Music setting was only applied when toggled, so menu music always played on launch.
@@ -55,7 +57,7 @@ public class TCMenuUI : MonoBehaviour
     {
         var bg = TCUI.Rect("BG", canvas.transform); TCUI.Stretch(bg);
         var tex = new Texture2D(2, 64) { wrapMode = TextureWrapMode.Clamp };
-        for (int y = 0; y < 64; y++) { var c = Color.Lerp(TCUI.Hex("#FFE3D3"), TCUI.Hex("#BFE6F7"), y / 63f); tex.SetPixel(0, y, c); tex.SetPixel(1, y, c); }
+        for (int y = 0; y < 64; y++) { var c = Color.Lerp(TCUI.Hex("#FFD3B8"), TCUI.Hex("#7FD0FF"), y / 63f); tex.SetPixel(0, y, c); tex.SetPixel(1, y, c); }
         tex.Apply();
         var ri = bg.gameObject.AddComponent<RawImage>(); ri.texture = tex; ri.raycastTarget = false;
         for (int i = 0; i < 14; i++)
@@ -96,13 +98,96 @@ public class TCMenuUI : MonoBehaviour
             var smr = previewSpider.GetComponentInChildren<SkinnedMeshRenderer>();
             var b = smr ? smr.bounds : new Bounds(previewSpider.transform.position, Vector3.one);
             float size = b.size.magnitude;
-            previewCam.transform.position = b.center + new Vector3(0, size * 0.55f, -size * 1.5f);
-            previewCam.transform.LookAt(b.center);
+            var aim = b.center + Vector3.up * size * 0.22f; // new chibi spider sits taller: frame its full body
+            previewCam.transform.position = aim + new Vector3(0, size * 0.6f, -size * 1.7f);
+            previewCam.transform.LookAt(aim); previewSize = size;
         }
         ApplyPreview(TCSave.SelectedSkin);
     }
     void ApplyPreview(int i) { if (previewSpider && previewSkin != i) { previewSkin = i; TCSkins.Apply(previewSpider, i); } }
-    void LateUpdate() { if (previewSpider) previewSpider.transform.localRotation = Quaternion.Euler(0, Mathf.Sin(Time.unscaledTime * 1.3f) * 28f, 0); } // gentle sway, face stays visible
+    void LateUpdate() { if (previewSpider && !entering) previewSpider.transform.localRotation = Quaternion.Euler(0, Mathf.Sin(Time.unscaledTime * 1.3f) * 28f, 0); } // gentle sway, face stays visible
+
+    // ---------- Main menu entrance: drop on a silk thread, somersault, squash landing, dust, wave ----------
+    bool entering; LineRenderer silk; float previewSize = 1;
+    IEnumerator Entrance()
+    {
+        if (!previewSpider) yield break;
+        entering = true;
+        var cs = previewSpider.GetComponent<TCCuteSpider>();
+        float S = previewSize;
+        // Animate a pivot above the spider (its own Animator owns the spider transform).
+        var pivot = new GameObject("DropPivot").transform; pivot.SetParent(previewSpider.transform.parent, false);
+        float h = S * 0.22f; pivot.localPosition = new Vector3(0, h, 0);
+        previewSpider.transform.SetParent(pivot, true);
+        var st = pivot; Vector3 rest = new Vector3(0, h, 0), top = new Vector3(0, h + S * 1.6f, 0);
+        silk = new GameObject("Silk").AddComponent<LineRenderer>(); silk.transform.SetParent(pivot.parent, false); silk.useWorldSpace = false;
+        silk.material = new Material(Shader.Find("Sprites/Default")); silk.startColor = silk.endColor = new Color(1, 1, 1, 0.85f);
+        silk.widthMultiplier = S * 0.012f; silk.positionCount = 2; silk.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        st.localPosition = top; st.localScale = Vector3.one;
+        yield return new WaitForSecondsRealtime(0.25f);
+        TCSfx.Play("menu_drop", 0.6f);
+        bool flipSfx = false;
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.95f)
+        {
+            float e = 1 - Mathf.Pow(1 - x, 3);                                 // ease-out drop
+            st.localPosition = Vector3.Lerp(top, rest, e);
+            float flip = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.25f, 0.8f, x));
+            if (!flipSfx && x > 0.25f) { flipSfx = true; TCSfx.Play("menu_flip", 0.6f); }
+            st.localRotation = Quaternion.Euler(-360f * flip, 0, 0) * Quaternion.Euler(0, 0, Mathf.Sin(x * 9) * 8 * (1 - x)); // somersault on the thread
+            float str = 1 + 0.18f * Mathf.Sin(x * Mathf.PI);                    // stretch while falling
+            st.localScale = new Vector3(1 / Mathf.Sqrt(str), str, 1 / Mathf.Sqrt(str));
+            Silk(st, S); yield return null;
+        }
+        st.localPosition = rest; st.localRotation = Quaternion.identity;
+        TCSfx.Play("land", 0.7f); Dust(pivot.parent, S);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.45f)       // squash + wobble settle
+        {
+            float k = Mathf.Sin(x * Mathf.PI * 3) * (1 - x) * 0.3f;
+            st.localScale = new Vector3(1 + k, 1 - k, 1 + k); Silk(st, S);
+            silk.startColor = silk.endColor = new Color(1, 1, 1, 0.85f * (1 - x)); yield return null;
+        }
+        st.localScale = Vector3.one; Destroy(silk.gameObject);
+        TCSfx.Play("wave", 0.6f);
+        cs = previewSpider.GetComponent<TCCuteSpider>();
+        for (float x = 0; x < 1.4f; x += Time.unscaledDeltaTime) { if (cs) cs.wave = Mathf.Clamp01(Mathf.Min(x * 5, (1.4f - x) * 5)); yield return null; }
+        if (cs) cs.wave = 0;
+        entering = false;
+    }
+    void Silk(Transform st, float S) { if (!silk) return; silk.SetPosition(0, st.localPosition + new Vector3(0, S * 0.5f, 0)); silk.SetPosition(1, new Vector3(0, S * 4f, 0)); }
+    void Dust(Transform parent, float S)
+    {
+        var m = new Material(Shader.Find("Sprites/Default"));
+        for (int i = 0; i < 10; i++)
+        {
+            var g = GameObject.CreatePrimitive(PrimitiveType.Sphere); Destroy(g.GetComponent<Collider>()); g.transform.SetParent(parent, false);
+            float a = i / 10f * Mathf.PI * 2; var dir = new Vector3(Mathf.Cos(a), 0.15f, Mathf.Sin(a) * 0.6f);
+            g.GetComponent<Renderer>().sharedMaterial = m; g.GetComponent<Renderer>().material.color = i % 3 == 0 ? new Color(1, 0.95f, 0.6f, 0.9f) : new Color(1, 1, 1, 0.8f);
+            StartCoroutine(Puff(g.transform, dir, S));
+        }
+    }
+    IEnumerator Puff(Transform t, Vector3 dir, float S)
+    {
+        var r = t.GetComponent<Renderer>(); var c = r.material.color;
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.5f)
+        {
+            t.localPosition = dir * S * (0.25f + 0.45f * x); t.localScale = Vector3.one * S * 0.07f * (1 - x * 0.6f);
+            r.material.color = new Color(c.r, c.g, c.b, c.a * (1 - x)); yield return null;
+        }
+        Destroy(t.gameObject);
+    }
+    // UI pop-in around the spider (staggered squash pop)
+    IEnumerator PopIn(Transform t, float delay)
+    {
+        if (!t) yield break; var baseS = t.localScale; t.localScale = Vector3.zero;
+        yield return new WaitForSecondsRealtime(delay);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.35f)
+        {
+            if (!t) yield break;
+            float k = 1 + Mathf.Sin(x * Mathf.PI) * 0.25f * (1 - x) ; float e = 1 - Mathf.Pow(1 - x, 3);
+            t.localScale = new Vector3(baseS.x * e * k, baseS.y * e / k, baseS.z); yield return null;
+        }
+        if (t) t.localScale = baseS;
+    }
     public void PreviewSkin(int i) => ApplyPreview(i); // used by the screenshot harness
 
     // ---------- Main ----------
@@ -129,7 +214,10 @@ public class TCMenuUI : MonoBehaviour
 
         var play = TCUI.Btn("Play", safe, "PLAY", TCUI.Mint, () => StartCoroutine(LoadGame()), 96, TCUI.Icon("play")); // no game-start sound
         TCUI.Place((RectTransform)play.transform, new Vector2(0.5f, 0), new Vector2(0, 330), new Vector2(640, 200));
-        StartCoroutine(Pulse(play.transform));
+        { var glow = TCUI.Img("Glow", safe, new Color(1f, 0.95f, 0.55f, 0.55f), TCUI.Circle); glow.raycastTarget = false;
+          TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 330), new Vector2(820, 300)); glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1);
+          StartCoroutine(Glow(glow)); }
+        StartCoroutine(Pulse(play.transform)); StartCoroutine(Breathe(play.transform));
 
         SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 120), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel); });
         SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 120), () => TCUI.Show(this, shopPanel));
@@ -148,6 +236,8 @@ public class TCMenuUI : MonoBehaviour
         var t = TCUI.Label("Value", pill.transform, "0", 48, TCUI.Cocoa, TextAlignmentOptions.Right); TCUI.Stretch(t.rectTransform, 90, 24, 0, 0); return t;
     }
     IEnumerator Bob(RectTransform r, float amp, float speed) { var p = r.anchoredPosition; while (r) { r.anchoredPosition = p + new Vector2(0, Mathf.Sin(Time.unscaledTime * speed) * amp); yield return null; } }
+    IEnumerator Glow(Image g) { while (g) { float k = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3f); g.color = new Color(1f, 0.95f, 0.55f, 0.25f + 0.35f * k); g.transform.localScale = Vector3.one * (0.95f + 0.1f * k); yield return null; } }
+    IEnumerator Breathe(Transform t) { yield return new WaitForSecondsRealtime(1.6f); while (t) { float k = Mathf.Sin(Time.unscaledTime * 3f) * 0.04f; t.localScale = new Vector3(1 + k, 1 - k * 0.6f, 1); yield return null; } }
     IEnumerator Pulse(Transform t) { var ic = t.Find("Icon"); while (ic) { ic.localScale = Vector3.one * (1 + 0.12f * Mathf.Sin(Time.unscaledTime * 5)); yield return null; } }
     IEnumerator LoadGame()
     {
@@ -170,7 +260,7 @@ public class TCMenuUI : MonoBehaviour
             int idx = i; var def = TCSkins.All[i];
             int col = i % 5, row = i / 5;
             var b = TCUI.Btn("Skin" + i, card, "", def.body, () => { selectedCard = idx; ApplyPreview(idx); RefreshSkinGrid(); }, 30);
-            TCUI.Place((RectTransform)b.transform, new Vector2(0.5f, 1), new Vector2(-376 + col * 188, -720 - row * 230), new Vector2(160, 160));
+            TCUI.Place((RectTransform)b.transform, new Vector2(0.5f, 1), new Vector2(-376 + col * 188, -700 - row * 200), new Vector2(150, 150));
             var accent = TCUI.Img("Accent", b.transform, def.accent, TCUI.Circle); TCUI.Place(accent.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(70, 70));
             var lbl = TCUI.Label("Price", b.transform, "", 30, TCUI.Cocoa); TCUI.Place(lbl.rectTransform, new Vector2(0.5f, 0), new Vector2(0, -24), new Vector2(200, 40));
             var lk = TCUI.Img("Lock", b.transform, Color.white, TCUI.Icon("lock")); TCUI.Place(lk.rectTransform, new Vector2(1, 1), new Vector2(-24, -24), new Vector2(48, 48));
