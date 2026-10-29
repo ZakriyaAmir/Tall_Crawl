@@ -123,16 +123,16 @@ public class player : MonoBehaviour
     {
         if (paused || GameOver) return;
 
-        // Scale jump duration inversely with speed so the jump completes quickly at high climb speeds
-        float speedRatio = Mathf.Clamp(calcSpeed / Mathf.Max(0.1f, C.startSpeed), 1f, 2.0f);
-        float jumpDur = 0.6f / speedRatio;
-        float dblJumpDur = 0.85f / speedRatio;
+        // Calculate jump durations: nice, sustained hangtime for visibility, with gentle speed scaling at high climb speeds
+        float speedRatio = Mathf.Clamp(calcSpeed / Mathf.Max(0.1f, C.startSpeed), 1f, 1.4f);
+        float jumpDur = 0.95f / speedRatio;
+        float dblJumpDur = 1.35f / speedRatio;
 
         // In jump mode: a second jump trigger executes a backflip double jump
         if (spider && spider.IsJumping && canDoubleJump)
         {
             canDoubleJump = false;
-            jumpCooldown = 0.5f / speedRatio;
+            jumpCooldown = 0.6f / speedRatio;
             if (anim) anim.SetTrigger("jump");
             spider.doubleJump(dblJumpDur);
             OnJumped?.Invoke();
@@ -140,7 +140,7 @@ public class player : MonoBehaviour
         }
 
         if (jumpCooldown > 0) return;
-        jumpCooldown = 0.25f / speedRatio; // short cooldown to allow responsive double-tap / double-jump input
+        jumpCooldown = 0.35f / speedRatio; // cooldown window allowing double-jump trigger while in air
         canDoubleJump = true;
         if (anim) anim.SetTrigger("jump");
         if (spider) spider.jump(jumpDur);

@@ -215,8 +215,8 @@ public class TCMenuUI : MonoBehaviour
 
         if (TCAssets.I.logo)
         {
-            var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.84f), Vector2.zero, new Vector2(450, 420)); // cute app logo + title
-            StartCoroutine(Bob(logo.rectTransform, 12, 1.6f));
+            var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.83f), Vector2.zero, new Vector2(760, 428)); // cute & awesome 3D title logo
+            StartCoroutine(Bob(logo.rectTransform, 10, 1.8f));
         }
         else { var t = TCUI.Label("Title", safe, "TALL CRAWL", 120, TCUI.Cocoa); TCUI.Place(t.rectTransform, new Vector2(0.5f, 0.85f), Vector2.zero, new Vector2(1000, 200)); }
 

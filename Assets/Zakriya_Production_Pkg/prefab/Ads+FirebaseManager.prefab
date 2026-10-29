@@ -68,7 +68,7 @@ MonoBehaviour:
   maxRewarded: 0
   maxRewardedInterstitial: 0
   maxMRec: 0
-  bannerPosition: 0
+  bannerPosition: 1
   MRecPos: 1
   money: 0
   moneytext: {fileID: 0}

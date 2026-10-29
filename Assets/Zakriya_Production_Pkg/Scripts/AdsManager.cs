@@ -38,7 +38,7 @@ public class AdsManager : MonoBehaviour
     public bool maxRewardedInterstitial;
     public bool maxMRec;
 
-    public BannerPosition bannerPosition;
+    public BannerPosition bannerPosition = BannerPosition.Bottom;
     public enum BannerPosition
     {
         Top,

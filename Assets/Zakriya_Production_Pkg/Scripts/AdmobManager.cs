@@ -383,15 +383,17 @@ public class AdmobManager : MonoBehaviour
 
         if (AdsManager.Instance.bannerPosition == AdsManager.BannerPosition.Top)
         {
-            //Customize banner ad size here
-            Debug.Log("Top Banner");
-            _bannerView = new BannerView(_adBannerUnitId, AdSize.Banner, AdPosition.Top);
+            // Anchored adaptive banner stretched horizontally across screen width
+            AdSize adaptiveSize = AdSize.GetCurrentOrientationAnchoredAdaptiveBannerAdSizeWithWidth(AdSize.FullWidth);
+            Debug.Log("Top Banner (adaptive size: " + adaptiveSize.Width + "x" + adaptiveSize.Height + ")");
+            _bannerView = new BannerView(_adBannerUnitId, adaptiveSize, AdPosition.Top);
         }
         else if (AdsManager.Instance.bannerPosition == AdsManager.BannerPosition.Bottom)
         {
-            //Customize banner ad size here
-            Debug.Log("Bottom Banner");
-            _bannerView = new BannerView(_adBannerUnitId, AdSize.Banner, AdPosition.Bottom);
+            // Anchored adaptive banner stretched horizontally across screen width at the very bottom
+            AdSize adaptiveSize = AdSize.GetCurrentOrientationAnchoredAdaptiveBannerAdSizeWithWidth(AdSize.FullWidth);
+            Debug.Log("Bottom Banner (adaptive size: " + adaptiveSize.Width + "x" + adaptiveSize.Height + ")");
+            _bannerView = new BannerView(_adBannerUnitId, adaptiveSize, AdPosition.Bottom);
         }
     }
 

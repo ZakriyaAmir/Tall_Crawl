@@ -169,11 +169,11 @@ public class TCCuteSpider : MonoBehaviour
         Vector3 off = bone ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
         if (off.magnitude > 5f) off = Vector3.zero;
 
-        // Is the spider actively moving/climbing or idle?
-        // In gameplay: moving if game run is active, OR during the start intro walk-up.
+        // Is the spider actively moving/climbing, jumping, or idle?
         var playerComp = GetComponentInParent<player>();
         bool isIntroWalking = anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("spiderIntro");
-        bool isMoving = (playerComp != null && !playerComp.paused && !playerComp.GameOver) || isIntroWalking;
+        bool isJumping = (pi && pi.IsJumping) || (anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("SpiderJump")) || backflipTimer > 0;
+        bool isMoving = (playerComp != null && !playerComp.paused && !playerComp.GameOver && !isJumping) || isIntroWalking;
 
         // Double jump backflip animation & extra hop height (going higher rather than falling down)
         float flipPitch = 0f;
@@ -185,23 +185,51 @@ public class TCCuteSpider : MonoBehaviour
             flipPitch = -360f * Mathf.SmoothStep(0, 1, p);
 
             // Double jump boost: blend from captured jump offset to 0 as animation completes,
-            // while adding a high upward launch arc outward from the trunk
+            // launching with double the height arc
             float arc = Mathf.Sin(p * Mathf.PI);
             float carryOver = 1f - Mathf.SmoothStep(0, 1, p);
-            off = Vector3.Lerp(off, jumpOffsetAtDoubleJump * carryOver, carryOver) + Vector3.up * (arc * 1.35f);
+            off = Vector3.Lerp(off, jumpOffsetAtDoubleJump * carryOver, carryOver) + Vector3.up * (arc * 2.7f);
         }
 
         root.localPosition = restRoot + off;
         float hop = Mathf.Clamp01(off.magnitude * 4f);
-        // Squash & stretch + scuttle bounce (gentle breathing when idle, active bounce when moving)
-        float bob = isMoving ? Mathf.Sin(t * 24f) * 0.035f : Mathf.Sin(t * 2.5f) * 0.015f;
+        // Squash & stretch + scuttle bounce (gentle breathing when idle, active bounce when moving, dynamic stretch when jumping)
+        float bob = isJumping ? 0.08f * Mathf.Sin(t * 18f) : isMoving ? Mathf.Sin(t * 24f) * 0.035f : Mathf.Sin(t * 2.5f) * 0.015f;
         body.localScale = new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f);
         if (head) head.localPosition = headRest + new Vector3(Mathf.Sin(t * (isMoving ? 12f : 2f)) * 0.015f, Mathf.Abs(Mathf.Sin(t * (isMoving ? 12f : 2f))) * 0.02f, 0) * head.localScale.y;
 
-        // Legs: alternating tetrapod gait only when actively moving / climbing. Keep still in rest position during idle!
+        // Legs:
+        // - Jumping: expressive jump pose (tuck/reach pose) rather than running leg cycle!
+        // - Moving / Climbing: alternating tetrapod gait.
+        // - Idle: rest position.
         for (int i = 0; i < legs.Count; i++)
         {
-            if (isMoving)
+            if (isJumping)
+            {
+                // Dynamic jump pose:
+                // Front legs (0, 1 on left; 4, 5 on right) reach up and forward
+                // Rear legs (2, 3 on left; 6, 7 on right) trail back and tuck slightly
+                bool isLeft = i < 4;
+                int legIndex = i % 4;
+                float tuckAngle;
+                float spreadAngle;
+
+                if (legIndex <= 1)
+                {
+                    // Front legs reach upward into the air
+                    tuckAngle = -35f + Mathf.Sin(t * 14f + i) * 6f;
+                    spreadAngle = (isLeft ? -15f : 15f);
+                }
+                else
+                {
+                    // Rear legs stretch/trail backward
+                    tuckAngle = 28f + Mathf.Sin(t * 14f + i) * 6f;
+                    spreadAngle = (isLeft ? 10f : -10f);
+                }
+
+                legs[i].localRotation = Quaternion.Euler(0, spreadAngle, 0) * legRest[i] * Quaternion.Euler(tuckAngle, 0, 0);
+            }
+            else if (isMoving)
             {
                 int side = i < 4 ? 0 : 1, k = i % 4;
                 float ph = t * 12f + (((k + side) & 1) == 0 ? 0 : Mathf.PI);
@@ -241,6 +269,8 @@ public class TCCuteSpider : MonoBehaviour
         if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", emission > 0 ? c * emission : Color.black);
         if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0f);
         if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+        if (m.HasProperty("_OutlineColor")) m.SetColor("_OutlineColor", new Color(0.12f, 0.08f, 0.10f, 1f));
+        if (m.HasProperty("_OutlineWidth")) m.SetFloat("_OutlineWidth", 0.018f);
         if (emission > 0) { m.EnableKeyword("_EMISSION"); }
         else m.DisableKeyword("_EMISSION");
         mats[key] = m; return m;

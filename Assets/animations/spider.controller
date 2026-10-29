@@ -335,7 +335,7 @@ AnimatorState:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: SpiderJump
-  m_Speed: 1
+  m_Speed: 0.8
   m_CycleOffset: 0
   m_Transitions:
   - {fileID: -6833779307662806036}
@@ -512,7 +512,7 @@ AnimatorState:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: spiderIdle
-  m_Speed: 0
+  m_Speed: 1
   m_CycleOffset: 0
   m_Transitions:
   - {fileID: 8876864792141446702}
@@ -525,7 +525,7 @@ AnimatorState:
   m_MirrorParameterActive: 0
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
-  m_Motion: {fileID: 7400000, guid: 8b469035c3ebae149a6031707b86d945, type: 2}
+  m_Motion: {fileID: 7400000, guid: 8b469035c3ebae149a6031707b86d946, type: 2}
   m_Tag: 
   m_SpeedParameter: 
   m_MirrorParameter: 

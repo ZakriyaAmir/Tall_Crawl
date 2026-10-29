@@ -415,22 +415,25 @@ public class MediationManager : MonoBehaviour
 
         // Banners are automatically sized to 320x50 on phones and 728x90 on tablets.
         // You may use the utility method `MaxSdkUtils.isTablet()` to help with view sizing adjustments.
-        //Customize banner ad size here
+        // Position banner at the bottom or top center
         if (AdsManager.Instance.bannerPosition == AdsManager.BannerPosition.Top)
         {
-            //Customize banner ad size here
             MaxSdk.CreateBanner(BannerAdUnitId, MaxSdkBase.BannerPosition.TopCenter);
         }
         else if (AdsManager.Instance.bannerPosition == AdsManager.BannerPosition.Bottom)
         {
-            //Customize banner ad size here
             MaxSdk.CreateBanner(BannerAdUnitId, MaxSdkBase.BannerPosition.BottomCenter);
         }
 
         // Set background or background color for banners to be fully functional.
         MaxSdk.SetBannerBackgroundColor(BannerAdUnitId, Color.black);
         // MaxSdk.SetBannerBackgroundColor(BannerAdUnitId, "#000000");
-        MaxSdk.SetBannerWidth(BannerAdUnitId, 320);
+        // Adapt width to full screen width if supported by device density
+        float screenWidthDp = Screen.width / (Screen.dpi > 0 ? Screen.dpi / 160f : 1f);
+        if (screenWidthDp > 0)
+        {
+            MaxSdk.SetBannerWidth(BannerAdUnitId, screenWidthDp);
+        }
     }
 
     public void ShowBannerMax()
