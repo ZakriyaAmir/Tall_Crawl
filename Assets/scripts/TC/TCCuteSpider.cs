@@ -68,18 +68,20 @@ public class TCCuteSpider : MonoBehaviour
         var fangMat = Flat(def.body * 0.70f, bodyMat, 0, def.metallic, def.gloss);
 
         Vector3 s = def.BodyScale;
-        float pivotY = R * 0.95f;
+        float pivotY = R * 0.85f;
         var bodyT = new GameObject("body").transform; bodyT.SetParent(root, false); bodyT.localPosition = new Vector3(0, pivotY, 0);
         cs.body = bodyT; cs.bodyRest = bodyT.localPosition; cs.bodyScale = Vector3.one;
         Vector3 P(float x, float y, float z) => new Vector3(x * R, y * R - pivotY, z * R);
-        // Big round abdomen at the back (shape per skin), smaller round head in front.
-        Vector3 ab = Vector3.Scale(new Vector3(1.02f, 0.95f, 1.0f), s) * R;
-        var abd = Part(PrimitiveType.Sphere, bodyT, P(0, 1.08f, -0.55f) , ab * 2f, bodyMat).transform; abd.name = "abdomen";
-        abd.localRotation = Quaternion.Euler(-12, 0, 0);
-        float hr = 0.8f * Mathf.Lerp(1f, s.x, 0.35f);
-        var headT = Part(PrimitiveType.Sphere, bodyT, P(0, 0.80f, 0.55f), new Vector3(2f, 1.85f, 1.9f) * hr * R, plain).transform; headT.name = "head";
+
+        // Uniform, well-proportioned hyper-casual abdomen (shortened, neat oval)
+        Vector3 ab = Vector3.Scale(new Vector3(0.95f, 0.82f, 0.95f), s) * R;
+        var abd = Part(PrimitiveType.Sphere, bodyT, P(0, 0.92f, -0.42f), ab * 2f, bodyMat).transform; abd.name = "abdomen";
+        abd.localRotation = Quaternion.Euler(-6, 0, 0);
+
+        float hr = 0.78f * Mathf.Lerp(1f, s.x, 0.35f);
+        var headT = Part(PrimitiveType.Sphere, bodyT, P(0, 0.82f, 0.52f), new Vector3(1.85f, 1.72f, 1.78f) * hr * R, plain).transform; headT.name = "head";
         cs.head = headT; cs.headRest = headT.localPosition;
-        Vector3 HS(Vector3 dir, float lift) { dir.Normalize(); return headT.localPosition + Vector3.Scale(dir, new Vector3(1f, 0.925f, 0.95f) * hr * R) + dir * lift * R; }
+        Vector3 HS(Vector3 dir, float lift) { dir.Normalize(); return headT.localPosition + Vector3.Scale(dir, new Vector3(0.92f, 0.86f, 0.89f) * hr * R) + dir * lift * R; }
         cs.eyes.Clear();
         for (int sgn = -1; sgn <= 1; sgn += 2)
         {
@@ -95,26 +97,42 @@ public class TCCuteSpider : MonoBehaviour
             se.localRotation = Quaternion.LookRotation(sd, Vector3.up);
             cs.eyes.Add(se); cs.eyeRest.Add(se.localScale);
             // tiny fangs / pedipalps under the face
-            var f = Part(PrimitiveType.Capsule, bodyT, P(0.17f * sgn, 0.22f, 1.10f), new Vector3(0.17f, 0.15f, 0.17f) * R, fangMat).transform;
+            var f = Part(PrimitiveType.Capsule, bodyT, P(0.17f * sgn, 0.22f, 1.05f), new Vector3(0.17f, 0.15f, 0.17f) * R, fangMat).transform;
             f.localRotation = Quaternion.Euler(18, 0, -8 * sgn);
         }
 
-        // 8 short, chunky, rounded legs with a slight bend (two capsules + rounded knee), 4 per side.
+        // 8 sleek legs uniformly distributed along the body
         for (int sgn = -1; sgn <= 1; sgn += 2)
             for (int k = 0; k < 4; k++)
             {
-                float z = Mathf.Lerp(0.85f, -0.55f, k / 3f);
+                // Z spans uniformly from front head/thorax (0.65) to back abdomen (-0.65)
+                float z = Mathf.Lerp(0.65f, -0.65f, k / 3f);
+                float sideX = sgn * Mathf.Lerp(0.60f, 0.70f, Mathf.Sin(k / 3f * Mathf.PI));
+                float hipY = Mathf.Lerp(0.58f, 0.52f, k / 3f);
+
                 var hip = new GameObject("leg").transform; hip.SetParent(bodyT, false);
-                hip.localPosition = P(sgn * 0.55f, 0.62f, z);
-                hip.localRotation = Quaternion.Euler(0, sgn * (90 - 32 * (k - 1.5f)), 0);
-                float th = 0.36f;
-                // upper: out and slightly up
-                var up1 = Part(PrimitiveType.Capsule, hip, new Vector3(0, 0.08f * R, 0.26f * R), new Vector3(th, 0.32f, th) * R, legMat).transform;
-                up1.localRotation = Quaternion.Euler(72, 0, 0);
-                Part(PrimitiveType.Sphere, hip, new Vector3(0, 0.15f * R, 0.55f * R), Vector3.one * th * 1.04f * R, legMat);
-                // lower: down to the ground, chunky rounded foot
-                var lo = Part(PrimitiveType.Capsule, hip, new Vector3(0, -0.15f * R, 0.68f * R), new Vector3(th * 1.08f, 0.34f, th * 1.08f) * R, legMat).transform;
-                lo.localRotation = Quaternion.Euler(-20, 0, 0);
+                hip.localPosition = P(sideX, hipY, z);
+
+                // Natural spider leg spread angle: front reach forward, rear reach backward
+                float yaw = sgn * (45f + k * 30f);
+                hip.localRotation = Quaternion.Euler(0, yaw, 0);
+
+                // Sleek, well-proportioned leg segments
+                float th = 0.26f;
+                float upperLen = 0.56f;
+                float lowerLen = 0.62f;
+
+                // Upper leg: arching outward and upward
+                var up1 = Part(PrimitiveType.Capsule, hip, new Vector3(0, 0.16f * R, upperLen * 0.5f * R), new Vector3(th, upperLen * 0.5f, th) * R, legMat).transform;
+                up1.localRotation = Quaternion.Euler(62, 0, 0);
+
+                // Knee joint
+                Part(PrimitiveType.Sphere, hip, new Vector3(0, 0.28f * R, upperLen * R), Vector3.one * th * 1.15f * R, legMat);
+
+                // Lower leg: stepping down firmly to the trunk surface
+                var lo = Part(PrimitiveType.Capsule, hip, new Vector3(0, -0.22f * R, (upperLen + lowerLen * 0.35f) * R), new Vector3(th * 0.88f, lowerLen * 0.55f, th * 0.88f) * R, legMat).transform;
+                lo.localRotation = Quaternion.Euler(-32, 0, 0);
+
                 cs.legs.Add(hip); cs.legRest.Add(hip.localRotation);
             }
         Vector3 radii = ab; // spikes sit on the abdomen
@@ -152,28 +170,24 @@ public class TCCuteSpider : MonoBehaviour
     [System.NonSerialized] public float wave; // 0..1, menu wave (front leg up)
     public Bounds cachedBounds; Transform root; Vector3 restRoot;
     float backflipTimer, backflipDuration;
-    Vector3 jumpOffsetAtDoubleJump;
+    float currentAirHeight;
+    float jumpBlend; // 0 (on ground/running) -> 1 (fully in jump pose)
 
     public void TriggerBackflip(float duration = 0.75f)
     {
         backflipDuration = duration;
         backflipTimer = duration;
-        // Capture the spider's current jump displacement at the moment of double jumping
-        // so the double jump launches higher from this current apex instead of dropping down
-        var st = transform;
-        Vector3 curOff = bone ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
-        if (curOff.magnitude > 5f) curOff = Vector3.zero;
-        jumpOffsetAtDoubleJump = curOff;
     }
 
     void LateUpdate()
     {
         if (!root) return;
-        t += Time.deltaTime;
+        float dt = Time.deltaTime;
+        t += dt;
         var st = transform;
         // Follow the rig's root motion (jump hop etc.) but keep our own clean orientation.
-        Vector3 off = bone ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
-        if (off.magnitude > 5f) off = Vector3.zero;
+        Vector3 rigOff = bone ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
+        if (rigOff.magnitude > 5f) rigOff = Vector3.zero;
 
         // Is the spider actively moving/climbing, jumping, or idle?
         var playerComp = GetComponentInParent<player>();
@@ -181,83 +195,119 @@ public class TCCuteSpider : MonoBehaviour
         bool isJumping = (pi && pi.IsJumping) || (anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("SpiderJump")) || backflipTimer > 0;
         bool isMoving = (playerComp != null && !playerComp.paused && !playerComp.GameOver && !isJumping) || isIntroWalking;
 
-        // Double jump backflip animation & extra hop height (going higher rather than falling down)
+        // Smooth jump/landing blend transition (prevents sudden snapping into or out of jump pose)
+        float targetJumpBlend = isJumping ? 1f : 0f;
+        jumpBlend = Mathf.MoveTowards(jumpBlend, targetJumpBlend, dt * (isJumping ? 12f : 7f));
+
+        // Smooth height calculation:
+        // Rig jump base height:
+        float rigY = Mathf.Max(0f, rigOff.y);
+
+        // Double jump extra height: launches directly from current height, attaining more vertical height
         float flipPitch = 0f;
+        float extraHeight = 0f;
         if (backflipTimer > 0)
         {
-            backflipTimer -= Time.deltaTime;
+            backflipTimer -= dt;
             float p = 1f - Mathf.Clamp01(backflipTimer / backflipDuration);
             // Smooth backflip rotation 0 -> -360 degrees along local X (pitching backward)
             flipPitch = -360f * Mathf.SmoothStep(0, 1, p);
-
-            // Double jump boost: blend from captured jump offset to 0 as animation completes,
-            // launching with double the height arc
-            float arc = Mathf.Sin(p * Mathf.PI);
-            float carryOver = 1f - Mathf.SmoothStep(0, 1, p);
-            off = Vector3.Lerp(off, jumpOffsetAtDoubleJump * carryOver, carryOver) + Vector3.up * (arc * 2.7f);
+            // Extra vertical boost: smooth parabolic arc reaching +2.6m above current position
+            extraHeight = Mathf.Sin(p * Mathf.PI) * 2.6f;
         }
 
+        float targetHeight = isJumping ? (rigY + extraHeight) : 0f;
+        // When jumping or in air, smooth vertical displacement cleanly
+        currentAirHeight = Mathf.Lerp(currentAirHeight, targetHeight, 1f - Mathf.Exp(-14f * dt));
+        if (!isJumping && currentAirHeight < 0.01f) currentAirHeight = 0f;
+
+        Vector3 off = new Vector3(rigOff.x, currentAirHeight, rigOff.z);
         root.localPosition = restRoot + off;
-        float hop = Mathf.Clamp01(off.magnitude * 4f);
+        float hop = Mathf.Clamp01(currentAirHeight * 3.5f);
+
         // Squash & stretch + scuttle bounce (gentle breathing when idle, active bounce when moving, dynamic stretch when jumping)
         float bob = isJumping ? 0.08f * Mathf.Sin(t * 18f) : isMoving ? Mathf.Sin(t * 24f) * 0.035f : Mathf.Sin(t * 2.5f) * 0.015f;
         body.localScale = new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f);
         if (head) head.localPosition = headRest + new Vector3(Mathf.Sin(t * (isMoving ? 12f : 2f)) * 0.015f, Mathf.Abs(Mathf.Sin(t * (isMoving ? 12f : 2f))) * 0.02f, 0) * head.localScale.y;
 
+        // Speed of movement affects leg gait rate
+        float moveSpeed = (playerComp && playerComp.calcSpeed > 0) ? playerComp.calcSpeed : 10f;
+        float gaitFreq = Mathf.Clamp(moveSpeed * 1.5f, 12f, 26f);
+
         // Legs:
-        // - Jumping: expressive jump pose (tuck/reach pose) rather than running leg cycle!
-        // - Moving / Climbing: alternating tetrapod gait.
-        // - Idle: rest position.
+        // Real spider gait is a wave-like alternating tetrapod gait:
+        // Left side:  L1, L3 swing while L2, L4 stand
+        // Right side: R2, R4 swing while R1, R3 stand
+        // In arachnid locomotion, adjacent contralateral pairs alternate (L1 & R2, L3 & R4, etc.)
+        // with phase propagation down the body (front legs step first, followed sequentially by rear legs)
         for (int i = 0; i < legs.Count; i++)
         {
-            if (isJumping)
-            {
-                // Dynamic jump pose:
-                // Front legs (0, 1 on left; 4, 5 on right) reach up and forward
-                // Rear legs (2, 3 on left; 6, 7 on right) trail back and tuck slightly
-                bool isLeft = i < 4;
-                int legIndex = i % 4;
-                float tuckAngle;
-                float spreadAngle;
+            bool isLeft = i < 4;
+            int legIdx = i % 4; // 0: front (L1/R1), 1: mid-front (L2/R2), 2: mid-rear (L3/R3), 3: rear (L4/R4)
 
-                if (legIndex <= 1)
-                {
-                    // Front legs reach upward into the air
-                    tuckAngle = -35f + Mathf.Sin(t * 14f + i) * 6f;
-                    spreadAngle = (isLeft ? -15f : 15f);
-                }
-                else
-                {
-                    // Rear legs stretch/trail backward
-                    tuckAngle = 28f + Mathf.Sin(t * 14f + i) * 6f;
-                    spreadAngle = (isLeft ? 10f : -10f);
-                }
+            // 1. Moving gait calculation (real spider sequential ripple tetrapod):
+            // Base alternating phase between odd and even legs, plus a realistic metachronal ripple along the body
+            float phaseOffset = (legIdx % 2 == 0 ? 0f : Mathf.PI) + (isLeft ? 0f : Mathf.PI) + (legIdx * 0.35f);
+            float ph = t * gaitFreq + phaseOffset;
 
-                legs[i].localRotation = Quaternion.Euler(0, spreadAngle, 0) * legRest[i] * Quaternion.Euler(tuckAngle, 0, 0);
-            }
-            else if (isMoving)
+            // Forward/backward stride swing:
+            // Front legs reach forward and pull; rear legs push backward
+            float swingAmp = legIdx == 0 ? 24f : (legIdx == 3 ? 20f : 16f);
+            float swing = Mathf.Sin(ph) * swingAmp;
+
+            // Realistic vertical lift: legs lift high during swing phase, step firmly onto surface
+            float liftNormalized = Mathf.Clamp01(Mathf.Sin(ph));
+            // Steeper parabolic lift (quick step up and down, longer stance)
+            float stepLift = Mathf.Pow(liftNormalized, 1.8f) * 22f;
+
+            // Lateral foot splay/curl during stride (spiders curl inward during lift, splay outward on stance):
+            float splay = Mathf.Cos(ph) * (isLeft ? -7f : 7f);
+
+            Quaternion moveRot = Quaternion.Euler(0, swing, splay) * legRest[i] * Quaternion.Euler(-stepLift, 0, 0);
+
+            // 2. Jumping pose calculation:
+            // Front legs reach upward and spread out to grab surfaces/balance
+            // Rear legs tuck inward and stream backward
+            float tuckAngle;
+            float spreadAngle;
+            if (legIdx <= 1)
             {
-                int side = i < 4 ? 0 : 1, k = i % 4;
-                float ph = t * 12f + (((k + side) & 1) == 0 ? 0 : Mathf.PI);
-                float swing = Mathf.Sin(ph) * 22f, lift = Mathf.Max(0, Mathf.Cos(ph)) * 18f;
-                legs[i].localRotation = Quaternion.Euler(0, swing, 0) * legRest[i] * Quaternion.Euler(-lift, 0, 0);
+                tuckAngle = -32f + Mathf.Sin(t * 12f + i) * 5f;
+                spreadAngle = (isLeft ? -18f : 18f);
             }
             else
             {
-                // Idle: keep legs in rest position (with support for wave in menu)
-                legs[i].localRotation = legRest[i];
+                tuckAngle = 26f + Mathf.Sin(t * 12f + i) * 5f;
+                spreadAngle = (isLeft ? 12f : -12f);
             }
+            Quaternion jumpRot = Quaternion.Euler(0, spreadAngle, 0) * legRest[i] * Quaternion.Euler(tuckAngle, 0, 0);
 
-            if (i == 4 && wave > 0) legs[i].localRotation = legRest[i] * Quaternion.Euler(-70f * wave, 0, Mathf.Sin(t * 16f) * 25f * wave); // hi!
+            // 3. Ground / Idle stance:
+            Quaternion groundRot = isMoving ? moveRot : legRest[i];
+
+            // 4. Smooth blend between Ground (walk/run/idle) and Jump poses:
+            legs[i].localRotation = Quaternion.Slerp(groundRot, jumpRot, jumpBlend);
+
+            // Friendly wave in main menu
+            if (i == 4 && wave > 0)
+            {
+                legs[i].localRotation = Quaternion.Slerp(
+                    legs[i].localRotation,
+                    legRest[i] * Quaternion.Euler(-70f * wave, 0, Mathf.Sin(t * 16f) * 25f * wave),
+                    wave
+                );
+            }
         }
+
         // Eyes: blink every few seconds
-        blink -= Time.deltaTime;
+        blink -= dt;
         if (blink < -0.14f) blink = Random.Range(1.8f, 4f);
         float lid = blink < 0 ? 0.12f : 1f;
         for (int i = 0; i < eyes.Count; i++) if (eyes[i]) { var r = eyeRest[i]; eyes[i].localScale = new Vector3(r.x, r.y * lid, r.z); }
+
         // Death: roll on the back, cartoon style. Backflip pitch combined with death roll.
         bool dead = pi ? pi.life <= 0 : anim && anim.isActiveAndEnabled && HasBool(anim, "death") && anim.GetBool("death");
-        flip = Mathf.MoveTowards(flip, dead ? 1 : 0, Time.deltaTime * 3f);
+        flip = Mathf.MoveTowards(flip, dead ? 1 : 0, dt * 3f);
         body.localRotation = Quaternion.Euler(flipPitch, 0, 180f * Mathf.SmoothStep(0, 1, flip));
     }
 

@@ -132,8 +132,8 @@ public class player : MonoBehaviour
         if (spider && spider.IsJumping && canDoubleJump)
         {
             canDoubleJump = false;
-            jumpCooldown = 0.6f / speedRatio;
-            if (anim) anim.SetTrigger("jump");
+            jumpCooldown = 0.5f / speedRatio;
+            // Trigger double jump without resetting the underlying base jump state
             spider.doubleJump(dblJumpDur);
             OnJumped?.Invoke();
             return;

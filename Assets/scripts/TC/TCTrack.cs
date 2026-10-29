@@ -164,6 +164,14 @@ public class TCTrack : MonoBehaviour
             angles.Add(a);
             var b = Spawn(branchPool, "branch", y, a);
             b.transform.rotation = Quaternion.Euler(0, a, 0);
+
+            // Apply flower/foliage variant:
+            // 4 variants: None (0), Red (1), Yellow (2), Pink (3)
+            // Each branch row or individual branch gets its own variant
+            var bv = b.GetComponent<TCBranchVariant>();
+            if (!bv) bv = b.gameObject.AddComponent<TCBranchVariant>();
+            var flowerType = (TCBranchVariant.FlowerType)Random.Range(0, 4);
+            bv.SetVariant(flowerType);
         }
         float prevRowY = lastHazardY;
         lastHazardY = y;

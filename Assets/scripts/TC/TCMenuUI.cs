@@ -27,8 +27,8 @@ public class TCMenuUI : MonoBehaviour
         { float d = 0.9f; foreach (Transform c in safe) { if (c.GetComponent<CanvasGroup>() || c.name == "Preview" || c.name.StartsWith("Shadow")) continue; StartCoroutine(PopIn(c, d)); d += 0.06f; } }
         ApplyMenuMusic();
         TCSkins.CheckAchievements();
-        if (PlayerPrefs.GetInt("consent", 0) == 0) TCUI.Show(this, consentPanel);
-        else { TCServices.Banner(true); if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(3.4f, () => OpenDaily())) /* after the spider entrance */; }
+        if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
+        TCServices.Banner(true);
     }
     void OnDestroy() { TCSave.Changed -= Refresh; if (rt) rt.Release(); }
     // The saved Music setting was only applied when toggled, so menu music always played on launch.
@@ -274,18 +274,18 @@ public class TCMenuUI : MonoBehaviour
             int idx = i; var def = TCSkins.All[i];
             int col = i % 5, row = i / 5;
             var b = TCUI.Btn("Skin" + i, card, "", def.body, () => { selectedCard = idx; ApplyPreview(idx); RefreshSkinGrid(); }, 30);
-            TCUI.Place((RectTransform)b.transform, new Vector2(0.5f, 1), new Vector2(-376 + col * 188, -700 - row * 200), new Vector2(150, 150));
-            var accent = TCUI.Img("Accent", b.transform, def.accent, TCUI.Circle); TCUI.Place(accent.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(70, 70));
-            var lbl = TCUI.Label("Price", b.transform, "", 30, TCUI.Cocoa); TCUI.Place(lbl.rectTransform, new Vector2(0.5f, 0), new Vector2(0, -24), new Vector2(200, 40));
-            var lk = TCUI.Img("Lock", b.transform, Color.white, TCUI.Icon("lock")); TCUI.Place(lk.rectTransform, new Vector2(1, 1), new Vector2(-24, -24), new Vector2(48, 48));
-            var ck = TCUI.Img("Check", b.transform, TCUI.Mint, TCUI.Circle); TCUI.Place(ck.rectTransform, new Vector2(1, 1), new Vector2(-20, -20), new Vector2(56, 56));
+            TCUI.Place((RectTransform)b.transform, new Vector2(0.5f, 1), new Vector2(-376 + col * 188, -660 - row * 175), new Vector2(140, 140));
+            var accent = TCUI.Img("Accent", b.transform, def.accent, TCUI.Circle); TCUI.Place(accent.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(64, 64));
+            var lbl = TCUI.Label("Price", b.transform, "", 28, TCUI.Cocoa); TCUI.Place(lbl.rectTransform, new Vector2(0.5f, 0), new Vector2(0, -22), new Vector2(190, 36));
+            var lk = TCUI.Img("Lock", b.transform, Color.white, TCUI.Icon("lock")); TCUI.Place(lk.rectTransform, new Vector2(1, 1), new Vector2(-22, -22), new Vector2(44, 44));
+            var ck = TCUI.Img("Check", b.transform, TCUI.Mint, TCUI.Circle); TCUI.Place(ck.rectTransform, new Vector2(1, 1), new Vector2(-18, -18), new Vector2(52, 52));
             var ckI = TCUI.Img("I", ck.transform, Color.white, TCUI.Icon("check")); TCUI.Stretch(ckI.rectTransform, 8, 8, 8, 8);
             skinCards.Add((b.GetComponent<Image>(), lbl, lk, ck, idx));
         }
-        skinAction = TCUI.Btn("Action", card, "SELECT", TCUI.Mint, SkinAction, 56);
-        TCUI.Place((RectTransform)skinAction.transform, new Vector2(0.5f, 0), new Vector2(-150, 120), new Vector2(520, 140));
+        skinAction = TCUI.Btn("Action", card, "SELECT", TCUI.Mint, SkinAction, 52);
+        TCUI.Place((RectTransform)skinAction.transform, new Vector2(0.5f, 0), new Vector2(-160, 100), new Vector2(460, 120));
         skinActionText = skinAction.GetComponentInChildren<TextMeshProUGUI>();
-        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "BACK", TCUI.Grey, () => { ApplyPreview(TCSave.SelectedSkin); TCUI.Hide(this, skinsPanel); }, 46).transform, new Vector2(0.5f, 0), new Vector2(300, 120), new Vector2(240, 120));
+        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "BACK", TCUI.Grey, () => { ApplyPreview(TCSave.SelectedSkin); TCUI.Hide(this, skinsPanel); }, 44).transform, new Vector2(0.5f, 0), new Vector2(260, 100), new Vector2(260, 120));
         selectedCard = TCSave.SelectedSkin;
         refreshers.Add(() => { if (skinsPanel.gameObject.activeSelf) RefreshSkinGrid(); });
         RefreshSkinGrid(); // grid showed every skin as equipped/unlocked until first tap

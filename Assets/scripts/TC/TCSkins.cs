@@ -19,11 +19,11 @@ public class SkinDef
 
     public Vector3 BodyScale => shape switch
     {
-        SkinShape.Chubby => new Vector3(1.18f, 0.9f, 1.12f),
-        SkinShape.Tall => new Vector3(0.9f, 1.18f, 0.95f),
-        SkinShape.Flat => new Vector3(1.22f, 0.74f, 1.2f),
-        SkinShape.Pear => new Vector3(1.0f, 1.0f, 1.25f),
-        _ => Vector3.one
+        SkinShape.Chubby => new Vector3(1.08f, 0.82f, 0.98f),
+        SkinShape.Tall => new Vector3(0.90f, 0.95f, 0.95f),
+        SkinShape.Flat => new Vector3(1.08f, 0.68f, 0.96f),
+        SkinShape.Pear => new Vector3(0.96f, 0.85f, 1.05f),
+        _ => new Vector3(1.0f, 0.82f, 0.98f)
     };
 
     public string UnlockText => unlock switch
@@ -59,6 +59,12 @@ public static class TCSkins
         new SkinDef("Chrome",     "#DCE2EA", "#8FA0B5", SkinPattern.Solid,    0f,   "#EAF2FF",   SkinShape.Round,  5, 0.45f, SkinUnlock.Coins, 6500,      "#2D8CFF", 0.5f, 0.55f, 0.75f),
         new SkinDef("Cactus",     "#6DBE6A", "#F4F1C8", SkinPattern.Solid,    0f,   "#BFEAB0",   SkinShape.Tall,   9, 0.3f,  SkinUnlock.Ads, 4,           "#141216", 0f,   0f,    0.3f),
         new SkinDef("Ruby",       "#C2283A", "#FF7A8A", SkinPattern.Solid,    0.1f, "#FF8A9A",   SkinShape.Chubby, 6, 0.4f,  SkinUnlock.Runs, 120,        "#FFFFFF", 0.3f, 0.2f,  0.85f),
+        // Premium special skins:
+        new SkinDef("Bumblebee",  "#FFC828", "#1C191E", SkinPattern.Stripes,  0f,   "#FFF4B8",   SkinShape.Chubby, 0, 0f,    SkinUnlock.Coins, 12000,     "#141216", 0f,   0.05f, 0.65f),
+        new SkinDef("Ladybug",    "#E52521", "#18151A", SkinPattern.Dots,     0f,   "#FFA0A8",   SkinShape.Round,  0, 0f,    SkinUnlock.Coins, 15000,     "#141216", 0f,   0.05f, 0.70f),
+        new SkinDef("Tiger",      "#F27818", "#181416", SkinPattern.Stripes,  0f,   "#FFCA80",   SkinShape.Flat,   4, 0.35f, SkinUnlock.Coins, 20000,     "#FFB420", 0.3f, 0.1f,  0.60f),
+        new SkinDef("Tarantula",  "#2E2522", "#E65A20", SkinPattern.Dots,     0f,   "#FF8850",   SkinShape.Tall,   8, 0.50f, SkinUnlock.Coins, 25000,     "#FF3300", 0.4f, 0.15f, 0.50f),
+        new SkinDef("Golden",     "#FFE259", "#FFA751", SkinPattern.Solid,    0.85f,"#FFDF00",   SkinShape.Pear,   6, 0.55f, SkinUnlock.Coins, 100000,    "#FFF4B8", 0.9f, 0.85f, 0.95f),
     };
 
     public static bool CanAutoUnlock(int i)
@@ -94,7 +100,55 @@ public static class TCSkins
             tr.colorGradient = g; tr.enabled = true;
             tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
-        else if (tr) tr.enabled = false;
+        // Golden Gleam Particles (Skin 19: Golden Spider)
+        var oldGoldFx = spider.transform.Find("GoldGleamFx");
+        if (i == 19)
+        {
+            if (!oldGoldFx)
+            {
+                var fxObj = new GameObject("GoldGleamFx");
+                fxObj.transform.SetParent(spider.transform, false);
+                fxObj.transform.localPosition = new Vector3(0, 0.2f, 0);
+
+                var ps = fxObj.AddComponent<ParticleSystem>();
+                var main = ps.main;
+                main.loop = true;
+                main.startLifetime = 1.0f;
+                main.startSpeed = 0.25f;
+                main.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.09f);
+                main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.88f, 0.35f, 1f), new Color(1f, 1f, 0.85f, 1f));
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.maxParticles = 35;
+
+                var emission = ps.emission;
+                emission.rateOverTime = 16f;
+
+                var shape = ps.shape;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 0.45f;
+
+                var colOverLifetime = ps.colorOverLifetime;
+                colOverLifetime.enabled = true;
+                var grad = new Gradient();
+                grad.SetKeys(
+                    new[] { new GradientColorKey(new Color(1f, 0.85f, 0.2f), 0f), new GradientColorKey(new Color(1f, 1f, 0.9f), 0.5f), new GradientColorKey(new Color(1f, 0.75f, 0.1f), 1f) },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.3f), new GradientAlphaKey(0f, 1f) }
+                );
+                colOverLifetime.color = grad;
+
+                var sizeOverLifetime = ps.sizeOverLifetime;
+                sizeOverLifetime.enabled = true;
+                var sizeCurve = new AnimationCurve(new Keyframe(0f, 0.2f), new Keyframe(0.5f, 1f), new Keyframe(1f, 0f));
+                sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
+
+                var psRenderer = fxObj.GetComponent<ParticleSystemRenderer>();
+                psRenderer.sharedMaterial = Resources.Load<Material>("Skins/Trail") ?? new Material(Shader.Find("Sprites/Default"));
+            }
+        }
+        else if (oldGoldFx)
+        {
+            Object.Destroy(oldGoldFx.gameObject);
+        }
     }
 
     public static Transform FindDeep(Transform t, string n)
