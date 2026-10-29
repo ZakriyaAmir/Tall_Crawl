@@ -133,7 +133,7 @@ public static class TCSetup
 
     static void Skins()
     {
-        var std = Shader.Find("Standard");
+        var spiderShader = Shader.Find("TallCrawl/SpiderPreBaked") ?? Shader.Find("Mobile/Diffuse");
         for (int i = 0; i < TCSkins.All.Length; i++)
         {
             var d = TCSkins.All[i];
@@ -144,11 +144,14 @@ public static class TCSetup
             ti.maxTextureSize = 256; ti.mipmapEnabled = true;
             var s = ti.GetPlatformTextureSettings("Android"); s.overridden = true; s.maxTextureSize = 256; s.format = TextureImporterFormat.ASTC_6x6; ti.SetPlatformTextureSettings(s);
             ti.SaveAndReimport();
-            var mat = Mat($"{Res}/Skins/Skin_{i}.mat", std);
+            var mat = Mat($"{Res}/Skins/Skin_{i}.mat", spiderShader);
             mat.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
-            mat.color = Color.white; mat.SetFloat("_Glossiness", d.gloss); mat.SetFloat("_Metallic", d.metallic);
-            if (d.emission > 0) { mat.EnableKeyword("_EMISSION"); mat.SetColor("_EmissionColor", d.accent * d.emission); mat.SetTexture("_EmissionMap", mat.mainTexture); mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive; }
-            else mat.DisableKeyword("_EMISSION");
+            mat.color = Color.white;
+            if (mat.HasProperty("_ShadowDull")) mat.SetFloat("_ShadowDull", 0.55f);
+            if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0f);
+            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
+            if (d.emission > 0) { mat.EnableKeyword("_EMISSION"); mat.SetColor("_EmissionColor", d.accent * d.emission); }
+            else { mat.DisableKeyword("_EMISSION"); if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", Color.black); }
             mat.enableInstancing = true;
             EditorUtility.SetDirty(mat);
             AssetDatabase.DeleteAsset($"{Res}/Skins/Hat_{i}.mat"); // hats/props removed: skins are colour + spikes + shape only
@@ -179,7 +182,15 @@ public static class TCSetup
             }
             Color c = d.pattern == SkinPattern.Gradient ? Color.Lerp(d.body, d.accent, k) : acc ? d.accent : d.body;
             if (d.pattern == SkinPattern.Solid) c = d.body;
-            c *= 1f - 0.07f * Mathf.Pow(Mathf.Abs(Mathf.Sin(v * Mathf.PI * 34f)), 6f); // faint 3D-print layer lines
+
+            // Pre-baked lighting & curvature:
+            // Medium, balanced tone: top has warm ambient light, underside has soft baked roll-off,
+            // so spiders look richly toned without looking overblown or too bright.
+            float curvature = 0.68f + 0.22f * Mathf.Sin(v * Mathf.PI * 0.5f);
+            float side = 0.94f + 0.06f * Mathf.Sin(u * Mathf.PI);
+            float layer = 1f - 0.04f * Mathf.Pow(Mathf.Abs(Mathf.Sin(v * Mathf.PI * 34f)), 6f); // faint 3D-print layer lines
+            c *= curvature * side * layer;
+
             c.a = 1; t.SetPixel(x, y, c);
         }
         t.Apply(); return t;

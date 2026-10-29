@@ -19,6 +19,7 @@ public class player : MonoBehaviour
     Animator camAnim;
     bool camBoost; [HideInInspector] public float camHoldUntil;
     float targetYaw, yaw, startY, jumpCooldown, yawAtTouch;
+    bool canDoubleJump;
     Vector2 touchStart, lastPos, lastTapPos; float touchStartTime, lastTapTime = -1f; bool dragging, swipeUsed, passedDeadZone;
     playerInteract spider;
 
@@ -45,13 +46,21 @@ public class player : MonoBehaviour
         var pos = p1.position; pos.y += calcSpeed * dt; p1.position = pos;
         currentScore = (pos.y - startY) * C.metresPerUnit;
 
-        bool camB = boost && Time.time > camHoldUntil; // keep the default camera at game start (no Head Start zoom)
+        bool camB = boost;
         if (camAnim && camBoost != camB) { camBoost = camB; camAnim.SetBool("boost", camB); }
 
         HandleInput(dt);
         yaw = Mathf.LerpAngle(yaw, targetYaw, 1f - Mathf.Exp(-C.rotationSmoothing * dt));
         var e = p1.localEulerAngles; e.y = yaw; p1.localEulerAngles = e;
         if (jumpCooldown > 0) jumpCooldown -= dt;
+        if (spider && !spider.IsJumping) canDoubleJump = false;
+
+        // Speed up spider animation speed with climbing speed (keeps run and jump animations snappy as difficulty rises)
+        if (anim && !GameOver && !paused)
+        {
+            float speedScale = Mathf.Clamp(calcSpeed / Mathf.Max(0.1f, C.startSpeed), 1f, 2.2f);
+            anim.speed = speedScale;
+        }
     }
 
     void HandleInput(float dt)
@@ -112,10 +121,29 @@ public class player : MonoBehaviour
 
     public void jump()
     {
-        if (paused || GameOver || jumpCooldown > 0) return;
-        jumpCooldown = 0.55f;
+        if (paused || GameOver) return;
+
+        // Scale jump duration inversely with speed so the jump completes quickly at high climb speeds
+        float speedRatio = Mathf.Clamp(calcSpeed / Mathf.Max(0.1f, C.startSpeed), 1f, 2.0f);
+        float jumpDur = 0.6f / speedRatio;
+        float dblJumpDur = 0.85f / speedRatio;
+
+        // In jump mode: a second jump trigger executes a backflip double jump
+        if (spider && spider.IsJumping && canDoubleJump)
+        {
+            canDoubleJump = false;
+            jumpCooldown = 0.5f / speedRatio;
+            if (anim) anim.SetTrigger("jump");
+            spider.doubleJump(dblJumpDur);
+            OnJumped?.Invoke();
+            return;
+        }
+
+        if (jumpCooldown > 0) return;
+        jumpCooldown = 0.25f / speedRatio; // short cooldown to allow responsive double-tap / double-jump input
+        canDoubleJump = true;
         if (anim) anim.SetTrigger("jump");
-        if (spider) spider.jump();
+        if (spider) spider.jump(jumpDur);
         OnJumped?.Invoke();
     }
 }

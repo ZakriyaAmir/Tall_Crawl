@@ -15,6 +15,7 @@ public class TCTrack : MonoBehaviour
     readonly List<float> angles = new List<float>(8);
     float nextTrunkY, nextRowY, safeAngle, lastCoinY = -999f;
     float lastHazardY = -999f, lastBonusY = -999f;
+    float nextHeartEligibleTime;
     int rowIndex; bool lastWasBee; player pl;
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
@@ -23,7 +24,8 @@ public class TCTrack : MonoBehaviour
 
     const float MinCoinSpacing = 0.55f;
     const float MinHazardSpacing = 1.0f;
-    const float MinBonusSpacing = 1.2f;
+    const float MinBonusSpacing = 1.5f;
+    const float BonusCoinMargin = 1.0f; // absolute clearance between any bonus pickup and any coin
 
     void Start()
     {
@@ -44,6 +46,7 @@ public class TCTrack : MonoBehaviour
         lastCoinY = -999f;
         lastHazardY = -999f;
         lastBonusY = -999f;
+        nextHeartEligibleTime = Time.time + 10f; // heart check every 10 seconds
 
         // Safe start: welcome coin trail straight up with zero overlap
         SpawnCoinTrail(py + 1.2f, py + 4.2f, safeAngle, safeAngle);
@@ -90,6 +93,14 @@ public class TCTrack : MonoBehaviour
         float gap = Mathf.Lerp(C.rowGapEasy, C.rowGapHard, d) * Random.Range(0.95f, 1.15f);
         bool breather = C.breatherEvery > 0 && rowIndex % C.breatherEvery == 0;
 
+        // Check 10-second timer for heart eligibility (2 out of 10 probability, i.e. 0.20)
+        bool heartEligible = false;
+        if (Time.time >= nextHeartEligibleTime)
+        {
+            nextHeartEligibleTime = Time.time + 10f;
+            heartEligible = (Random.value < 0.20f);
+        }
+
         if (breather)
         {
             // Breather: clear row with no hazards.
@@ -98,16 +109,23 @@ public class TCTrack : MonoBehaviour
             safeAngle += Random.value < 0.5f ? -60f : 60f;
             lastWasBee = false;
 
-            if (bonusY > lastBonusY + MinBonusSpacing && Random.value < C.heartChance * 4f)
+            bool canSpawnBreatherBonus = bonusY > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusY - lastCoinY) > BonusCoinMargin;
+
+            if (canSpawnBreatherBonus && heartEligible)
             {
-                // Standalone heart pickup on breather row
                 Spawn(heartPool, "heart", bonusY, safeAngle);
+                lastBonusY = bonusY;
+                heartEligible = false; // consumed
+            }
+            else if (canSpawnBreatherBonus && Random.value < C.boostChance * 2f)
+            {
+                Spawn(boostPool, "boost", bonusY, safeAngle);
                 lastBonusY = bonusY;
             }
             else
             {
                 // Coin spiral that guarantees no overlap with hazards or powerups
-                float spiralStartY = Mathf.Max(y + 0.3f, lastCoinY + MinCoinSpacing);
+                float spiralStartY = Mathf.Max(y + 0.3f, Mathf.Max(lastCoinY + MinCoinSpacing, lastBonusY + BonusCoinMargin));
                 float spiralEndY = y + gap - 0.3f;
                 SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
             }
@@ -151,14 +169,17 @@ public class TCTrack : MonoBehaviour
         lastHazardY = y;
         OnRow?.Invoke(y, newSafe, Mathf.Abs(Mathf.DeltaAngle(safeAngle, newSafe)), window, secs, metres);
 
-        // In the safe gap between rows, spawn strictly ONE item type (coins, heart, or boost) with proper margins
+        // In the safe gap between rows, spawn strictly ONE item type (heart, chilli boost, or coins) with proper margins
         float bonusYPos = y + gap * 0.5f;
-        if (bonusYPos > lastBonusY + MinBonusSpacing && Random.value < C.heartChance)
+        bool canSpawnBonus = bonusYPos > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusYPos - lastCoinY) > BonusCoinMargin;
+
+        if (canSpawnBonus && heartEligible)
         {
             Spawn(heartPool, "heart", bonusYPos, newSafe);
             lastBonusY = bonusYPos;
+            heartEligible = false; // consumed
         }
-        else if (bonusYPos > lastBonusY + MinBonusSpacing && Random.value < C.boostChance)
+        else if (canSpawnBonus && Random.value < C.boostChance)
         {
             Spawn(boostPool, "boost", bonusYPos, newSafe);
             lastBonusY = bonusYPos;
@@ -170,7 +191,7 @@ public class TCTrack : MonoBehaviour
             // (it used to start at the old angle after the row, luring players the wrong way).
             // Coins sit in the line of the upcoming opening, so steering to safety also collects them
             // (playtest: diagonal trails were almost never collected, ~8 coins per 1,500 m).
-            float trailStartY = Mathf.Max(prevRowY + 0.45f, y - gap * 0.7f);
+            float trailStartY = Mathf.Max(Mathf.Max(prevRowY + 0.45f, y - gap * 0.7f), lastBonusY + BonusCoinMargin);
             float trailEndY = y - 0.4f;
             SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.75f), newSafe);
         }
@@ -181,7 +202,7 @@ public class TCTrack : MonoBehaviour
 
     void SpawnCoinTrail(float startY, float endY, float fromAngle, float toAngle)
     {
-        float minY = Mathf.Max(startY, lastCoinY + MinCoinSpacing);
+        float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + MinCoinSpacing, lastBonusY + BonusCoinMargin));
         float span = endY - minY;
         if (span < MinCoinSpacing * 0.7f) return;
 

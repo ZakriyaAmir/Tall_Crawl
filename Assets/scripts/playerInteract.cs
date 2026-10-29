@@ -16,6 +16,7 @@ public class playerInteract : MonoBehaviour
 
     public int MaxLife { get; private set; }
     public bool Invulnerable => invulnTimer > 0 || boostDuration > 0;
+    public bool IsJumping => jumpTimer > 0;
     public static System.Action<string, Vector3> OnEvent; // "coin","hit","heart","boost","smash","death"
 
     AudioSource audioSource; player p; Animator animator; Renderer[] renderers;
@@ -48,7 +49,7 @@ public class playerInteract : MonoBehaviour
         {
             p.boost = true;
             boostDuration -= dt;
-            if (boostDuration <= 0) { p.boost = false; if (animator) animator.SetBool("boost", false); invulnTimer = 1.0f; }
+            if (boostDuration <= 0) { p.boost = false; invulnTimer = 1.0f; }
         }
     }
 
@@ -63,14 +64,41 @@ public class playerInteract : MonoBehaviour
         if (other.CompareTag("branch"))
         {
             TCFx.Spawn(impactParticle, other.transform.position);
-            Play(TCSfx.Get("hit") ?? woodImpactSound, 0.8f);
             if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);
-            if (Invulnerable) { OnEvent?.Invoke("smash", transform.position); TCFx.Shake(0.08f); }
-            else Damage();
+            if (boostDuration > 0)
+            {
+                // In chilli mode: smash through with a powerful thrust sound (no sad/hurt sound)
+                Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
+                OnEvent?.Invoke("smash", transform.position);
+                TCFx.Shake(0.1f);
+            }
+            else if (invulnTimer > 0)
+            {
+                Play(TCSfx.Get("thrust") ?? woodImpactSound, 0.7f);
+                OnEvent?.Invoke("smash", transform.position);
+                TCFx.Shake(0.08f);
+            }
+            else
+            {
+                Play(TCSfx.Get("hit") ?? woodImpactSound, 0.8f);
+                Damage();
+            }
         }
         else if (other.CompareTag("bees"))
         {
-            if (jumpTimer > 0 || Invulnerable) return; // jumped over / boosting
+            if (jumpTimer > 0) return; // jumped over
+            if (boostDuration > 0)
+            {
+                // In chilli mode: thrust through bee swarms with punchy thrust sound
+                TCFx.Spawn(BeesimpactParticle, transform.position);
+                Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
+                if (pooled) pooled.Release();
+                OnEvent?.Invoke("smash", transform.position);
+                TCFx.Shake(0.1f);
+                return;
+            }
+            if (invulnTimer > 0) return; // post-hit invulnerability
+
             TCFx.Spawn(BeesimpactParticle, transform.position);
             Play(TCSfx.Get("bees") ?? beesImpactSound, 0.8f);
             if (pooled) pooled.Release();
@@ -137,9 +165,16 @@ public class playerInteract : MonoBehaviour
     public void StartBoost(float secs)
     {
         boostDuration = Mathf.Max(boostDuration, secs);
-        if (animator) animator.SetBool("boost", true);
         OnEvent?.Invoke("boost", transform.position);
     }
 
-    public void jump() { jumpTimer = 0.6f; Play(TCSfx.Get("jump") ?? jumpSound, 0.7f); }
+    public void jump(float duration = 0.6f) { jumpTimer = duration; Play(TCSfx.Get("jump") ?? jumpSound, 0.7f); }
+
+    public void doubleJump(float duration = 0.85f)
+    {
+        jumpTimer = duration;
+        Play(TCSfx.Get("menu_flip") ?? TCSfx.Get("jump") ?? jumpSound, 0.85f);
+        var cute = GetComponentInChildren<TCCuteSpider>();
+        if (cute) cute.TriggerBackflip(duration * (0.75f / 0.85f));
+    }
 }

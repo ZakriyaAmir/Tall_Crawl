@@ -51,14 +51,15 @@ public class TCCuteSpider : MonoBehaviour
         cs.legs.Clear(); cs.legRest.Clear(); cs.eyeRest.Clear();
 
         var bodyMat = Resources.Load<Material>("Skins/Skin_" + skin);
-        if (!bodyMat) bodyMat = Flat(def.body, null, 0, def.metallic, def.gloss);
+        if (!bodyMat) bodyMat = Flat(def.body * 0.85f, null, 0, def.metallic, def.gloss);
         // Photo look (3D-printed chibi spider): one solid plastic colour for head + legs, the abdomen carries the skin pattern.
-        var plain = Flat(def.body, bodyMat, 0, def.metallic, def.gloss);
-        var legMat = Flat(def.body * 0.93f, bodyMat, 0, def.metallic, def.gloss);
-        var spikeMat = Flat(def.accent, bodyMat, def.emission, def.metallic, def.gloss);
+        // Tuned to medium tone so spider parts are not overly bright.
+        var plain = Flat(def.body * 0.85f, bodyMat, 0, def.metallic, def.gloss);
+        var legMat = Flat(def.body * 0.80f, bodyMat, 0, def.metallic, def.gloss);
+        var spikeMat = Flat(def.accent * 0.88f, bodyMat, def.emission, def.metallic, def.gloss);
         var eyeMat = Flat(def.eye, bodyMat, def.eyeGlow, 0.1f, 0.92f);
-        var shine = Flat(Color.white, bodyMat, 0.6f, 0, 0.9f);
-        var fangMat = Flat(def.body * 0.8f, bodyMat, 0, def.metallic, def.gloss);
+        var shine = Flat(new Color(0.85f, 0.85f, 0.85f, 1f), bodyMat, 0.4f, 0, 0.9f);
+        var fangMat = Flat(def.body * 0.70f, bodyMat, 0, def.metallic, def.gloss);
 
         Vector3 s = def.BodyScale;
         float pivotY = R * 0.95f;
@@ -144,6 +145,20 @@ public class TCCuteSpider : MonoBehaviour
 
     [System.NonSerialized] public float wave; // 0..1, menu wave (front leg up)
     public Bounds cachedBounds; Transform root; Vector3 restRoot;
+    float backflipTimer, backflipDuration;
+    Vector3 jumpOffsetAtDoubleJump;
+
+    public void TriggerBackflip(float duration = 0.75f)
+    {
+        backflipDuration = duration;
+        backflipTimer = duration;
+        // Capture the spider's current jump displacement at the moment of double jumping
+        // so the double jump launches higher from this current apex instead of dropping down
+        var st = transform;
+        Vector3 curOff = bone ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
+        if (curOff.magnitude > 5f) curOff = Vector3.zero;
+        jumpOffsetAtDoubleJump = curOff;
+    }
 
     void LateUpdate()
     {
@@ -153,19 +168,52 @@ public class TCCuteSpider : MonoBehaviour
         // Follow the rig's root motion (jump hop etc.) but keep our own clean orientation.
         Vector3 off = bone ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
         if (off.magnitude > 5f) off = Vector3.zero;
+
+        // Is the spider actively moving/climbing or idle?
+        // In gameplay: moving if game run is active, OR during the start intro walk-up.
+        var playerComp = GetComponentInParent<player>();
+        bool isIntroWalking = anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("spiderIntro");
+        bool isMoving = (playerComp != null && !playerComp.paused && !playerComp.GameOver) || isIntroWalking;
+
+        // Double jump backflip animation & extra hop height (going higher rather than falling down)
+        float flipPitch = 0f;
+        if (backflipTimer > 0)
+        {
+            backflipTimer -= Time.deltaTime;
+            float p = 1f - Mathf.Clamp01(backflipTimer / backflipDuration);
+            // Smooth backflip rotation 0 -> -360 degrees along local X (pitching backward)
+            flipPitch = -360f * Mathf.SmoothStep(0, 1, p);
+
+            // Double jump boost: blend from captured jump offset to 0 as animation completes,
+            // while adding a high upward launch arc outward from the trunk
+            float arc = Mathf.Sin(p * Mathf.PI);
+            float carryOver = 1f - Mathf.SmoothStep(0, 1, p);
+            off = Vector3.Lerp(off, jumpOffsetAtDoubleJump * carryOver, carryOver) + Vector3.up * (arc * 1.35f);
+        }
+
         root.localPosition = restRoot + off;
         float hop = Mathf.Clamp01(off.magnitude * 4f);
-        // Squash & stretch + scuttle bounce
-        float bob = Mathf.Sin(t * 24f) * 0.035f;
+        // Squash & stretch + scuttle bounce (gentle breathing when idle, active bounce when moving)
+        float bob = isMoving ? Mathf.Sin(t * 24f) * 0.035f : Mathf.Sin(t * 2.5f) * 0.015f;
         body.localScale = new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f);
-        if (head) head.localPosition = headRest + new Vector3(Mathf.Sin(t * 12f) * 0.02f, Mathf.Abs(Mathf.Sin(t * 12f)) * 0.03f, 0) * head.localScale.y;
-        // Legs: alternating tetrapod gait (scuttle / climb): swing forward-back, lift on the swing phase.
+        if (head) head.localPosition = headRest + new Vector3(Mathf.Sin(t * (isMoving ? 12f : 2f)) * 0.015f, Mathf.Abs(Mathf.Sin(t * (isMoving ? 12f : 2f))) * 0.02f, 0) * head.localScale.y;
+
+        // Legs: alternating tetrapod gait only when actively moving / climbing. Keep still in rest position during idle!
         for (int i = 0; i < legs.Count; i++)
         {
-            int side = i < 4 ? 0 : 1, k = i % 4;
-            float ph = t * 12f + (((k + side) & 1) == 0 ? 0 : Mathf.PI);
-            float swing = Mathf.Sin(ph) * 22f, lift = Mathf.Max(0, Mathf.Cos(ph)) * 18f;
-            legs[i].localRotation = Quaternion.Euler(0, swing, 0) * legRest[i] * Quaternion.Euler(-lift, 0, 0);
+            if (isMoving)
+            {
+                int side = i < 4 ? 0 : 1, k = i % 4;
+                float ph = t * 12f + (((k + side) & 1) == 0 ? 0 : Mathf.PI);
+                float swing = Mathf.Sin(ph) * 22f, lift = Mathf.Max(0, Mathf.Cos(ph)) * 18f;
+                legs[i].localRotation = Quaternion.Euler(0, swing, 0) * legRest[i] * Quaternion.Euler(-lift, 0, 0);
+            }
+            else
+            {
+                // Idle: keep legs in rest position (with support for wave in menu)
+                legs[i].localRotation = legRest[i];
+            }
+
             if (i == 4 && wave > 0) legs[i].localRotation = legRest[i] * Quaternion.Euler(-70f * wave, 0, Mathf.Sin(t * 16f) * 25f * wave); // hi!
         }
         // Eyes: blink every few seconds
@@ -173,10 +221,10 @@ public class TCCuteSpider : MonoBehaviour
         if (blink < -0.14f) blink = Random.Range(1.8f, 4f);
         float lid = blink < 0 ? 0.12f : 1f;
         for (int i = 0; i < eyes.Count; i++) if (eyes[i]) { var r = eyeRest[i]; eyes[i].localScale = new Vector3(r.x, r.y * lid, r.z); }
-        // Death: roll on the back, cartoon style
+        // Death: roll on the back, cartoon style. Backflip pitch combined with death roll.
         bool dead = pi ? pi.life <= 0 : anim && anim.isActiveAndEnabled && HasBool(anim, "death") && anim.GetBool("death");
         flip = Mathf.MoveTowards(flip, dead ? 1 : 0, Time.deltaTime * 3f);
-        body.localRotation = Quaternion.Euler(0, 0, 180f * Mathf.SmoothStep(0, 1, flip));
+        body.localRotation = Quaternion.Euler(flipPitch, 0, 180f * Mathf.SmoothStep(0, 1, flip));
     }
 
     static bool HasBool(Animator a, string n) { foreach (var p in a.parameters) if (p.name == n) return true; return false; }
@@ -185,11 +233,15 @@ public class TCCuteSpider : MonoBehaviour
     {
         string key = ColorUtility.ToHtmlStringRGBA(c) + emission.ToString("0.00") + metallic.ToString("0.00") + gloss.ToString("0.00");
         if (mats.TryGetValue(key, out var m) && m) return m;
-        m = src ? new Material(src) : new Material(Shader.Find("Standard"));
-        m.mainTexture = null; m.color = c;
-        if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", gloss);
-        if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metallic);
-        if (emission > 0) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", c * emission); m.SetTexture("_EmissionMap", null); }
+        var shader = Shader.Find("TallCrawl/SpiderPreBaked") ?? (src ? src.shader : Shader.Find("Mobile/Diffuse"));
+        m = src ? new Material(src) : new Material(shader);
+        m.shader = shader;
+        m.mainTexture = Texture2D.whiteTexture; m.color = c;
+        if (m.HasProperty("_ShadowDull")) m.SetFloat("_ShadowDull", 0.55f);
+        if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", emission > 0 ? c * emission : Color.black);
+        if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0f);
+        if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+        if (emission > 0) { m.EnableKeyword("_EMISSION"); }
         else m.DisableKeyword("_EMISSION");
         mats[key] = m; return m;
     }

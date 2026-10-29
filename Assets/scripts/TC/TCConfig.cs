@@ -27,7 +27,7 @@ public class TCConfig : ScriptableObject
     public float beeMinMetres = 250f;
     [Range(0, 1)] public float coinTrailChance = 0.55f;
     [Range(0, 1)] public float heartChance = 0.06f;
-    [Range(0, 1)] public float boostChance = 0.05f;
+    [Range(0, 1)] public float boostChance = 0.12f;
 
     [Header("Player")]
     public float defaultSensitivity = 1f;

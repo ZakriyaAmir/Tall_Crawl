@@ -148,6 +148,28 @@ public static class TCUI
                 var s = new Vector2(Mathf.Abs(Mathf.Abs(p.x) - 0.6f) - 0.2f, Mathf.Abs(p.y - 0.25f) - 0.25f);
                 return Fill(Mathf.Min(Mathf.Max(b.x, b.y), Mathf.Max(s.x, s.y)), Hex("#8FDCC4"));
             }
+            case "home":
+            {
+                // Roof triangle + house body + door
+                float roof = Mathf.Max(-p.y - 0.1f, Mathf.Abs(p.x) * 1.15f + p.y * 1.1f - 0.8f);
+                var body = new Vector2(Mathf.Abs(p.x) - 0.52f, Mathf.Abs(p.y + 0.32f) - 0.48f);
+                var door = new Vector2(Mathf.Abs(p.x) - 0.2f, Mathf.Abs(p.y + 0.48f) - 0.32f);
+                float h = Mathf.Min(roof, Mathf.Max(body.x, body.y));
+                return Over(Fill(h, Color.white), Fill(Mathf.Max(door.x, door.y), Cocoa));
+            }
+            case "restart":
+            {
+                // Circular arrow: arc ring + arrowhead triangle
+                float r = p.magnitude;
+                float arc = Mathf.Abs(r - 0.58f) - 0.13f;
+                float ang = Mathf.Atan2(p.y, p.x);
+                // Cut a 75 degree gap for the arrow tip
+                if (ang > 0.3f && ang < 1.6f) arc = 9f;
+                // Arrowhead pointing clockwise
+                var ap = p - new Vector2(0.35f, 0.55f);
+                float tip = Mathf.Max(Mathf.Abs(ap.x) * 1.2f - (ap.y + 0.22f) * 0.9f, Mathf.Abs(ap.y) - 0.25f);
+                return Fill(Mathf.Min(arc, tip), Color.white);
+            }
         }
         return Color.clear;
     }

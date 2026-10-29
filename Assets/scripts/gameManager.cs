@@ -82,8 +82,6 @@ public class gameManager : MonoBehaviour
     {
         p.paused = false;
         if (p.anim) p.anim.SetBool("started", true);
-        if (TCSave.Upgrade(4) > 0) p.camHoldUntil = Time.time + 2f + 1.5f * TCSave.Upgrade(4);
-        if (TCSave.Upgrade(4) > 0 && spider) spider.StartBoost(1.5f + 1.5f * TCSave.Upgrade(4)); // Head Start (was invisible: no anim/FX)
     }
 
     /// One collected coin = exactly one coin in the wallet (no multipliers, no doubling).

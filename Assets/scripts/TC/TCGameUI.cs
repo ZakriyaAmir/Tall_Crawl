@@ -274,14 +274,15 @@ public class TCGameUI : MonoBehaviour
             resBonus.text = (gm.DistanceBonus * 2).ToString("N0") + GemSuffix();
             resTotal.text = gm.RunReward.ToString("N0");
             doubleBtn.interactable = false; StartCoroutine(TCUI.Punch(resTotal.transform, 0.4f, 0.4f)); TCAudio.Play(TCAssets.I.purchase);
-        }, "double_coins"), 48, TCUI.Icon("play"));
-        TCUI.Place((RectTransform)doubleBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -155), new Vector2(700, 120));
+        }, "double_coins"), 46, TCUI.Icon("play"));
+        TCUI.Place((RectTransform)doubleBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -165), new Vector2(680, 115));
 
-        var againBtn = TCUI.Btn("Again", card, "PLAY AGAIN", TCUI.Mint, () => gm.Restart(), 54);
-        TCUI.Place((RectTransform)againBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -295), new Vector2(700, 125));
+        // Bottom action row: Home (left) and Restart (right), compact with icons only and clean spacing
+        var homeBtn = TCUI.Btn("Home", card, "", TCUI.Sky, () => gm.Home(), 40, TCUI.Icon("home"));
+        TCUI.Place((RectTransform)homeBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(-155, -340), new Vector2(170, 140));
 
-        var homeBtn = TCUI.Btn("Home", card, "MAIN MENU", TCUI.Sky, () => gm.Home(), 44);
-        TCUI.Place((RectTransform)homeBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -430), new Vector2(700, 100));
+        var againBtn = TCUI.Btn("Again", card, "", TCUI.Mint, () => gm.Restart(), 40, TCUI.Icon("restart"));
+        TCUI.Place((RectTransform)againBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(155, -340), new Vector2(170, 140));
     }
 
     TextMeshProUGUI Row(RectTransform card, string label, float y, bool isTotal)

@@ -32,7 +32,7 @@ MonoBehaviour:
   beeMinMetres: 250
   coinTrailChance: 0.55
   heartChance: 0.06
-  boostChance: 0.05
+  boostChance: 0.12
   defaultSensitivity: 1
   dragDegreesPerScreenWidth: 300
   deadZonePixels: 6

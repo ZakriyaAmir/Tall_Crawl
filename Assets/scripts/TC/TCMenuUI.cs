@@ -94,7 +94,7 @@ public class TCMenuUI : MonoBehaviour
             previewSpider = Instantiate(a.spiderModel, root.transform);
             previewSpider.transform.localPosition = Vector3.zero;
             var anim = previewSpider.GetComponentInChildren<Animator>(); if (!anim) anim = previewSpider.AddComponent<Animator>();
-            if (a.spiderAnimator) { anim.runtimeAnimatorController = a.spiderAnimator; anim.SetBool("started", true); }
+            if (a.spiderAnimator) { anim.runtimeAnimatorController = a.spiderAnimator; anim.SetBool("started", false); }
             var smr = previewSpider.GetComponentInChildren<SkinnedMeshRenderer>();
             var b = smr ? smr.bounds : new Bounds(previewSpider.transform.position, Vector3.one);
             float size = b.size.magnitude;
@@ -105,7 +105,15 @@ public class TCMenuUI : MonoBehaviour
         ApplyPreview(TCSave.SelectedSkin);
     }
     void ApplyPreview(int i) { if (previewSpider && previewSkin != i) { previewSkin = i; TCSkins.Apply(previewSpider, i); } }
-    void LateUpdate() { if (previewSpider && !entering) previewSpider.transform.localRotation = Quaternion.Euler(0, Mathf.Sin(Time.unscaledTime * 1.3f) * 28f, 0); } // gentle sway, face stays visible
+    float swayBlend = 0f;
+    void LateUpdate()
+    {
+        if (previewSpider && !entering)
+        {
+            swayBlend = Mathf.MoveTowards(swayBlend, 1f, Time.unscaledDeltaTime * 1.25f);
+            previewSpider.transform.localRotation = Quaternion.Euler(0, Mathf.Sin(Time.unscaledTime * 1.3f) * 28f * swayBlend, 0);
+        }
+    } // gentle sway, face stays visible
 
     // ---------- Main menu entrance: drop on a silk thread, somersault, squash landing, dust, wave ----------
     bool entering; LineRenderer silk; float previewSize = 1;
@@ -113,6 +121,7 @@ public class TCMenuUI : MonoBehaviour
     {
         if (!previewSpider) yield break;
         entering = true;
+        swayBlend = 0f;
         var cs = previewSpider.GetComponent<TCCuteSpider>();
         float S = previewSize;
         // Animate a pivot above the spider (its own Animator owns the spider transform).
@@ -121,8 +130,13 @@ public class TCMenuUI : MonoBehaviour
         previewSpider.transform.SetParent(pivot, true);
         var st = pivot; Vector3 rest = new Vector3(0, h, 0), top = new Vector3(0, h + S * 1.6f, 0);
         silk = new GameObject("Silk").AddComponent<LineRenderer>(); silk.transform.SetParent(pivot.parent, false); silk.useWorldSpace = false;
-        silk.material = new Material(Shader.Find("Sprites/Default")); silk.startColor = silk.endColor = new Color(1, 1, 1, 0.85f);
-        silk.widthMultiplier = S * 0.012f; silk.positionCount = 2; silk.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        var silkMat = new Material(Shader.Find("Particles/Standard Unlit") ?? Shader.Find("Mobile/Particles/Alpha Blended") ?? Shader.Find("Sprites/Default"));
+        var silkTex = Resources.Load<Texture2D>("SilkWeb");
+        if (silkTex) silkMat.mainTexture = silkTex;
+        silk.material = silkMat;
+        silk.textureMode = LineTextureMode.Tile;
+        silk.startColor = silk.endColor = new Color(1, 1, 1, 0.95f);
+        silk.widthMultiplier = S * 0.022f; silk.positionCount = 2; silk.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         st.localPosition = top; st.localScale = Vector3.one;
         yield return new WaitForSecondsRealtime(0.25f);
         TCSfx.Play("menu_drop", 0.6f);
@@ -144,7 +158,7 @@ public class TCMenuUI : MonoBehaviour
         {
             float k = Mathf.Sin(x * Mathf.PI * 3) * (1 - x) * 0.3f;
             st.localScale = new Vector3(1 + k, 1 - k, 1 + k); Silk(st, S);
-            silk.startColor = silk.endColor = new Color(1, 1, 1, 0.85f * (1 - x)); yield return null;
+            silk.startColor = silk.endColor = new Color(1, 1, 1, 0.95f * (1 - x)); yield return null;
         }
         st.localScale = Vector3.one; Destroy(silk.gameObject);
         TCSfx.Play("wave", 0.6f);
@@ -201,27 +215,27 @@ public class TCMenuUI : MonoBehaviour
 
         if (TCAssets.I.logo)
         {
-            var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.805f), Vector2.zero, new Vector2(470, 440)); // cute app logo + title
+            var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.84f), Vector2.zero, new Vector2(450, 420)); // cute app logo + title
             StartCoroutine(Bob(logo.rectTransform, 12, 1.6f));
         }
-        else { var t = TCUI.Label("Title", safe, "TALL CRAWL", 120, TCUI.Cocoa); TCUI.Place(t.rectTransform, new Vector2(0.5f, 0.82f), Vector2.zero, new Vector2(1000, 200)); }
+        else { var t = TCUI.Label("Title", safe, "TALL CRAWL", 120, TCUI.Cocoa); TCUI.Place(t.rectTransform, new Vector2(0.5f, 0.85f), Vector2.zero, new Vector2(1000, 200)); }
 
         previewImg = new GameObject("Preview", typeof(RectTransform)).AddComponent<RawImage>(); previewImg.transform.SetParent(safe, false);
-        previewImg.texture = rt; previewImg.raycastTarget = false; TCUI.Place(previewImg.rectTransform, new Vector2(0.5f, 0.52f), Vector2.zero, new Vector2(720, 720));
+        previewImg.texture = rt; previewImg.raycastTarget = false; TCUI.Place(previewImg.rectTransform, new Vector2(0.5f, 0.50f), Vector2.zero, new Vector2(740, 740));
 
-        var bestPill = TCUI.Img("Best", safe, new Color(1, 1, 1, 0.85f)); TCUI.Place(bestPill.rectTransform, new Vector2(0.5f, 0.31f), Vector2.zero, new Vector2(480, 90));
-        bestText = TCUI.Label("Value", bestPill.transform, "", 46, TCUI.Cocoa); TCUI.Stretch(bestText.rectTransform);
+        var bestPill = TCUI.Img("Best", safe, new Color(1, 1, 1, 0.85f)); TCUI.Place(bestPill.rectTransform, new Vector2(0.5f, 0.28f), Vector2.zero, new Vector2(480, 84));
+        bestText = TCUI.Label("Value", bestPill.transform, "", 44, TCUI.Cocoa); TCUI.Stretch(bestText.rectTransform);
 
         var play = TCUI.Btn("Play", safe, "PLAY", TCUI.Mint, () => StartCoroutine(LoadGame()), 96, TCUI.Icon("play")); // no game-start sound
-        TCUI.Place((RectTransform)play.transform, new Vector2(0.5f, 0), new Vector2(0, 330), new Vector2(640, 200));
+        TCUI.Place((RectTransform)play.transform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(640, 190));
         { var glow = TCUI.Img("Glow", safe, new Color(1f, 0.95f, 0.55f, 0.55f), TCUI.Circle); glow.raycastTarget = false;
-          TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 330), new Vector2(820, 300)); glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1);
+          TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(820, 290)); glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1);
           StartCoroutine(Glow(glow)); }
         StartCoroutine(Pulse(play.transform)); StartCoroutine(Breathe(play.transform));
 
-        SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 120), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel); });
-        SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 120), () => TCUI.Show(this, shopPanel));
-        var daily = SmallBtn("Daily", "DAILY", TCUI.Sky, "gift", new Vector2(330, 120), OpenDaily);
+        SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 110), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel); });
+        SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 110), () => TCUI.Show(this, shopPanel));
+        var daily = SmallBtn("Daily", "DAILY", TCUI.Sky, "gift", new Vector2(330, 110), OpenDaily);
         dailyBadge = TCUI.Img("Badge", daily.transform, TCUI.Hex("#FF6F8E"), TCUI.Circle); TCUI.Place(dailyBadge.rectTransform, new Vector2(1, 1), new Vector2(-10, -10), new Vector2(46, 46));
     }
     Button SmallBtn(string n, string text, Color c, string icon, Vector2 pos, System.Action a)
@@ -389,7 +403,8 @@ public class TCMenuUI : MonoBehaviour
     }
 
     // ---------- Daily reward ----------
-    readonly List<Image> dailyCells = new List<Image>(); Button claimBtn;
+    readonly List<Image> dailyCells = new List<Image>(); Button claimBtn, dblBtn;
+    TextMeshProUGUI claimBtnText, dblBtnText;
     void BuildDaily()
     {
         dailyPanel = TCUI.Panel("Daily", safe, out var card, new Vector2(960, 1100), "DAILY REWARD");
@@ -406,21 +421,28 @@ public class TCMenuUI : MonoBehaviour
             dailyCells.Add(c);
         }
         claimBtn = TCUI.Btn("Claim", card, "CLAIM", TCUI.Mint, () => ClaimDaily(false), 56);
+        claimBtnText = claimBtn.GetComponentInChildren<TextMeshProUGUI>();
         TCUI.Place((RectTransform)claimBtn.transform, new Vector2(0.5f, 0), new Vector2(-160, 260), new Vector2(380, 140));
-        var dbl = TCUI.Btn("Double", card, "x2 (AD)", TCUI.Butter, () => TCServices.Rewarded(() => ClaimDaily(true), "daily"), 48, TCUI.Icon("play"));
-        TCUI.Place((RectTransform)dbl.transform, new Vector2(0.5f, 0), new Vector2(230, 260), new Vector2(340, 140));
+        dblBtn = TCUI.Btn("Double", card, "x2 (AD)", TCUI.Butter, () => TCServices.Rewarded(() => ClaimDaily(true), "daily"), 48, TCUI.Icon("play"));
+        dblBtnText = dblBtn.GetComponentInChildren<TextMeshProUGUI>();
+        TCUI.Place((RectTransform)dblBtn.transform, new Vector2(0.5f, 0), new Vector2(230, 260), new Vector2(340, 140));
         TCUI.Place((RectTransform)TCUI.Btn("Close", card, "LATER", TCUI.Grey, () => TCUI.Hide(this, dailyPanel), 42).transform, new Vector2(0.5f, 0), new Vector2(0, 100), new Vector2(300, 100));
         refreshers.Add(() =>
         {
             bool avail = TCSave.DailyAvailable(out int day);
             for (int i = 0; i < 7; i++) dailyCells[i].color = i < day ? TCUI.Mint : i == day && avail ? TCUI.Butter : Color.white;
-            claimBtn.interactable = avail; dbl.interactable = avail;
+            claimBtn.interactable = avail;
+            dblBtn.interactable = avail;
+            if (claimBtnText) claimBtnText.text = avail ? "CLAIM" : "CLAIMED";
+            if (dblBtnText) dblBtnText.text = avail ? "x2 (AD)" : "CLAIMED";
         });
     }
     void OpenDaily() { Refresh(); TCUI.Show(this, dailyPanel); }
     void ClaimDaily(bool doubled)
     {
         if (!TCSave.DailyAvailable(out int day)) return;
+        claimBtn.interactable = false;
+        if (dblBtn) dblBtn.interactable = false;
         int amt = TCConfig.I.dailyRewards[day] * (doubled ? 2 : 1);
         if (day == 6) TCSave.Gems += amt; else TCSave.Coins += amt;
         TCSave.ClaimDaily(day); TCAudio.Play(TCAssets.I.purchase);
