@@ -52,6 +52,12 @@ public class TCCuteSpider : MonoBehaviour
 
         var bodyMat = Resources.Load<Material>("Skins/Skin_" + skin);
         if (!bodyMat) bodyMat = Flat(def.body * 0.85f, null, 0, def.metallic, def.gloss);
+        else
+        {
+            if (bodyMat.HasProperty("_OutlineColor")) bodyMat.SetColor("_OutlineColor", new Color(0.12f, 0.08f, 0.10f, 1f));
+            if (bodyMat.HasProperty("_OutlineWidth")) bodyMat.SetFloat("_OutlineWidth", 1.4f);
+            if (bodyMat.HasProperty("_EdgeThreshold")) bodyMat.SetFloat("_EdgeThreshold", 0.22f);
+        }
         // Photo look (3D-printed chibi spider): one solid plastic colour for head + legs, the abdomen carries the skin pattern.
         // Tuned to medium tone so spider parts are not overly bright.
         var plain = Flat(def.body * 0.85f, bodyMat, 0, def.metallic, def.gloss);
@@ -269,8 +275,10 @@ public class TCCuteSpider : MonoBehaviour
         if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", emission > 0 ? c * emission : Color.black);
         if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0f);
         if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+        bool isShine = emission > 0.35f && c.r > 0.8f;
         if (m.HasProperty("_OutlineColor")) m.SetColor("_OutlineColor", new Color(0.12f, 0.08f, 0.10f, 1f));
-        if (m.HasProperty("_OutlineWidth")) m.SetFloat("_OutlineWidth", 0.018f);
+        if (m.HasProperty("_OutlineWidth")) m.SetFloat("_OutlineWidth", isShine ? 0f : 1.4f);
+        if (m.HasProperty("_EdgeThreshold")) m.SetFloat("_EdgeThreshold", isShine ? 0f : 0.22f);
         if (emission > 0) { m.EnableKeyword("_EMISSION"); }
         else m.DisableKeyword("_EMISSION");
         mats[key] = m; return m;
