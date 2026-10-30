@@ -134,7 +134,7 @@ public class TCTrack : MonoBehaviour
             return;
         }
 
-        if (!lastWasBee && metres > C.beeMinMetres && Random.value < C.beeChance * d + 0.04f)
+        if (!lastWasBee && metres > C.beeMinMetres && Random.value < C.beeChance * d + 0.02f)
         {
             // Bee swarm row: full 360 jump ring hazard. Never spawns coins or pickups directly inside it.
             float beeY = y + gap * 0.4f;
@@ -153,28 +153,33 @@ public class TCTrack : MonoBehaviour
         float newSafe = safeAngle + Random.Range(-turn, turn);
         float window = Mathf.Lerp(C.openWindowEasy, C.openWindowHard, d);
 
-        // Branches fill the rest of the circle with spacing; count ramps with difficulty.
-        int maxBranches = Mathf.RoundToInt(Mathf.Lerp(1.5f, 4.2f, d));
-        int count = Random.Range(1, maxBranches + 1);
-        angles.Clear();
-        float blocked = 360 - window;
-        for (int k = 0; k < count; k++)
+        // Branch row: spawn branches according to branchChance (default 0.5 = 50% reduced branch probability)
+        bool spawnBranches = Random.value < C.branchChance;
+        if (spawnBranches)
         {
-            float a = newSafe + window * 0.5f + 20 + (blocked - 40) * ((k + Random.Range(0.2f, 0.8f)) / count);
-            angles.Add(a);
-            var b = Spawn(branchPool, "branch", y, a);
-            b.transform.rotation = Quaternion.Euler(0, a, 0);
+            // Branches fill the rest of the circle with spacing; count ramps with difficulty.
+            int maxBranches = Mathf.RoundToInt(Mathf.Lerp(1.5f, 4.2f, d));
+            int count = Random.Range(1, maxBranches + 1);
+            angles.Clear();
+            float blocked = 360 - window;
+            for (int k = 0; k < count; k++)
+            {
+                float a = newSafe + window * 0.5f + 20 + (blocked - 40) * ((k + Random.Range(0.2f, 0.8f)) / count);
+                angles.Add(a);
+                var b = Spawn(branchPool, "branch", y, a);
+                b.transform.rotation = Quaternion.Euler(0, a, 0);
 
-            // Apply flower/foliage variant:
-            // 4 variants: None (0), Red (1), Yellow (2), Pink (3)
-            // Each branch row or individual branch gets its own variant
-            var bv = b.GetComponent<TCBranchVariant>();
-            if (!bv) bv = b.gameObject.AddComponent<TCBranchVariant>();
-            var flowerType = (TCBranchVariant.FlowerType)Random.Range(0, 4);
-            bv.SetVariant(flowerType);
+                // Apply flower/foliage variant:
+                // 4 variants: None (0), Red (1), Yellow (2), Pink (3)
+                // Each branch row or individual branch gets its own variant
+                var bv = b.GetComponent<TCBranchVariant>();
+                if (!bv) bv = b.gameObject.AddComponent<TCBranchVariant>();
+                var flowerType = (TCBranchVariant.FlowerType)Random.Range(0, 4);
+                bv.SetVariant(flowerType);
+            }
         }
         float prevRowY = lastHazardY;
-        lastHazardY = y;
+        if (spawnBranches) lastHazardY = y;
         OnRow?.Invoke(y, newSafe, Mathf.Abs(Mathf.DeltaAngle(safeAngle, newSafe)), window, secs, metres);
 
         // In the safe gap between rows, spawn strictly ONE item type (heart, chilli boost, or coins) with proper margins

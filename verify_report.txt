@@ -1,0 +1,19 @@
+=== TALL CRAWL FULL VERIFICATION REPORT ===
+Timestamp: 2026-10-30 16:33:21
+[PASS] TCSkins.All count is 20
+[PASS] Skin 15 is Bumblebee
+[PASS] Skin 16 is Ladybug
+[PASS] Skin 17 is Tiger
+[PASS] Skin 18 is Tarantula
+[PASS] Skin 19 is Golden with 100,000 coins
+[PASS] Buisson_Atlas_None material exists
+[PASS] Buisson_Atlas_Red material exists
+[PASS] Buisson_Atlas_Yellow material exists
+[PASS] Buisson_Atlas_Pink material exists
+[PASS] Log material exists
+[PASS] Wood material exists
+[PASS] MainMenu scene has 0 missing scripts
+[PASS] Manager object exists in MainMenu
+[PASS] TCMenuUI component attached to Manager
+[PASS] gameplay scene has 0 missing scripts
+=== SUMMARY: 16 PASSED, 0 FAILED ===

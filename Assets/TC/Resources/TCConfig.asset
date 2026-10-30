@@ -28,7 +28,8 @@ MonoBehaviour:
   maxTurnHard: 150
   maxTurnRate: 240
   breatherEvery: 7
-  beeChance: 0.18
+  branchChance: 0.5
+  beeChance: 0.09
   beeMinMetres: 250
   coinTrailChance: 0.55
   heartChance: 0.06
