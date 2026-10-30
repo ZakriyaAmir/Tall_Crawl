@@ -16,6 +16,7 @@ public class TCCuteSpider : MonoBehaviour
 
     static readonly Dictionary<string, Material> mats = new Dictionary<string, Material>();
     static Mesh cone;
+    static Mesh abdomenMesh;
 
     public static void Build(GameObject spider, SkinDef def, int skin)
     {
@@ -68,94 +69,172 @@ public class TCCuteSpider : MonoBehaviour
         var fangMat = Flat(def.body * 0.70f, bodyMat, 0, def.metallic, def.gloss);
 
         Vector3 s = def.BodyScale;
-        float pivotY = R * 0.85f;
+        float pivotY = R * 0.70f;
         var bodyT = new GameObject("body").transform; bodyT.SetParent(root, false); bodyT.localPosition = new Vector3(0, pivotY, 0);
         cs.body = bodyT; cs.bodyRest = bodyT.localPosition; cs.bodyScale = Vector3.one;
         Vector3 P(float x, float y, float z) => new Vector3(x * R, y * R - pivotY, z * R);
 
-        // Uniform, well-proportioned hyper-casual abdomen (shortened, neat oval)
-        Vector3 ab = Vector3.Scale(new Vector3(0.95f, 0.82f, 0.95f), s) * R;
-        var abd = Part(PrimitiveType.Sphere, bodyT, P(0, 0.92f, -0.42f), ab * 2f, bodyMat).transform; abd.name = "abdomen";
-        abd.localRotation = Quaternion.Euler(-6, 0, 0);
+        // --- Anatomically Sleek Spider Body (Cephalothorax + Pedicel + Abdomen) ---
+        // 1. Cephalothorax (prosoma): sleek, tapered forward, low center of mass, anchors legs & head
+        Vector3 cephScale = new Vector3(1.15f, 0.72f, 1.25f) * R;
+        var ceph = Part(PrimitiveType.Sphere, bodyT, P(0, 0.62f, 0.12f), cephScale, plain).transform; ceph.name = "cephalothorax";
+        ceph.localRotation = Quaternion.Euler(-4, 0, 0);
 
-        float hr = 0.78f * Mathf.Lerp(1f, s.x, 0.35f);
-        var headT = Part(PrimitiveType.Sphere, bodyT, P(0, 0.82f, 0.52f), new Vector3(1.85f, 1.72f, 1.78f) * hr * R, plain).transform; headT.name = "head";
+        // 2. Head / Ocular Region: sleek front snout with cute rounded silhouette
+        float hr = 0.65f * Mathf.Lerp(1f, s.x, 0.35f);
+        var headT = Part(PrimitiveType.Sphere, bodyT, P(0, 0.66f, 0.65f), new Vector3(1.35f, 1.15f, 1.25f) * hr * R, plain).transform; headT.name = "head";
         cs.head = headT; cs.headRest = headT.localPosition;
-        Vector3 HS(Vector3 dir, float lift) { dir.Normalize(); return headT.localPosition + Vector3.Scale(dir, new Vector3(0.92f, 0.86f, 0.89f) * hr * R) + dir * lift * R; }
+
+        // 3. Waist (pedicel): slender anatomical junction connecting thorax to abdomen
+        Part(PrimitiveType.Cylinder, bodyT, P(0, 0.60f, -0.38f), new Vector3(0.52f, 0.16f, 0.52f) * R, plain, Quaternion.Euler(90, 0, 0)).name = "pedicel";
+
+        // 4. Abdomen (opisthosoma): lore-accurate, sleek, beautifully proportioned spider butt
+        abdomenMesh = MakeSpiderAbdomenMesh();
+        Vector3 ab = Vector3.Scale(new Vector3(1.10f, 1.05f, 1.28f), s) * R;
+        var abdObj = new GameObject("abdomen");
+        abdObj.transform.SetParent(bodyT, false);
+        abdObj.transform.localPosition = P(0, 0.62f, -0.88f);
+        abdObj.transform.localRotation = Quaternion.Euler(-2, 0, 0);
+        abdObj.transform.localScale = ab;
+        var abdMf = abdObj.AddComponent<MeshFilter>();
+        abdMf.sharedMesh = abdomenMesh;
+        var abdMr = abdObj.AddComponent<MeshRenderer>();
+        abdMr.sharedMaterial = bodyMat;
+        abdMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        var abd = abdObj.transform;
+
+        // 5. Lore-accurate posterior spinnerets (silk-spinning nubs at rear-ventral apex of butt)
+        var spinMat = Flat(def.body * 0.76f, bodyMat, 0, def.metallic, def.gloss);
+        float rearZ = -0.88f * R - 0.53f * ab.z;
+        for (int sgn = -1; sgn <= 1; sgn += 2)
+        {
+            var spin = Part(PrimitiveType.Sphere, bodyT, new Vector3(0.08f * sgn * R, 0.56f * R - pivotY, rearZ), new Vector3(0.12f, 0.10f, 0.14f) * R, spinMat).transform;
+            spin.localRotation = Quaternion.Euler(14, 10 * sgn, 0);
+            spin.name = "spinneret";
+        }
+
+        // Eyes: stylish, expressive, beautiful arachnid gaze
+        Vector3 HS(Vector3 dir, float lift) { dir.Normalize(); return headT.localPosition + Vector3.Scale(dir, new Vector3(0.68f, 0.58f, 0.62f) * hr * R) + dir * lift * R; }
         cs.eyes.Clear();
         for (int sgn = -1; sgn <= 1; sgn += 2)
         {
-            // two very big glossy round eyes with a small white highlight
-            var d = new Vector3(0.42f * sgn, 0.14f, 0.9f).normalized;
-            var e = Part(PrimitiveType.Sphere, bodyT, HS(d, -0.05f), new Vector3(0.52f, 0.52f, 0.22f) * R, eyeMat).transform;
+            // Main pair of prominent glossy forward-facing eyes
+            var d = new Vector3(0.38f * sgn, 0.16f, 0.92f).normalized;
+            var e = Part(PrimitiveType.Sphere, bodyT, HS(d, -0.03f), new Vector3(0.42f, 0.42f, 0.18f) * R, eyeMat).transform;
             e.localRotation = Quaternion.LookRotation(d, Vector3.up); e.name = "eye";
-            Part(PrimitiveType.Sphere, e, new Vector3(0.22f, 0.24f, 0.42f), new Vector3(0.24f, 0.24f, 0.3f), shine);
+            Part(PrimitiveType.Sphere, e, new Vector3(0.20f, 0.22f, 0.40f), new Vector3(0.22f, 0.22f, 0.28f), shine);
             cs.eyes.Add(e); cs.eyeRest.Add(e.localScale);
-            // tiny side eye
-            var sd = new Vector3(0.86f * sgn, 0.22f, 0.46f).normalized;
-            var se = Part(PrimitiveType.Sphere, bodyT, HS(sd, -0.02f), new Vector3(0.15f, 0.15f, 0.08f) * R, eyeMat).transform;
+
+            // Secondary lateral eyes
+            var sd = new Vector3(0.82f * sgn, 0.24f, 0.52f).normalized;
+            var se = Part(PrimitiveType.Sphere, bodyT, HS(sd, -0.02f), new Vector3(0.14f, 0.14f, 0.07f) * R, eyeMat).transform;
             se.localRotation = Quaternion.LookRotation(sd, Vector3.up);
             cs.eyes.Add(se); cs.eyeRest.Add(se.localScale);
-            // tiny fangs / pedipalps under the face
-            var f = Part(PrimitiveType.Capsule, bodyT, P(0.17f * sgn, 0.22f, 1.05f), new Vector3(0.17f, 0.15f, 0.17f) * R, fangMat).transform;
-            f.localRotation = Quaternion.Euler(18, 0, -8 * sgn);
+
+            // Sleek pedipalps / sensory feelers in front of the mouth
+            var f = Part(PrimitiveType.Capsule, bodyT, P(0.16f * sgn, 0.28f, 1.12f), new Vector3(0.14f, 0.22f, 0.14f) * R, fangMat).transform;
+            f.localRotation = Quaternion.Euler(32, 12 * sgn, -6 * sgn);
         }
 
-        // 8 sleek legs uniformly distributed along the body
+        // --- 8 Perfectly Proportioned Legs radiating from the Cephalothorax ---
+        // Leg placement and splay angles from biological arachnid morphology:
+        // Leg 1 (anterior): reaches forward-outward to explore and grasp
+        // Leg 2 (mid-anterior): longest lateral-forward reach
+        // Leg 3 (mid-posterior): lateral-backward balance and pivot
+        // Leg 4 (posterior): strong rearward propulsion reach
+        float[] legZ = { 0.45f, 0.22f, -0.02f, -0.25f };
+        float[] legX = { 0.48f, 0.56f, 0.56f, 0.50f };
+        float[] legY = { 0.52f, 0.54f, 0.52f, 0.50f };
+        float[] legYaw = { 36f, 68f, 114f, 146f };
+        float[] legLengthMult = { 1.05f, 1.12f, 1.08f, 1.15f }; // Leg 2 and Leg 4 are naturally longer for elegance
+
         for (int sgn = -1; sgn <= 1; sgn += 2)
             for (int k = 0; k < 4; k++)
             {
-                // Z spans uniformly from front head/thorax (0.65) to back abdomen (-0.65)
-                float z = Mathf.Lerp(0.65f, -0.65f, k / 3f);
-                float sideX = sgn * Mathf.Lerp(0.60f, 0.70f, Mathf.Sin(k / 3f * Mathf.PI));
-                float hipY = Mathf.Lerp(0.58f, 0.52f, k / 3f);
+                float z = legZ[k];
+                float sideX = sgn * legX[k];
+                float hipY = legY[k];
 
                 var hip = new GameObject("leg").transform; hip.SetParent(bodyT, false);
                 hip.localPosition = P(sideX, hipY, z);
 
-                // Natural spider leg spread angle: front reach forward, rear reach backward
-                float yaw = sgn * (45f + k * 30f);
+                // Natural spider leg spread angle radiating around the cephalothorax
+                float yaw = sgn * legYaw[k];
                 hip.localRotation = Quaternion.Euler(0, yaw, 0);
 
-                // Sleek, well-proportioned leg segments
-                float th = 0.26f;
-                float upperLen = 0.56f;
-                float lowerLen = 0.62f;
+                // Sleek, beautifully tapered segments
+                float mult = legLengthMult[k];
+                float thUpper = 0.22f;
+                float thLower = 0.18f;
+                float upperLen = 0.62f * mult;
+                float lowerLen = 0.72f * mult;
 
-                // Upper leg: arching outward and upward
-                var up1 = Part(PrimitiveType.Capsule, hip, new Vector3(0, 0.16f * R, upperLen * 0.5f * R), new Vector3(th, upperLen * 0.5f, th) * R, legMat).transform;
-                up1.localRotation = Quaternion.Euler(62, 0, 0);
+                // Upper leg (femur): graceful arch outward and upward
+                var up1 = Part(PrimitiveType.Capsule, hip, new Vector3(0, 0.18f * R, upperLen * 0.5f * R), new Vector3(thUpper, upperLen * 0.5f, thUpper) * R, legMat).transform;
+                up1.localRotation = Quaternion.Euler(60, 0, 0);
 
-                // Knee joint
-                Part(PrimitiveType.Sphere, hip, new Vector3(0, 0.28f * R, upperLen * R), Vector3.one * th * 1.15f * R, legMat);
+                // Knee joint (patella): neat rounded connector
+                Part(PrimitiveType.Sphere, hip, new Vector3(0, 0.32f * R, upperLen * R), Vector3.one * thUpper * 1.12f * R, legMat);
 
-                // Lower leg: stepping down firmly to the trunk surface
-                var lo = Part(PrimitiveType.Capsule, hip, new Vector3(0, -0.22f * R, (upperLen + lowerLen * 0.35f) * R), new Vector3(th * 0.88f, lowerLen * 0.55f, th * 0.88f) * R, legMat).transform;
-                lo.localRotation = Quaternion.Euler(-32, 0, 0);
+                // Lower leg (tibia & metatarsus): slender, tapering downward to a delicate foot contact
+                var lo = Part(PrimitiveType.Capsule, hip, new Vector3(0, -0.26f * R, (upperLen + lowerLen * 0.38f) * R), new Vector3(thLower, lowerLen * 0.55f, thLower) * R, legMat).transform;
+                lo.localRotation = Quaternion.Euler(-34, 0, 0);
 
                 cs.legs.Add(hip); cs.legRest.Add(hip.localRotation);
             }
-        Vector3 radii = ab; // spikes sit on the abdomen
-        Vector3 abC = abd.localPosition;
-        Vector3 Surf(Vector3 dir, float lift = 0) { dir.Normalize(); return abC + Vector3.Scale(dir, radii) + dir * lift * R; }
-
-        // Spikes along the back ridge (skin feature)
+        // Spikes along the back ridge (skin feature) directly seated on the sculpted abdomen
         if (def.spikes > 0)
         {
             if (!cone) cone = MakeCone();
             for (int k = 0; k < def.spikes; k++)
             {
-                float a = Mathf.Lerp(-10f, 125f, def.spikes == 1 ? 0.5f : k / (float)(def.spikes - 1)) * Mathf.Deg2Rad; // from forehead over the back
-                var n = new Vector3(0, Mathf.Cos(a), -Mathf.Sin(a));
-                float sideJ = def.spikes > 5 ? ((k % 2) * 2 - 1) * 0.18f : 0f;
-                n.x = sideJ; n.Normalize();
-                var g = new GameObject("spike"); g.transform.SetParent(bodyT, false);
-                g.transform.localPosition = Surf(n, -0.06f);
-                g.transform.localRotation = Quaternion.FromToRotation(Vector3.up, n);
-                float len = def.spikeLength * R * (k == 0 || k == def.spikes - 1 ? 0.7f : 1f);
-                g.transform.localScale = new Vector3(R * 0.28f, len, R * 0.28f);
+                // Distribute spikes along the dorsal spine of the sculpted opisthosoma
+                float v = def.spikes == 1 ? 0.45f : Mathf.Lerp(0.18f, 0.78f, k / (float)(def.spikes - 1));
+                float theta = v * Mathf.PI;
+                float sTheta = Mathf.Max(0f, Mathf.Sin(theta));
+                float cTheta = Mathf.Cos(theta);
+
+                float zMesh = cTheta * 0.52f - 0.03f;
+                float widthMod = 1f + 0.16f * cTheta - 0.05f * (cTheta * cTheta);
+                float ry = sTheta * widthMod * 0.40f;
+                float rx = sTheta * widthMod * 0.52f;
+                float yCenter = sTheta * sTheta * 0.04f - 0.02f * v;
+                float yTop = yCenter + ry;
+
+                // Alternate slightly left/right if many spikes (double crest effect)
+                float sideJ = def.spikes > 5 ? ((k % 2) * 2 - 1) * 0.18f * rx : 0f;
+                float xMesh = sideJ;
+
+                // Exact dorsal surface normal in local abdomen mesh space
+                // dz/dv is negative (z decreases from front to rear)
+                float dz = -sTheta * Mathf.PI * 0.52f;
+                // dy/dv
+                float dWidth = (-0.16f * sTheta - 0.10f * cTheta * sTheta) * Mathf.PI;
+                float dry = (cTheta * Mathf.PI * widthMod + sTheta * dWidth) * 0.40f;
+                float dyCenter = (2f * sTheta * cTheta * Mathf.PI * 0.04f) - 0.02f;
+                float dy = dyCenter + dry;
+
+                // Outward surface normal pointing generally upwards (+Y) and perpendicular to spine
+                Vector3 nLocal = new Vector3(sideJ * 1.5f, -dz, dy).normalized;
+
+                // Position in local mesh space (abd object scales this by ab)
+                Vector3 localSpikePos = new Vector3(xMesh, yTop, zMesh);
+
+                // Parent to abd so spikes inherit abdomen orientation & scaling perfectly
+                var g = new GameObject("spike");
+                g.transform.SetParent(abd, false);
+                // Sink slightly into the mesh base so spikes don't hover/float in the air
+                g.transform.localPosition = localSpikePos - Vector3.up * 0.04f;
+                g.transform.localRotation = Quaternion.FromToRotation(Vector3.up, nLocal);
+
+                float len = def.spikeLength * (k == 0 || k == def.spikes - 1 ? 0.75f : 1f);
+                float thickness = 0.26f;
+                g.transform.localScale = new Vector3(thickness, len, thickness);
+
                 g.AddComponent<MeshFilter>().sharedMesh = cone;
-                var mr = g.AddComponent<MeshRenderer>(); mr.sharedMaterial = spikeMat; mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var mr = g.AddComponent<MeshRenderer>();
+                mr.sharedMaterial = spikeMat;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
         }
 
@@ -343,6 +422,91 @@ public class TCCuteSpider : MonoBehaviour
         var r = g.GetComponent<MeshRenderer>(); r.sharedMaterial = m;
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         return g;
+    }
+
+    /// Lore-accurate, anatomically sculpted spider opisthosoma (abdomen/butt):
+    /// Broad rounded anterior shoulders behind the pedicel, gentle continuous dorsal arch (no bumps/humps),
+    /// and a smooth, plump, rounded posterior dome with dual spinnerets.
+    static Mesh MakeSpiderAbdomenMesh()
+    {
+        const int rings = 28;
+        const int segments = 36;
+        var verts = new List<Vector3>((rings + 1) * (segments + 1));
+        var uvs = new List<Vector2>((rings + 1) * (segments + 1));
+        var tri = new List<int>(rings * segments * 6);
+
+        for (int r = 0; r <= rings; r++)
+        {
+            float v = r / (float)rings; // 0 at front pedicel, 1 at rear tip
+            float theta = v * Mathf.PI;
+            float st = Mathf.Max(0f, Mathf.Sin(theta));
+            float ct = Mathf.Cos(theta);
+
+            // Z coordinate: smooth mapping from +0.50 (front) to -0.55 (rear)
+            // Using cos(theta) guarantees derivative dz/dtheta = 0 at both poles -> zero crease or pinch point!
+            float z = ct * 0.52f - 0.03f;
+
+            // Lore-accurate width modulation:
+            // Widest at anterior-mid section (shoulders at v ~ 0.38), gracefully tapering to a rounded butt dome
+            float widthMod = 1f + 0.16f * ct - 0.05f * (ct * ct);
+
+            // Radii (X is width, Y is dorsoventral height)
+            float rx = st * widthMod * 0.52f;
+            float ry = st * widthMod * 0.40f;
+
+            // Dorsal curve: subtle, continuous arch perfectly blended across the back (zero bump)
+            float yCenter = st * st * 0.04f - 0.02f * v;
+
+            for (int s = 0; s <= segments; s++)
+            {
+                float u = s / (float)segments;
+                float phi = u * Mathf.PI * 2f;
+                float cosP = Mathf.Cos(phi);
+                float sinP = Mathf.Sin(phi);
+
+                float x = cosP * rx;
+                float y = yCenter + sinP * ry;
+
+                verts.Add(new Vector3(x, y, z));
+                uvs.Add(new Vector2(u, v));
+            }
+        }
+
+        for (int r = 0; r < rings; r++)
+        {
+            for (int s = 0; s < segments; s++)
+            {
+                int i0 = r * (segments + 1) + s;
+                int i1 = i0 + 1;
+                int i2 = (r + 1) * (segments + 1) + s;
+                int i3 = i2 + 1;
+
+                if (r == 0)
+                {
+                    // Front pole fan (non-degenerate)
+                    tri.Add(i0); tri.Add(i2); tri.Add(i3);
+                }
+                else if (r == rings - 1)
+                {
+                    // Rear pole fan (non-degenerate)
+                    tri.Add(i0); tri.Add(i2); tri.Add(i1);
+                }
+                else
+                {
+                    // Body quads
+                    tri.Add(i0); tri.Add(i2); tri.Add(i1);
+                    tri.Add(i1); tri.Add(i2); tri.Add(i3);
+                }
+            }
+        }
+
+        var m = new Mesh { name = "spider_abdomen" };
+        m.SetVertices(verts);
+        m.SetUVs(0, uvs);
+        m.SetTriangles(tri, 0);
+        m.RecalculateNormals();
+        m.RecalculateBounds();
+        return m;
     }
 
     /// Unit cone: base radius 0.5 at y=0, tip at y=1 (smooth, rounded look via normals).

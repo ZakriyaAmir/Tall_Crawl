@@ -19,11 +19,11 @@ public class SkinDef
 
     public Vector3 BodyScale => shape switch
     {
-        SkinShape.Chubby => new Vector3(1.08f, 0.82f, 0.98f),
-        SkinShape.Tall => new Vector3(0.90f, 0.95f, 0.95f),
-        SkinShape.Flat => new Vector3(1.08f, 0.68f, 0.96f),
-        SkinShape.Pear => new Vector3(0.96f, 0.85f, 1.05f),
-        _ => new Vector3(1.0f, 0.82f, 0.98f)
+        SkinShape.Chubby => new Vector3(1.10f, 0.95f, 1.05f),
+        SkinShape.Tall => new Vector3(0.92f, 1.08f, 1.08f),
+        SkinShape.Flat => new Vector3(1.08f, 0.85f, 1.06f),
+        SkinShape.Pear => new Vector3(1.04f, 0.96f, 1.15f),
+        _ => new Vector3(1.0f, 1.0f, 1.08f)
     };
 
     public string UnlockText => unlock switch
