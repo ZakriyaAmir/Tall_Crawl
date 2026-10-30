@@ -9,13 +9,14 @@ public class TCGameUI : MonoBehaviour
 {
     public static TCGameUI Instance;
     player pl; playerInteract spider; gameManager gm;
-    RectTransform safe, heartsRow; TextMeshProUGUI scoreText, coinText, hintText, boostText;
+    RectTransform safe, heartsRow, coinIconTarget; TextMeshProUGUI scoreText, coinText, hintText, boostText;
     readonly List<Image> hearts = new List<Image>();
     CanvasGroup startOverlay, pausePanel, revivePanel, resultPanel, flash;
     RectTransform hand; Coroutine tutorialCo;
     int shownCoins = -1, shownMetres = -1, shownLife = -1;
     bool started, turnedOnce, jumpedOnce;
     readonly Queue<TextMeshProUGUI> popPool = new Queue<TextMeshProUGUI>();
+    readonly Queue<Image> flyingCoinPool = new Queue<Image>();
     TextMeshProUGUI resMetres, resBest, resCoins, resBonus, resTotal, reviveTimer; Button doubleBtn, reviveGemBtn;
     Camera cam;
 
@@ -52,6 +53,7 @@ public class TCGameUI : MonoBehaviour
         scoreText = TCUI.Label("Score", pill.transform, "0M", 72, TCUI.Cocoa); TCUI.Stretch(scoreText.rectTransform);
         var cp = TCUI.Img("Coins", top, new Color(1, 1, 1, 0.85f)); TCUI.Place(cp.rectTransform, new Vector2(1, 0.5f), new Vector2(-190, 10), new Vector2(260, 96));
         var ci = TCUI.Img("Icon", cp.transform, Color.white, TCUI.Icon("coin")); TCUI.Place(ci.rectTransform, new Vector2(0, 0.5f), new Vector2(50, 0), new Vector2(72, 72));
+        coinIconTarget = ci.rectTransform;
         coinText = TCUI.Label("Value", cp.transform, "0", 52, TCUI.Cocoa, TextAlignmentOptions.Right); TCUI.Stretch(coinText.rectTransform, 90, 26, 0, 0);
         heartsRow = TCUI.Rect("Hearts", top); TCUI.Place(heartsRow, new Vector2(0, 0.5f), new Vector2(170, 10), new Vector2(300, 80));
         var pause = TCUI.Btn("Pause", top, "", TCUI.Butter, ShowPause, 40, TCUI.Icon("pause"));
@@ -97,12 +99,78 @@ public class TCGameUI : MonoBehaviour
     {
         switch (e)
         {
-            case "coin": Pop("+" + gameManager.CoinValue, pos, TCUI.Butter); break;
+            case "coin":
+                Pop("+" + gameManager.CoinValue, pos, TCUI.Butter);
+                FlyCoin(pos);
+                break;
             case "heart": Pop("+1 HEART", pos, TCUI.Blush); StartCoroutine(TCUI.Punch(heartsRow, 0.25f)); break;
             case "boost": Pop("BOOST", pos, TCUI.Peach); break;
             case "smash": Pop("SMASH!", pos, TCUI.Mint); break;
             case "hit": flash.alpha = 1; StartCoroutine(TCUI.Punch(heartsRow, 0.3f)); break;
         }
+    }
+
+    void FlyCoin(Vector3 worldPos)
+    {
+        if (!cam) cam = Camera.main;
+        if (!cam || !safe || !coinIconTarget) return;
+
+        var img = flyingCoinPool.Count > 0 ? flyingCoinPool.Dequeue() : null;
+        if (!img)
+        {
+            img = TCUI.Img("FlyCoin", safe.parent, Color.white, TCUI.Icon("coin"));
+            img.rectTransform.sizeDelta = new Vector2(56, 56);
+            img.raycastTarget = false;
+        }
+
+        img.gameObject.SetActive(true);
+        Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
+        StartCoroutine(FlyCoinRoutine(img, screenPos));
+    }
+
+    IEnumerator FlyCoinRoutine(Image coinImg, Vector3 screenStart)
+    {
+        var canvas = coinImg.canvas;
+        float s = canvas ? canvas.scaleFactor : 1f;
+        var rt = coinImg.rectTransform;
+        rt.anchorMin = rt.anchorMax = Vector2.zero;
+
+        Vector2 start = new Vector2(screenStart.x, screenStart.y) / s;
+        // Subtle random arc offset so multiple coins in a string fan out beautifully
+        Vector2 midOffset = new Vector2(Random.Range(-90f, 90f), Random.Range(60f, 150f));
+
+        float duration = 0.52f;
+        for (float elapsed = 0; elapsed < duration; elapsed += Time.deltaTime)
+        {
+            float t = elapsed / duration;
+            // Target UI position
+            Vector2 target = coinIconTarget ? (Vector2)coinIconTarget.position / s : start + new Vector2(0, 300);
+
+            // Quadratic bezier curve from spider contact to Coins UI pill
+            Vector2 control = (start + target) * 0.5f + midOffset;
+            float u = 1f - t;
+            Vector2 current = u * u * start + 2f * u * t * control + t * t * target;
+
+            rt.anchoredPosition = current;
+
+            // Scale up slightly at launch, then shrink as it arrives into the UI icon
+            float scale = t < 0.25f ? Mathf.Lerp(0.5f, 1.25f, t / 0.25f) : Mathf.Lerp(1.25f, 0.6f, (t - 0.25f) / 0.75f);
+            rt.localScale = Vector3.one * scale;
+
+            // Spin gently as it flies
+            rt.localEulerAngles = new Vector3(0, 0, t * 540f);
+
+            yield return null;
+        }
+
+        // Punch the Coins UI pill on arrival
+        if (coinIconTarget && coinIconTarget.parent)
+        {
+            StartCoroutine(TCUI.Punch(coinIconTarget.parent, 0.12f, 0.14f));
+        }
+
+        coinImg.gameObject.SetActive(false);
+        flyingCoinPool.Enqueue(coinImg);
     }
 
     void Pop(string text, Vector3 world, Color c)

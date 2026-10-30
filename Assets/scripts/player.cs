@@ -40,8 +40,7 @@ public class player : MonoBehaviour
     {
         if (paused || GameOver) return;
         float dt = Time.deltaTime;
-        float d = C.Difficulty(currentScore);
-        float baseSpeed = Mathf.Lerp(C.startSpeed, C.maxSpeed, d);
+        float baseSpeed = C.ClimbSpeedAtDistance(currentScore);
         calcSpeed = boost ? baseSpeed * C.boostMultiplier : baseSpeed;
         var pos = p1.position; pos.y += calcSpeed * dt; p1.position = pos;
         currentScore = (pos.y - startY) * C.metresPerUnit;

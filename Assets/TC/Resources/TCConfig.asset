@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: TCConfig
   m_EditorClassIdentifier: 
   startSpeed: 1.6
-  maxSpeed: 4.2
-  metresToMaxSpeed: 3000
+  maxSpeed: 2.73
+  metresToMaxSpeed: 1500
   boostMultiplier: 2.2
   metresPerUnit: 20
   trunkChunkHeight: 2

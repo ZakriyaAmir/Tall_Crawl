@@ -22,10 +22,10 @@ public class TCTrack : MonoBehaviour
     public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool };
     TCConfig C;
 
-    const float MinCoinSpacing = 0.55f;
+    const float MinCoinSpacing = 0.22f; // tighter spacing for dense long coin strings
     const float MinHazardSpacing = 1.0f;
     const float MinBonusSpacing = 1.5f;
-    const float BonusCoinMargin = 1.0f; // absolute clearance between any bonus pickup and any coin
+    const float BonusCoinMargin = 0.8f; // absolute clearance between any bonus pickup and any coin
 
     void Start()
     {
@@ -34,7 +34,7 @@ public class TCTrack : MonoBehaviour
         trunkPool = new TCPool(trunkPrefab, stemParent, C.chunksAhead + 4);
         branchPool = new TCPool(branchPrefab, hazardParent, 24);
         beePool = new TCPool(beesPrefab, hazardParent, 3);
-        coinPool = new TCPool(coinPrefab, bonusParent, 48);
+        coinPool = new TCPool(coinPrefab, bonusParent, 120);
         heartPool = new TCPool(heartPrefab, bonusParent, 2);
         boostPool = new TCPool(boostPrefab, bonusParent, 2);
 
@@ -48,8 +48,8 @@ public class TCTrack : MonoBehaviour
         lastBonusY = -999f;
         nextHeartEligibleTime = Time.time + 10f; // heart check every 10 seconds
 
-        // Safe start: welcome coin trail straight up with zero overlap
-        SpawnCoinTrail(py + 1.2f, py + 4.2f, safeAngle, safeAngle);
+        // Safe start: welcome string of coins straight up
+        SpawnCoinTrail(py + 1.2f, py + 1.2f + 6 * MinCoinSpacing, safeAngle, safeAngle, 7);
         Tick();
     }
 
@@ -141,14 +141,14 @@ public class TCTrack : MonoBehaviour
             Spawn(beePool, "bees", beeY, 0);
             lastHazardY = beeY + 0.3f;
             lastWasBee = true;
-            OnRow?.Invoke(beeY, safeAngle, 0, 360, gap / Mathf.Lerp(C.startSpeed, C.maxSpeed, d), metres);
+            OnRow?.Invoke(beeY, safeAngle, 0, 360, gap / C.ClimbSpeedAtDistance(metres), metres);
             nextRowY = beeY + gap * 1.5f;
             return;
         }
 
         lastWasBee = false;
         // Fairness: the turn between rows can never exceed what a player can steer in the time available.
-        float secs = Mathf.Max(0.1f, Mathf.Min(y - lastHazardY, gap * 3f) / Mathf.Lerp(C.startSpeed, C.maxSpeed, d));
+        float secs = Mathf.Max(0.1f, Mathf.Min(y - lastHazardY, gap * 3f) / C.ClimbSpeedAtDistance(metres));
         float turn = Mathf.Min(Mathf.Lerp(C.maxTurnEasy, C.maxTurnHard, d), C.maxTurnRate * secs);
         float newSafe = safeAngle + Random.Range(-turn, turn);
         float window = Mathf.Lerp(C.openWindowEasy, C.openWindowHard, d);
@@ -199,32 +199,33 @@ public class TCTrack : MonoBehaviour
         }
         else if (Random.value < C.coinTrailChance)
         {
-            // Coin trail along the safe passage strictly separated from branch rows
-            // Placed BEFORE the row so it leads the player from the previous opening into this one
-            // (it used to start at the old angle after the row, luring players the wrong way).
-            // Coins sit in the line of the upcoming opening, so steering to safety also collects them
-            // (playtest: diagonal trails were almost never collected, ~8 coins per 1,500 m).
-            float trailStartY = Mathf.Max(Mathf.Max(prevRowY + 0.45f, y - gap * 0.7f), lastBonusY + BonusCoinMargin);
-            float trailEndY = y - 0.4f;
-            SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.75f), newSafe);
+            // Long shape string of coins (5-10 coins) along the safe climbing trajectory
+            // Placed before the hazard row leading smoothly into the safe gap
+            int stringCount = Random.Range(5, 11); // 5 to 10 coins
+            float trailSpan = (stringCount - 1) * MinCoinSpacing;
+            float trailEndY = y - 0.35f;
+            float trailStartY = Mathf.Max(trailEndY - trailSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
+            // Recalculate actual count if space between rows was slightly constrained
+            int actualCount = Mathf.Clamp(Mathf.RoundToInt((trailEndY - trailStartY) / MinCoinSpacing) + 1, 5, stringCount);
+            SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.70f), newSafe, actualCount);
         }
 
         safeAngle = newSafe;
         nextRowY = y + gap;
     }
 
-    void SpawnCoinTrail(float startY, float endY, float fromAngle, float toAngle)
+    void SpawnCoinTrail(float startY, float endY, float fromAngle, float toAngle, int preferredCount = 0)
     {
         float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + MinCoinSpacing, lastBonusY + BonusCoinMargin));
         float span = endY - minY;
         if (span < MinCoinSpacing * 0.7f) return;
 
-        int count = Mathf.Max(1, Mathf.RoundToInt(span / MinCoinSpacing));
-        float step = span / count;
+        int count = preferredCount > 0 ? preferredCount : Mathf.Max(1, Mathf.RoundToInt(span / MinCoinSpacing));
+        float step = count > 1 ? span / (count - 1) : span;
 
         for (int i = 0; i < count; i++)
         {
-            float cy = minY + (i + 0.5f) * step;
+            float cy = count > 1 ? minY + i * step : minY + 0.5f * span;
             float t = (count <= 1) ? 0.5f : (float)i / (count - 1);
             float ca = Mathf.LerpAngle(fromAngle, toAngle, t);
             Spawn(coinPool, "coin", cy, ca);
