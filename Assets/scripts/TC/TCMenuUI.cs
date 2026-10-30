@@ -17,11 +17,8 @@ public class TCMenuUI : MonoBehaviour
     void Start()
     {
         Application.targetFrameRate = 60; Time.timeScale = 1; TCSave.Apply();
-        canvas = TCUI.MakeCanvas("TC_MenuUI", 10);
-        BuildBackground();
-        safe = TCUI.SafeRoot(canvas.transform);
         BuildPreview();
-        BuildMain(); BuildSkins(); BuildShop(); BuildSettings(); BuildDaily(); BuildConsent(); BuildToast();
+        BuildUI();
         TCSave.Changed += Refresh; Refresh();
         StartCoroutine(Entrance());
         { float d = 0.9f; foreach (Transform c in safe) { if (c.GetComponent<CanvasGroup>() || c.name == "Preview" || c.name.StartsWith("Shadow")) continue; StartCoroutine(PopIn(c, d)); d += 0.06f; } }
@@ -30,6 +27,15 @@ public class TCMenuUI : MonoBehaviour
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
         TCServices.Banner(true);
     }
+    /// Builds (or, when baked into the scene, binds to) every menu screen. Also run in edit mode by TCUIBake.
+    public void BuildUI()
+    {
+        canvas = TCUI.MakeCanvas("TC_MenuUI", 10);
+        BuildBackground();
+        safe = TCUI.SafeRoot(canvas.transform);
+        BuildMain(); BuildSkins(); BuildShop(); BuildSettings(); BuildDaily(); BuildConsent(); BuildToast();
+    }
+    void Co(IEnumerator e) { if (Application.isPlaying) StartCoroutine(e); }
     void OnDestroy() { TCSave.Changed -= Refresh; if (rt) rt.Release(); }
     // The saved Music setting was only applied when toggled, so menu music always played on launch.
     static void ApplyMenuMusic() { var m = GameObject.Find("bgm"); if (m) { var a = m.GetComponent<AudioSource>(); if (a) a.mute = !TCSave.Music; } }
@@ -56,16 +62,23 @@ public class TCMenuUI : MonoBehaviour
     void BuildBackground()
     {
         var bg = TCUI.Rect("BG", canvas.transform); TCUI.Stretch(bg);
-        var tex = new Texture2D(2, 64) { wrapMode = TextureWrapMode.Clamp };
-        for (int y = 0; y < 64; y++) { var c = Color.Lerp(TCUI.Hex("#FFD3B8"), TCUI.Hex("#7FD0FF"), y / 63f); tex.SetPixel(0, y, c); tex.SetPixel(1, y, c); }
-        tex.Apply();
-        var ri = bg.gameObject.AddComponent<RawImage>(); ri.texture = tex; ri.raycastTarget = false;
+        if (TCUI.Fresh(bg))
+        {
+            var tex = Resources.Load<Texture2D>("TCUI/menu_gradient");
+            if (!tex)
+            {
+                tex = new Texture2D(2, 64) { wrapMode = TextureWrapMode.Clamp };
+                for (int y = 0; y < 64; y++) { var c = Color.Lerp(TCUI.Hex("#FFD3B8"), TCUI.Hex("#7FD0FF"), y / 63f); tex.SetPixel(0, y, c); tex.SetPixel(1, y, c); }
+                tex.Apply();
+            }
+            var ri = bg.gameObject.AddComponent<RawImage>(); ri.texture = tex; ri.raycastTarget = false;
+        }
         for (int i = 0; i < 14; i++)
         {
             var dot = TCUI.Img("Bubble", bg, new Color(1, 1, 1, Random.Range(0.18f, 0.4f)), TCUI.Circle);
-            float s = Random.Range(40, 160); dot.rectTransform.sizeDelta = new Vector2(s, s);
+            if (TCUI.Fresh(dot)) { float s = Random.Range(40, 160); dot.rectTransform.sizeDelta = new Vector2(s, s); }
             dot.rectTransform.anchorMin = dot.rectTransform.anchorMax = new Vector2(Random.value, Random.value);
-            StartCoroutine(Float(dot.rectTransform, Random.Range(0.2f, 0.6f)));
+            Co(Float(dot.rectTransform, Random.Range(0.2f, 0.6f)));
         }
     }
     IEnumerator Float(RectTransform r, float speed)
@@ -216,11 +229,11 @@ public class TCMenuUI : MonoBehaviour
         if (TCAssets.I.logo)
         {
             var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.83f), Vector2.zero, new Vector2(760, 428)); // cute & awesome 3D title logo
-            StartCoroutine(Bob(logo.rectTransform, 10, 1.8f));
+            Co(Bob(logo.rectTransform, 10, 1.8f));
         }
         else { var t = TCUI.Label("Title", safe, "TALL CRAWL", 120, TCUI.Cocoa); TCUI.Place(t.rectTransform, new Vector2(0.5f, 0.85f), Vector2.zero, new Vector2(1000, 200)); }
 
-        previewImg = new GameObject("Preview", typeof(RectTransform)).AddComponent<RawImage>(); previewImg.transform.SetParent(safe, false);
+        previewImg = TCUI.Add<RawImage>(TCUI.Rect("Preview", safe).gameObject);
         previewImg.texture = rt; previewImg.raycastTarget = false; TCUI.Place(previewImg.rectTransform, new Vector2(0.5f, 0.50f), Vector2.zero, new Vector2(740, 740));
 
         var bestPill = TCUI.Img("Best", safe, new Color(1, 1, 1, 0.85f)); TCUI.Place(bestPill.rectTransform, new Vector2(0.5f, 0.28f), Vector2.zero, new Vector2(480, 84));
@@ -229,9 +242,9 @@ public class TCMenuUI : MonoBehaviour
         var play = TCUI.Btn("Play", safe, "PLAY", TCUI.Mint, () => StartCoroutine(LoadGame()), 96, TCUI.Icon("play")); // no game-start sound
         TCUI.Place((RectTransform)play.transform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(640, 190));
         { var glow = TCUI.Img("Glow", safe, new Color(1f, 0.95f, 0.55f, 0.55f), TCUI.Circle); glow.raycastTarget = false;
-          TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(820, 290)); glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1);
-          StartCoroutine(Glow(glow)); }
-        StartCoroutine(Pulse(play.transform)); StartCoroutine(Breathe(play.transform));
+          TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(820, 290)); if (TCUI.Fresh(glow)) glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1);
+          Co(Glow(glow)); }
+        Co(Pulse(play.transform)); Co(Breathe(play.transform));
 
         SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 110), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel); });
         SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 110), () => TCUI.Show(this, shopPanel));
@@ -266,7 +279,7 @@ public class TCMenuUI : MonoBehaviour
     void BuildSkins()
     {
         skinsPanel = TCUI.Panel("Skins", safe, out var card, new Vector2(980, 1500), "SKINS");
-        skinPreviewImg = new GameObject("Preview", typeof(RectTransform)).AddComponent<RawImage>(); skinPreviewImg.transform.SetParent(card, false);
+        skinPreviewImg = TCUI.Add<RawImage>(TCUI.Rect("Preview", card).gameObject);
         skinPreviewImg.texture = rt; skinPreviewImg.raycastTarget = false; TCUI.Place(skinPreviewImg.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -330), new Vector2(460, 460));
         skinName = TCUI.Label("Name", card, "", 56, TCUI.Cocoa); TCUI.Place(skinName.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -580), new Vector2(800, 80));
         for (int i = 0; i < TCSkins.All.Length; i++)
@@ -397,8 +410,8 @@ public class TCMenuUI : MonoBehaviour
         var fillArea = TCUI.Rect("FillArea", root); TCUI.Stretch(fillArea, 0, 0, 18, 18);
         var fill = TCUI.Img("Fill", fillArea, TCUI.Mint); TCUI.Stretch(fill.rectTransform);
         var handleArea = TCUI.Rect("HandleArea", root); TCUI.Stretch(handleArea, 30, 30, 0, 0);
-        var handle = TCUI.Img("Handle", handleArea, TCUI.Peach, TCUI.Circle); handle.rectTransform.sizeDelta = new Vector2(70, 70); handle.raycastTarget = true;
-        var s = root.gameObject.AddComponent<Slider>(); s.fillRect = fill.rectTransform; s.handleRect = handle.rectTransform; s.targetGraphic = handle;
+        var handle = TCUI.Img("Handle", handleArea, TCUI.Peach, TCUI.Circle); if (TCUI.Fresh(handle)) { handle.rectTransform.sizeDelta = new Vector2(70, 70); handle.raycastTarget = true; }
+        var s = TCUI.Add<Slider>(root.gameObject); s.fillRect = fill.rectTransform; s.handleRect = handle.rectTransform; s.targetGraphic = handle;
         return s;
     }
 
@@ -417,7 +430,7 @@ public class TCMenuUI : MonoBehaviour
             var d = TCUI.Label("D", c.transform, "DAY " + (i + 1), 34, TCUI.Cocoa); TCUI.Place(d.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -32), new Vector2(190, 50));
             bool gem = i == 6;
             var ic = TCUI.Img("I", c.transform, Color.white, TCUI.Icon(gem ? "gem" : "coin")); TCUI.Place(ic.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 0), new Vector2(80, 80));
-            var v = TCUI.Label("V", c.transform, r[i].ToString(), 40, TCUI.Cocoa); TCUI.Place(v.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 36), new Vector2(190, 50));
+            var v = TCUI.Label("V", c.transform, r[i].ToString(), 40, TCUI.Cocoa); TCUI.Place(v.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 36), new Vector2(190, 50)); v.text = r[i].ToString();
             dailyCells.Add(c);
         }
         claimBtn = TCUI.Btn("Claim", card, "CLAIM", TCUI.Mint, () => ClaimDaily(false), 56);
@@ -464,7 +477,7 @@ public class TCMenuUI : MonoBehaviour
     void BuildToast()
     {
         var r = TCUI.Img("Toast", canvas.transform, TCUI.Cocoa); TCUI.Place(r.rectTransform, new Vector2(0.5f, 0.62f), Vector2.zero, new Vector2(760, 110));
-        toastGroup = r.gameObject.AddComponent<CanvasGroup>(); toastGroup.alpha = 0; toastGroup.blocksRaycasts = false;
+        toastGroup = TCUI.Add<CanvasGroup>(r.gameObject); toastGroup.alpha = 0; toastGroup.blocksRaycasts = false;
         toastText = TCUI.Label("T", r.transform, "", 44, Color.white); TCUI.Stretch(toastText.rectTransform);
     }
     Coroutine toastCo;

@@ -15,8 +15,22 @@ public static class TCUI
     public static Color Hex(string h) { ColorUtility.TryParseHtmlString(h, out var c); return c; }
 
     static Sprite _round, _circle;
-    public static Sprite Round { get { if (!_round) _round = MakeRound(64, 26); return _round; } }
-    public static Sprite Circle { get { if (!_circle) _circle = MakeRound(128, 64, false); return _circle; } }
+    public static Sprite Round { get { if (!_round && !Readable) _round = Resources.Load<Sprite>("TCUI/round"); if (!_round) _round = MakeRound(64, 26); return _round; } }
+    public static Sprite Circle { get { if (!_circle && !Readable) _circle = Resources.Load<Sprite>("TCUI/circle"); if (!_circle) _circle = MakeRound(128, 64, false); return _circle; } }
+
+    // ---------- Baked-UI support ----------
+    // The editor bake (Tools > Tall Crawl > Bake UI) runs the same builders with Baking = true and saves the result in the
+    // scene, every object tagged with TCBaked. At runtime the builders then *bind* to those scene objects by name instead of
+    // creating them, and skip all layout/style code, so edits made in the Unity editor (position, size, colours, text) are kept.
+    // Only click listeners and dynamic text/state are wired at runtime.
+    public static bool Baking, Readable;
+    public static Func<float, Material> BakeOutlineMat;
+    static readonly System.Collections.Generic.HashSet<Transform> bound = new System.Collections.Generic.HashSet<Transform>();
+    /// True when the object was created now (not bound to a baked scene object): style/layout it.
+    public static bool Fresh(Component c) => c && !bound.Contains(c.transform);
+    public static T Add<T>(GameObject g) where T : Component { var c = g.GetComponent<T>(); return c ? c : g.AddComponent<T>(); }
+    static void ClearCaches() { _round = _circle = null; icons.Clear(); }
+    public static void ResetSpriteCache() => ClearCaches();
 
     static Sprite MakeRound(int size, int radius, bool slice = true)
     {
@@ -30,7 +44,7 @@ public static class TCUI
                 byte a = (byte)(Mathf.Clamp01(radius - d + 0.5f) * 255);
                 px[y * size + x] = new Color32(255, 255, 255, a);
             }
-        tex.SetPixels32(px); tex.Apply(false, true);
+        tex.SetPixels32(px); tex.Apply(false, !Readable);
         return Sprite.Create(tex, new Rect(0, 0, size, size), Vector2.one * 0.5f, 100, 0, SpriteMeshType.FullRect,
             slice ? new Vector4(radius, radius, radius, radius) : Vector4.zero);
     }
@@ -39,7 +53,8 @@ public static class TCUI
     static readonly System.Collections.Generic.Dictionary<string, Sprite> icons = new System.Collections.Generic.Dictionary<string, Sprite>();
     public static Sprite Icon(string name)
     {
-        if (icons.TryGetValue(name, out var s)) return s;
+        if (icons.TryGetValue(name, out var s) && s) return s;
+        if (!Readable) { s = Resources.Load<Sprite>("TCUI/icon_" + name); if (s) { icons[name] = s; return s; } }
         const int N = 128;
         var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
         var px = new Color[N * N];
@@ -49,7 +64,7 @@ public static class TCUI
                 Vector2 p = new Vector2((x + 0.5f) / N * 2 - 1, (y + 0.5f) / N * 2 - 1);
                 px[y * N + x] = Shade(name, p);
             }
-        tex.SetPixels(px); tex.Apply(false, true);
+        tex.SetPixels(px); tex.Apply(false, !Readable);
         s = Sprite.Create(tex, new Rect(0, 0, N, N), Vector2.one * 0.5f);
         icons[name] = s; return s;
     }
@@ -186,6 +201,9 @@ public static class TCUI
     // ---------- Builders ----------
     public static Canvas MakeCanvas(string name, int order)
     {
+        if (!Baking)
+            foreach (var bc in UnityEngine.Object.FindObjectsOfType<Canvas>())
+                if (bc.name == name && bc.GetComponent<TCBaked>()) { bound.Add(bc.transform); return bc; }
         var go = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         var c = go.GetComponent<Canvas>(); c.renderMode = RenderMode.ScreenSpaceOverlay; c.sortingOrder = order;
         var s = go.GetComponent<CanvasScaler>(); s.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize; s.referenceResolution = new Vector2(1080, 1920);
@@ -193,37 +211,44 @@ public static class TCUI
         // tall 9:20+ phones and taller than the screen on 3:4 tablets.
         s.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
         if (!UnityEngine.Object.FindObjectOfType<EventSystem>()) new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+        if (Baking) go.AddComponent<TCBaked>();
         return c;
     }
 
     /// Safe-area root that also leaves room at the bottom for the banner ad.
     public static RectTransform SafeRoot(Transform canvas, float bannerReserve = 170)
     {
-        var rt = Rect("Safe", canvas); Stretch(rt);
+        var rt = Rect("Safe", canvas); if (!Fresh(rt)) return rt; Stretch(rt);
         var sa = rt.gameObject.AddComponent<TCSafeArea>(); sa.bottomReserve = bannerReserve;
         return rt;
     }
 
     public static RectTransform Rect(string name, Transform parent)
     {
+        if (!Baking && parent)
+            foreach (Transform c in parent)
+                if (c.name == name && !bound.Contains(c) && c.GetComponent<TCBaked>() && c is RectTransform r) { bound.Add(c); return r; }
         var go = new GameObject(name, typeof(RectTransform)); go.transform.SetParent(parent, false);
+        if (Baking) go.AddComponent<TCBaked>();
         return (RectTransform)go.transform;
     }
     public static void Stretch(RectTransform rt, float l = 0, float r = 0, float t = 0, float b = 0)
-    { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = new Vector2(l, b); rt.offsetMax = new Vector2(-r, -t); }
+    { if (!Fresh(rt)) return; rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = new Vector2(l, b); rt.offsetMax = new Vector2(-r, -t); }
     public static RectTransform Place(RectTransform rt, Vector2 anchor, Vector2 pos, Vector2 size)
-    { rt.anchorMin = rt.anchorMax = anchor; rt.pivot = new Vector2(0.5f, 0.5f); rt.anchoredPosition = pos; rt.sizeDelta = size; return rt; }
+    { if (!Fresh(rt)) return rt; rt.anchorMin = rt.anchorMax = anchor; rt.pivot = new Vector2(0.5f, 0.5f); rt.anchoredPosition = pos; rt.sizeDelta = size; return rt; }
 
     public static Image Img(string name, Transform parent, Color c, Sprite s = null)
     {
-        var rt = Rect(name, parent); var i = rt.gameObject.AddComponent<Image>(); i.sprite = s ? s : Round; i.color = c;
+        var rt = Rect(name, parent); if (!Fresh(rt)) return Add<Image>(rt.gameObject);
+        var i = rt.gameObject.AddComponent<Image>(); i.sprite = s ? s : Round; i.color = c;
         if (i.sprite == Round) i.type = Image.Type.Sliced; else i.preserveAspect = true;
         i.raycastTarget = false; return i;
     }
 
     public static TextMeshProUGUI Label(string name, Transform parent, string text, float size, Color c, TextAlignmentOptions align = TextAlignmentOptions.Center)
     {
-        var rt = Rect(name, parent); var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+        var rt = Rect(name, parent); if (!Fresh(rt)) return Add<TextMeshProUGUI>(rt.gameObject);
+        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
         if (TCAssets.I.font) t.font = TCAssets.I.font;
         t.text = text; t.fontSize = size; t.color = c; t.alignment = align; t.raycastTarget = false; t.enableWordWrapping = true;
         t.fontStyle = FontStyles.Bold;
@@ -234,6 +259,7 @@ public static class TCUI
     public static Button Btn(string name, Transform parent, string text, Color face, Action onClick, float fontSize = 52, Sprite icon = null)
     {
         var rt = Rect(name, parent);
+        if (!Fresh(rt)) { var bb = Add<Button>(rt.gameObject); bb.onClick.AddListener(() => { TCAudio.Click(); onClick?.Invoke(); }); return bb; }
         var shadow = Img("Shadow", rt, Color.Lerp(face, Cocoa, 0.35f)); Stretch(shadow.rectTransform, 0, 0, 10, -10);
         var img = rt.gameObject.AddComponent<Image>(); img.sprite = Round; img.type = Image.Type.Sliced; img.color = face;
         var rim = rt.gameObject.AddComponent<UnityEngine.UI.Outline>(); rim.effectColor = Color.Lerp(face, Cocoa, 0.6f); rim.effectDistance = new Vector2(5, -5); // thick hypercasual rim
@@ -262,7 +288,9 @@ public static class TCUI
 
     public static CanvasGroup Panel(string name, Transform parent, out RectTransform card, Vector2 size, string title)
     {
-        var root = Rect(name, parent); Stretch(root);
+        var root = Rect(name, parent);
+        if (!Fresh(root)) { var bc = root.Find("Card"); card = bc ? (RectTransform)bc : root; if (bc) bound.Add(bc); return Add<CanvasGroup>(root.gameObject); }
+        Stretch(root);
         var cg = root.gameObject.AddComponent<CanvasGroup>();
         var dim = Img("Dim", root, Dim); Stretch(dim.rectTransform); dim.raycastTarget = true; dim.sprite = null; dim.type = Image.Type.Simple;
         card = Img("Card", root, Cream).rectTransform; Place(card, new Vector2(0.5f, 0.5f), new Vector2(0, 0), size);
@@ -284,6 +312,8 @@ public static class TCUI
     }
     public static void Outline(TMP_Text t, float w)
     {
+        if (!Fresh(t)) return;
+        if (Baking && BakeOutlineMat != null) { var bm = BakeOutlineMat(w); if (bm) { t.fontSharedMaterial = bm; return; } }
         try { var m = t.fontMaterial; m.EnableKeyword("OUTLINE_ON"); m.SetFloat("_OutlineWidth", w); m.SetColor("_OutlineColor", Cocoa); }
         catch (Exception) { }
     }
@@ -324,56 +354,4 @@ public static class TCUI
         for (float x = 0; x < dur; x += Time.unscaledDeltaTime) { if (!t) yield break; t.localScale = Vector3.one * (1 + amount * Mathf.Sin(x / dur * Mathf.PI)); yield return null; }
         if (t) t.localScale = Vector3.one;
     }
-}
-
-public class TCPress : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
-{
-    Vector3 target = Vector3.one;
-    public void OnPointerDown(PointerEventData e) => target = Vector3.one * 0.92f;
-    public void OnPointerUp(PointerEventData e) => target = Vector3.one;
-    public void OnPointerExit(PointerEventData e) => target = Vector3.one;
-    void OnDisable() { transform.localScale = Vector3.one; target = Vector3.one; }
-    void Update() { transform.localScale = Vector3.Lerp(transform.localScale, target, 1 - Mathf.Exp(-25 * Time.unscaledDeltaTime)); }
-}
-
-/// Keeps a shadow image glued under a button (so the button's own press-scale doesn't move it).
-public class TCFollowRect : MonoBehaviour
-{
-    public RectTransform target; public Vector2 offset; RectTransform me;
-    void LateUpdate()
-    {
-        if (!target) { Destroy(gameObject); return; }
-        if (!me) me = (RectTransform)transform;
-        gameObject.SetActive(true);
-        me.anchorMin = target.anchorMin; me.anchorMax = target.anchorMax; me.pivot = target.pivot;
-        me.sizeDelta = target.sizeDelta; me.anchoredPosition = target.anchoredPosition + offset;
-        me.localScale = target.localScale;
-        var tImg = target.GetComponent<Graphic>(); var mine = GetComponent<Graphic>();
-        if (tImg && mine) mine.enabled = tImg.isActiveAndEnabled;
-    }
-}
-
-public class TCSafeArea : MonoBehaviour
-{
-    public float bottomReserve; Rect last; float lastReserve = -1;
-    public static bool BannerVisible = true;
-    void Update()
-    {
-        var sa = Screen.safeArea; float reserve = BannerVisible && !TCSave.NoAds ? bottomReserve : 0;
-        if (sa == last && reserve == lastReserve) return; last = sa; lastReserve = reserve;
-        var rt = (RectTransform)transform; var canvas = GetComponentInParent<Canvas>();
-        float scale = canvas ? canvas.scaleFactor : 1;
-        Vector2 min = sa.position, max = sa.position + sa.size;
-        min.x /= Screen.width; max.x /= Screen.width; min.y /= Screen.height; max.y /= Screen.height;
-        rt.anchorMin = min; rt.anchorMax = max; rt.offsetMin = new Vector2(0, reserve); rt.offsetMax = Vector2.zero;
-    }
-}
-
-/// UI sounds (click etc.) + music toggle helper.
-public static class TCAudio
-{
-    static AudioSource src;
-    static AudioSource Src { get { if (!src) { var g = new GameObject("TCAudio"); UnityEngine.Object.DontDestroyOnLoad(g); src = g.AddComponent<AudioSource>(); src.playOnAwake = false; } return src; } }
-    public static void Click() { if (TCAssets.I.click) Src.PlayOneShot(TCAssets.I.click, 0.8f); }
-    public static void Play(AudioClip c, float v = 1) { if (c) Src.PlayOneShot(c, v); }
 }

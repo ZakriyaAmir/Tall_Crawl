@@ -24,22 +24,30 @@ public class TCGameUI : MonoBehaviour
     void Start()
     {
         pl = FindObjectOfType<player>(); spider = FindObjectOfType<playerInteract>(); gm = gameManager.Instance; cam = Camera.main;
-        var canvas = TCUI.MakeCanvas("TC_GameUI", 10);
-        safe = TCUI.SafeRoot(canvas.transform);
-        BuildHud(); BuildStart(); BuildPause(); BuildRevive(); BuildResults();
-        flash = TCUI.Rect("Flash", canvas.transform).gameObject.AddComponent<CanvasGroup>();
-        TCUI.Stretch((RectTransform)flash.transform); var fi = flash.gameObject.AddComponent<Image>(); fi.color = new Color(1, 0.35f, 0.4f, 0.35f); fi.raycastTarget = false; flash.alpha = 0;
+        BuildUI();
+        hintText.text = TCSave.TutorialDone ? "TAP TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk";
         playerInteract.OnEvent += OnGameEvent;
         player.OnTurned += () => turnedOnce = true;
         player.OnJumped += () => jumpedOnce = true;
         TCUI.Show(this, startOverlay, false);
+    }
+    /// Builds (or, when baked into the scene, binds to) the HUD and every in-game screen. Also run in edit mode by TCUIBake.
+    public void BuildUI()
+    {
+        var canvas = TCUI.MakeCanvas("TC_GameUI", 10);
+        safe = TCUI.SafeRoot(canvas.transform);
+        BuildHud(); BuildStart(); BuildPause(); BuildRevive(); BuildResults();
+        var fr = TCUI.Rect("Flash", canvas.transform); bool fresh = TCUI.Fresh(fr);
+        flash = TCUI.Add<CanvasGroup>(fr.gameObject); TCUI.Stretch(fr);
+        if (fresh) { var fi = fr.gameObject.AddComponent<Image>(); fi.color = new Color(1, 0.35f, 0.4f, 0.35f); fi.raycastTarget = false; }
+        flash.alpha = 0;
     }
     void OnDestroy() { playerInteract.OnEvent -= OnGameEvent; player.OnTurned = null; player.OnJumped = null; }
 
     // ---------------- HUD ----------------
     void BuildHud()
     {
-        var top = TCUI.Rect("Top", safe); top.anchorMin = new Vector2(0, 1); top.anchorMax = new Vector2(1, 1); top.pivot = new Vector2(0.5f, 1); top.sizeDelta = new Vector2(0, 200); top.anchoredPosition = Vector2.zero;
+        var top = TCUI.Rect("Top", safe); if (TCUI.Fresh(top)) { top.anchorMin = new Vector2(0, 1); top.anchorMax = new Vector2(1, 1); top.pivot = new Vector2(0.5f, 1); top.sizeDelta = new Vector2(0, 200); top.anchoredPosition = Vector2.zero; }
         var pill = TCUI.Img("ScorePill", top, new Color(1, 1, 1, 0.85f)); TCUI.Place(pill.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 10), new Vector2(360, 120));
         scoreText = TCUI.Label("Score", pill.transform, "0M", 72, TCUI.Cocoa); TCUI.Stretch(scoreText.rectTransform);
         var cp = TCUI.Img("Coins", top, new Color(1, 1, 1, 0.85f)); TCUI.Place(cp.rectTransform, new Vector2(1, 0.5f), new Vector2(-190, 10), new Vector2(260, 96));
@@ -124,15 +132,15 @@ public class TCGameUI : MonoBehaviour
     // ---------------- Start / Tutorial ----------------
     void BuildStart()
     {
-        var root = TCUI.Rect("Start", safe); TCUI.Stretch(root);
-        startOverlay = root.gameObject.AddComponent<CanvasGroup>();
-        var hit = root.gameObject.AddComponent<Image>(); hit.color = new Color(0, 0, 0, 0.001f);
-        var b = root.gameObject.AddComponent<Button>(); b.transition = Selectable.Transition.None; b.onClick.AddListener(StartRun);
+        var root = TCUI.Rect("Start", safe); bool fresh = TCUI.Fresh(root); TCUI.Stretch(root);
+        startOverlay = TCUI.Add<CanvasGroup>(root.gameObject);
+        if (fresh) { var hit = root.gameObject.AddComponent<Image>(); hit.color = new Color(0, 0, 0, 0.001f); }
+        var b = TCUI.Add<Button>(root.gameObject); if (fresh) b.transition = Selectable.Transition.None; b.onClick.AddListener(StartRun);
         hintText = TCUI.Label("Hint", root, TCSave.TutorialDone ? "TAP TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk", 72, Color.white);
         TCUI.Outline(hintText, 0.25f);
         TCUI.Place(hintText.rectTransform, new Vector2(0.5f, 0.3f), Vector2.zero, new Vector2(1000, 260));
         hand = TCUI.Img("Hand", root, Color.white, TCUI.Icon("hand")).rectTransform; TCUI.Place(hand, new Vector2(0.5f, 0.2f), Vector2.zero, new Vector2(150, 150));
-        StartCoroutine(HandWiggle());
+        if (Application.isPlaying) StartCoroutine(HandWiggle());
     }
     IEnumerator HandWiggle()
     {
@@ -192,6 +200,7 @@ public class TCGameUI : MonoBehaviour
         }, 44);
         TCUI.Place((RectTransform)b.transform, new Vector2(1, 0.5f), new Vector2(-90, 0), new Vector2(180, 84));
         bt = TCUI.Label("V", b.transform, get() ? "ON" : "OFF", 44, TCUI.Cocoa); TCUI.Stretch(bt.rectTransform);
+        b.GetComponent<Image>().color = get() ? TCUI.Mint : TCUI.Grey; bt.text = get() ? "ON" : "OFF"; // live state (also for baked UI)
     }
 
     public void ShowPause()
@@ -255,13 +264,13 @@ public class TCGameUI : MonoBehaviour
         TCUI.Place(caption.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 465), new Vector2(600, 38));
 
         resMetres = TCUI.Label("Metres", card, "0 M", 92, TCUI.Cocoa);
-        resMetres.enableAutoSizing = true; resMetres.fontSizeMin = 56; resMetres.fontSizeMax = 92;
+        if (TCUI.Fresh(resMetres)) { resMetres.enableAutoSizing = true; resMetres.fontSizeMin = 56; resMetres.fontSizeMax = 92; }
         TCUI.Place(resMetres.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 390), new Vector2(760, 95));
 
         var bestBadge = TCUI.Img("BestBadge", card, new Color(1f, 0.93f, 0.86f, 0.95f), TCUI.Round);
         TCUI.Place(bestBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 295), new Vector2(380, 58));
         resBest = TCUI.Label("Best", bestBadge.transform, "BEST 0 M", 34, TCUI.Peach);
-        resBest.enableWordWrapping = false; resBest.enableAutoSizing = true; resBest.fontSizeMin = 20; resBest.fontSizeMax = 34;
+        if (TCUI.Fresh(resBest)) { resBest.enableWordWrapping = false; resBest.enableAutoSizing = true; resBest.fontSizeMin = 20; resBest.fontSizeMax = 34; }
         TCUI.Stretch(resBest.rectTransform, 14, 14, 4, 4);
 
         resCoins = Row(card, "Coins Gathered", 195, false);
@@ -292,14 +301,14 @@ public class TCGameUI : MonoBehaviour
         TCUI.Place(row.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, y), new Vector2(740, isTotal ? 94 : 84));
 
         var l = TCUI.Label("L", row.transform, label, isTotal ? 36 : 32, TCUI.Cocoa, TextAlignmentOptions.Left);
-        l.enableWordWrapping = false;
+        if (TCUI.Fresh(l)) l.enableWordWrapping = false;
         TCUI.Stretch(l.rectTransform, 32, 260, 0, 0);
 
         var ic = TCUI.Img("I", row.transform, Color.white, TCUI.Icon("coin"));
         TCUI.Place(ic.rectTransform, new Vector2(1, 0.5f), new Vector2(-42, 0), new Vector2(isTotal ? 54 : 46, isTotal ? 54 : 46));
 
         var v = TCUI.Label("V", row.transform, "0", isTotal ? 46 : 40, isTotal ? TCUI.Hex("#E07A5F") : TCUI.Cocoa, TextAlignmentOptions.Right);
-        v.enableWordWrapping = false; v.enableAutoSizing = true; v.fontSizeMin = 22; v.fontSizeMax = isTotal ? 46 : 40;
+        if (TCUI.Fresh(v)) { v.enableWordWrapping = false; v.enableAutoSizing = true; v.fontSizeMin = 22; v.fontSizeMax = isTotal ? 46 : 40; }
         TCUI.Stretch(v.rectTransform, 300, 84, 0, 0);
         return v;
     }
