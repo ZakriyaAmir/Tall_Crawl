@@ -29,11 +29,14 @@ public class TCCuteSpider : MonoBehaviour
         var cs = spider.GetComponent<TCCuteSpider>();
         if (old) { if (cs && cs.cachedBounds.size != Vector3.zero) { b = cs.cachedBounds; } old.name = "__old"; old.gameObject.SetActive(false); Destroy(old.gameObject); }
         if (!cs) cs = spider.AddComponent<TCCuteSpider>();
-        if (hasB || cs.cachedBounds.size == Vector3.zero) cs.cachedBounds = b; else b = cs.cachedBounds;
+        if (cs.cachedBounds.size != Vector3.zero) b = cs.cachedBounds;
+        else if (hasB) cs.cachedBounds = b;
+        else cs.cachedBounds = b;
 
         float scale = Mathf.Max(0.0001f, st.lossyScale.x);
         float R = b.size.magnitude * 0.16f / scale;               // body radius, local units
-        Vector3 center = st.InverseTransformPoint(b.center);
+        Vector3 center = cs.hasRestRoot ? cs.cachedCenter : st.InverseTransformPoint(b.center);
+        cs.cachedCenter = center;
         // Up = spider's back. On the trunk that is radially outward, in the menu it is world up.
         Vector3 upW = spider.GetComponentInParent<player>() ? new Vector3(st.position.x, 0, st.position.z).normalized : Vector3.up;
         if (upW.sqrMagnitude < 0.01f) upW = Vector3.up;
@@ -47,7 +50,7 @@ public class TCCuteSpider : MonoBehaviour
         fwd.Normalize();
 
         var root = new GameObject(RootName).transform; root.SetParent(st, false);
-        root.localPosition = center - up * Vector3.Dot(center, up) + up * Mathf.Min(Vector3.Dot(center, up), R * 0.2f);
+        root.localPosition = cs.hasRestRoot ? cs.restRoot : (center - up * Vector3.Dot(center, up) + up * Mathf.Min(Vector3.Dot(center, up), R * 0.2f));
         root.localRotation = Quaternion.LookRotation(fwd, up);
         cs.legs.Clear(); cs.legRest.Clear(); cs.eyeRest.Clear();
 
@@ -61,12 +64,12 @@ public class TCCuteSpider : MonoBehaviour
         }
         // Photo look (3D-printed chibi spider): one solid plastic colour for head + legs, the abdomen carries the skin pattern.
         // Tuned to medium tone so spider parts are not overly bright.
-        var plain = Flat(def.body * 0.85f, bodyMat, 0, def.metallic, def.gloss);
-        var legMat = Flat(def.body * 0.80f, bodyMat, 0, def.metallic, def.gloss);
-        var spikeMat = Flat(def.accent * 0.88f, bodyMat, def.emission, def.metallic, def.gloss);
-        var eyeMat = Flat(def.eye, bodyMat, def.eyeGlow, 0.1f, 0.92f);
-        var shine = Flat(new Color(0.85f, 0.85f, 0.85f, 1f), bodyMat, 0.4f, 0, 0.9f);
-        var fangMat = Flat(def.body * 0.70f, bodyMat, 0, def.metallic, def.gloss);
+        var plain = Flat(def.body * 0.85f, null, 0, def.metallic, def.gloss);
+        var legMat = Flat(def.body * 0.80f, null, 0, def.metallic, def.gloss);
+        var spikeMat = Flat(def.accent * 0.95f, null, def.emission, def.metallic, def.gloss);
+        var eyeMat = Flat(def.eye, null, def.eyeGlow, 0.1f, 0.92f);
+        var shine = Flat(new Color(0.92f, 0.92f, 0.92f, 1f), null, 0.5f, 0, 0.9f);
+        var fangMat = Flat(def.body * 0.70f, null, 0, def.metallic, def.gloss);
 
         Vector3 s = def.BodyScale;
         float pivotY = R * 0.70f;
@@ -113,40 +116,69 @@ public class TCCuteSpider : MonoBehaviour
             spin.name = "spinneret";
         }
 
-        // Eyes: stylish, expressive, beautiful arachnid gaze
+        // Eyes: stylish, expressive, beautiful arachnid gaze with distinct skin-colored pupils
         Vector3 HS(Vector3 dir, float lift) { dir.Normalize(); return headT.localPosition + Vector3.Scale(dir, new Vector3(0.68f, 0.58f, 0.62f) * hr * R) + dir * lift * R; }
         cs.eyes.Clear();
+
+        // Outer eyeball base: sleek dark glossy sclera so colored pupils pop beautifully
+        var eyeballBaseMat = Flat(new Color(0.08f, 0.07f, 0.09f, 1f), null, 0f, 0.1f, 0.95f);
+
+        // Pupil color derived directly from skin: if def.eye is dark/unset, use accent or vibrant body color
+        Color pupilColor = def.eye;
+        float eyeBrightness = Mathf.Max(pupilColor.r, Mathf.Max(pupilColor.g, pupilColor.b));
+        if (eyeBrightness < 0.22f)
+        {
+            // Pick prominent contrasting skin color
+            float accentBrightness = Mathf.Max(def.accent.r, Mathf.Max(def.accent.g, def.accent.b));
+            if (accentBrightness > 0.35f) pupilColor = def.accent;
+            else pupilColor = Color.Lerp(def.body, Color.white, 0.15f);
+        }
+        float pupilGlow = Mathf.Max(def.eyeGlow, 0.25f);
+        var pupilMat = Flat(pupilColor, null, pupilGlow, 0.1f, 0.95f);
+
         for (int sgn = -1; sgn <= 1; sgn += 2)
         {
             // Main pair of prominent glossy forward-facing eyes
             var d = new Vector3(0.38f * sgn, 0.16f, 0.92f).normalized;
-            var e = Part(PrimitiveType.Sphere, bodyT, HS(d, -0.03f), new Vector3(0.42f, 0.42f, 0.18f) * R, eyeMat).transform;
+            var e = Part(PrimitiveType.Sphere, bodyT, HS(d, -0.03f), new Vector3(0.42f, 0.42f, 0.18f) * R, eyeballBaseMat).transform;
             e.localRotation = Quaternion.LookRotation(d, Vector3.up); e.name = "eye";
-            Part(PrimitiveType.Sphere, e, new Vector3(0.20f, 0.22f, 0.40f), new Vector3(0.22f, 0.22f, 0.28f), shine);
+
+            // Colored pupil dot resting visibly in the center of the eye
+            var pupil = Part(PrimitiveType.Sphere, e, new Vector3(0f, 0f, 0.34f), new Vector3(0.62f, 0.62f, 0.42f), pupilMat).transform;
+            pupil.name = "pupil";
+
+            // Inner eye highlight shine dot (offset to the top-right / cute anime gleam)
+            var shineObj = Part(PrimitiveType.Sphere, e, new Vector3(0.18f, 0.20f, 0.46f), new Vector3(0.24f, 0.24f, 0.28f), shine).transform;
+            shineObj.name = "shine";
+
             cs.eyes.Add(e); cs.eyeRest.Add(e.localScale);
 
             // Secondary lateral eyes
             var sd = new Vector3(0.82f * sgn, 0.24f, 0.52f).normalized;
-            var se = Part(PrimitiveType.Sphere, bodyT, HS(sd, -0.02f), new Vector3(0.14f, 0.14f, 0.07f) * R, eyeMat).transform;
+            var se = Part(PrimitiveType.Sphere, bodyT, HS(sd, -0.02f), new Vector3(0.14f, 0.14f, 0.07f) * R, eyeballBaseMat).transform;
             se.localRotation = Quaternion.LookRotation(sd, Vector3.up);
+            Part(PrimitiveType.Sphere, se, new Vector3(0f, 0f, 0.28f), new Vector3(0.65f, 0.65f, 0.45f), pupilMat);
             cs.eyes.Add(se); cs.eyeRest.Add(se.localScale);
 
-            // Sleek pedipalps / sensory feelers in front of the mouth
-            var f = Part(PrimitiveType.Capsule, bodyT, P(0.16f * sgn, 0.28f, 1.12f), new Vector3(0.14f, 0.22f, 0.14f) * R, fangMat).transform;
-            f.localRotation = Quaternion.Euler(32, 12 * sgn, -6 * sgn);
+            // Cute chelicerae / fangs seamlessly attached to the front-lower snout of the head
+            // In local head space: snout extends forward along +Z, lower half around Y ~ -0.25 to -0.40
+            var fangBase = new Vector3(0.18f * sgn * hr, -0.24f * hr, 0.44f * hr);
+            var f = Part(PrimitiveType.Capsule, headT, fangBase, new Vector3(0.18f, 0.26f, 0.18f) * hr, fangMat).transform;
+            f.localRotation = Quaternion.Euler(25, 10 * sgn, -8 * sgn);
+            f.name = "fang";
+
+            // Tiny cute curved tooth tip at the bottom of each chelicera
+            var tooth = Part(PrimitiveType.Sphere, f, new Vector3(0, -0.42f, 0.10f), new Vector3(0.7f, 0.7f, 0.7f), fangMat).transform;
+            tooth.name = "fang_tip";
         }
 
-        // --- 8 Perfectly Proportioned Legs radiating from the Cephalothorax ---
-        // Leg placement and splay angles from biological arachnid morphology:
-        // Leg 1 (anterior): reaches forward-outward to explore and grasp
-        // Leg 2 (mid-anterior): longest lateral-forward reach
-        // Leg 3 (mid-posterior): lateral-backward balance and pivot
-        // Leg 4 (posterior): strong rearward propulsion reach
-        float[] legZ = { 0.45f, 0.22f, -0.02f, -0.25f };
-        float[] legX = { 0.48f, 0.56f, 0.56f, 0.50f };
-        float[] legY = { 0.52f, 0.54f, 0.52f, 0.50f };
-        float[] legYaw = { 36f, 68f, 114f, 146f };
-        float[] legLengthMult = { 1.05f, 1.12f, 1.08f, 1.15f }; // Leg 2 and Leg 4 are naturally longer for elegance
+        // --- 8 Chunky, Cute Legs Seamlessly Attached to the Cephalothorax ---
+        // Anatomical coxae / hip sockets ensure 100% attachment with zero gap or floating space.
+        float[] legZ = { 0.42f, 0.20f, -0.04f, -0.26f };
+        float[] legX = { 0.42f, 0.48f, 0.48f, 0.44f };
+        float[] legY = { 0.50f, 0.52f, 0.50f, 0.48f };
+        float[] legYaw = { 38f, 70f, 112f, 144f };
+        float[] legLengthMult = { 1.02f, 1.08f, 1.06f, 1.10f };
 
         for (int sgn = -1; sgn <= 1; sgn += 2)
             for (int k = 0; k < 4; k++)
@@ -162,23 +194,38 @@ public class TCCuteSpider : MonoBehaviour
                 float yaw = sgn * legYaw[k];
                 hip.localRotation = Quaternion.Euler(0, yaw, 0);
 
-                // Sleek, beautifully tapered segments
+                // Sleek, cute chunky segments
                 float mult = legLengthMult[k];
-                float thUpper = 0.22f;
-                float thLower = 0.18f;
-                float upperLen = 0.62f * mult;
-                float lowerLen = 0.72f * mult;
+                float thUpper = 0.25f;
+                float thLower = 0.22f;
+                float upperLen = 0.60f * mult;
+                float lowerLen = 0.68f * mult;
 
-                // Upper leg (femur): graceful arch outward and upward
-                var up1 = Part(PrimitiveType.Capsule, hip, new Vector3(0, 0.18f * R, upperLen * 0.5f * R), new Vector3(thUpper, upperLen * 0.5f, thUpper) * R, legMat).transform;
-                up1.localRotation = Quaternion.Euler(60, 0, 0);
+                // Hip socket joint (coxa): anchors deep into the body mesh so there is zero gap
+                Part(PrimitiveType.Sphere, hip, Vector3.zero, Vector3.one * (thUpper * 1.35f) * R, legMat);
 
-                // Knee joint (patella): neat rounded connector
-                Part(PrimitiveType.Sphere, hip, new Vector3(0, 0.32f * R, upperLen * R), Vector3.one * thUpper * 1.12f * R, legMat);
+                // Upper leg (femur): arching outward and upward, starting directly from hip origin
+                // Capsule at Euler(60, 0, 0): Z forward/up, Y up.
+                float archAngle = 58f;
+                float rad = archAngle * Mathf.Deg2Rad;
+                Vector3 midUpper = new Vector3(0, Mathf.Sin(rad) * upperLen * 0.5f * R, Mathf.Cos(rad) * upperLen * 0.5f * R);
+                var up1 = Part(PrimitiveType.Capsule, hip, midUpper, new Vector3(thUpper, upperLen * 0.5f, thUpper) * R, legMat).transform;
+                up1.localRotation = Quaternion.Euler(archAngle, 0, 0);
 
-                // Lower leg (tibia & metatarsus): slender, tapering downward to a delicate foot contact
-                var lo = Part(PrimitiveType.Capsule, hip, new Vector3(0, -0.26f * R, (upperLen + lowerLen * 0.38f) * R), new Vector3(thLower, lowerLen * 0.55f, thLower) * R, legMat).transform;
-                lo.localRotation = Quaternion.Euler(-34, 0, 0);
+                // Knee joint (patella): seamless rounded connector at the end of the upper leg
+                Vector3 kneePos = new Vector3(0, Mathf.Sin(rad) * upperLen * R, Mathf.Cos(rad) * upperLen * R);
+                Part(PrimitiveType.Sphere, hip, kneePos, Vector3.one * (thUpper * 1.15f) * R, legMat);
+
+                // Lower leg (tibia & tarsus): steps downward from the knee joint down to ground contact
+                float downAngle = -38f;
+                float downRad = downAngle * Mathf.Deg2Rad;
+                Vector3 midLower = kneePos + new Vector3(0, Mathf.Sin(downRad) * lowerLen * 0.5f * R, Mathf.Cos(downRad) * lowerLen * 0.5f * R);
+                var lo = Part(PrimitiveType.Capsule, hip, midLower, new Vector3(thLower, lowerLen * 0.52f, thLower) * R, legMat).transform;
+                lo.localRotation = Quaternion.Euler(downAngle, 0, 0);
+
+                // Cute rounded foot tip (tarsus pad)
+                Vector3 footPos = kneePos + new Vector3(0, Mathf.Sin(downRad) * lowerLen * R, Mathf.Cos(downRad) * lowerLen * R);
+                Part(PrimitiveType.Sphere, hip, footPos, Vector3.one * (thLower * 1.05f) * R, legMat);
 
                 cs.legs.Add(hip); cs.legRest.Add(hip.localRotation);
             }
@@ -227,13 +274,53 @@ public class TCCuteSpider : MonoBehaviour
                 g.transform.localPosition = localSpikePos - Vector3.up * 0.04f;
                 g.transform.localRotation = Quaternion.FromToRotation(Vector3.up, nLocal);
 
-                float len = def.spikeLength * (k == 0 || k == def.spikes - 1 ? 0.75f : 1f);
-                float thickness = 0.26f;
+                // Rhythmic alternating heights and pattern diversity across the spine
+                float lengthWave = def.spikes > 3 ? (k % 2 == 0 ? 1.0f : 0.82f) : 1.0f;
+                float len = def.spikeLength * (k == 0 || k == def.spikes - 1 ? 0.72f : 1.0f) * lengthWave;
+                float thickness = 0.26f * (k % 2 == 0 ? 1.05f : 0.92f);
                 g.transform.localScale = new Vector3(thickness, len, thickness);
+
+                // Diverse spike coloring based on skin pattern and accent/body contrast
+                Color spkColor;
+                float spkEmis = def.emission;
+                switch (def.pattern)
+                {
+                    case SkinPattern.Stripes:
+                    case SkinPattern.Checker:
+                        // Alternating contrasting stripe colors
+                        spkColor = (k % 2 == 0) ? def.accent : Color.Lerp(def.body, def.accent, 0.4f);
+                        break;
+                    case SkinPattern.Dots:
+                        // Central crest / focal highlights
+                        spkColor = (k == def.spikes / 2) ? Color.Lerp(def.accent, Color.white, 0.35f) : def.accent;
+                        if (k == def.spikes / 2 && spkEmis > 0) spkEmis *= 1.4f;
+                        break;
+                    case SkinPattern.Gradient:
+                        // Beautiful gradient transition from front to rear
+                        spkColor = Color.Lerp(def.accent, def.body, (float)k / Mathf.Max(1, def.spikes - 1));
+                        break;
+                    case SkinPattern.Zigzag:
+                        // Dynamic energetic zigzag alternations
+                        spkColor = (k % 2 == 0) ? def.accent * 1.15f : Color.Lerp(def.accent, def.body, 0.3f);
+                        break;
+                    default: // Solid
+                        // Two-tone cadence matching skin theme
+                        bool alt = (k % 2 == 1);
+                        spkColor = alt ? Color.Lerp(def.accent, def.body, 0.5f) : def.accent;
+                        break;
+                }
+
+                // If accent is very dark (e.g. Tiger stripes), brighten the alternating spikes with a warm golden highlight
+                if (spkColor.grayscale < 0.20f)
+                {
+                    spkColor = Color.Lerp(def.body, Color.white, 0.15f);
+                }
+
+                var customSpikeMat = Flat(spkColor, null, spkEmis, def.metallic, def.gloss);
 
                 g.AddComponent<MeshFilter>().sharedMesh = cone;
                 var mr = g.AddComponent<MeshRenderer>();
-                mr.sharedMaterial = spikeMat;
+                mr.sharedMaterial = customSpikeMat;
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
         }
@@ -243,11 +330,29 @@ public class TCCuteSpider : MonoBehaviour
         var smr0 = smrs.Length > 0 ? smrs[0] : null;
         cs.bone = smr0 && smr0.rootBone ? smr0.rootBone : head;
         cs.boneRest = cs.bone ? st.InverseTransformPoint(cs.bone.position) : Vector3.zero;
-        cs.restRoot = root.localPosition; cs.root = root; cs.flip = 0;
+        cs.restRoot = root.localPosition; cs.hasRestRoot = true; cs.root = root; cs.flip = 0;
+
+        // Setup Rainbow wave animation if Rainbow skin
+        cs.isRainbow = def.name == "Rainbow";
+        cs.rainbowRenderers.Clear();
+        cs.rainbowOriginalMats.Clear();
+        if (cs.isRainbow)
+        {
+            foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                // We shift colors of body parts, legs, abdomen, spikes, spinnerets, fangs (keep eyes & shine crisp)
+                if (mr.name == "shine" || mr.name == "eye") continue;
+                cs.rainbowRenderers.Add(mr);
+                cs.rainbowOriginalMats.Add(mr.material); // instantiate local instance so it doesn't affect shared cache
+            }
+        }
     }
 
     [System.NonSerialized] public float wave; // 0..1, menu wave (front leg up)
-    public Bounds cachedBounds; Transform root; Vector3 restRoot;
+    public Bounds cachedBounds; public Vector3 cachedCenter; public bool hasRestRoot; Transform root; public Vector3 restRoot;
+    bool isRainbow;
+    readonly List<MeshRenderer> rainbowRenderers = new List<MeshRenderer>();
+    readonly List<Material> rainbowOriginalMats = new List<Material>();
     float backflipTimer, backflipDuration;
     float currentAirHeight;
     float jumpBlend; // 0 (on ground/running) -> 1 (fully in jump pose)
@@ -388,6 +493,28 @@ public class TCCuteSpider : MonoBehaviour
         bool dead = pi ? pi.life <= 0 : anim && anim.isActiveAndEnabled && HasBool(anim, "death") && anim.GetBool("death");
         flip = Mathf.MoveTowards(flip, dead ? 1 : 0, dt * 3f);
         body.localRotation = Quaternion.Euler(flipPitch, 0, 180f * Mathf.SmoothStep(0, 1, flip));
+
+        // Rainbow Spider: dynamically wave colors across all parts over time
+        if (isRainbow && rainbowRenderers.Count > 0)
+        {
+            float waveSpeed = 0.65f;
+            for (int rIdx = 0; rIdx < rainbowRenderers.Count; rIdx++)
+            {
+                var rend = rainbowRenderers[rIdx];
+                if (!rend) continue;
+                var mat = rend.material;
+                // Compute spatial offset based on position in body to create a continuous shifting rainbow wave
+                float spatialOffset = rend.transform.position.z * 1.8f + rend.transform.position.y * 1.2f + (rend.name.Contains("leg") ? 0.35f : 0f);
+                float hue = Mathf.Repeat(t * waveSpeed + spatialOffset, 1f);
+                Color rainbowCol = Color.HSVToRGB(hue, 0.85f, 1.0f);
+
+                mat.color = rainbowCol;
+                if (mat.HasProperty("_EmissionColor"))
+                {
+                    mat.SetColor("_EmissionColor", rainbowCol * 0.45f);
+                }
+            }
+        }
     }
 
     static bool HasBool(Animator a, string n) { foreach (var p in a.parameters) if (p.name == n) return true; return false; }

@@ -13,18 +13,13 @@ public class SkinDef
     public float emission; public Color trail; public SkinShape shape; public int spikes; public float spikeLength;
     public SkinUnlock unlock; public int amount;
     public Color eye; public float eyeGlow, metallic, gloss;
+    public SkinDef() {}
     public SkinDef(string n, string b, string a, SkinPattern p, float e, string t, SkinShape s, int sp, float spLen, SkinUnlock u, int amt, string eyeHex = "#141216", float eyeGlow = 0f, float metallic = 0f, float gloss = 0.35f)
     { name = n; body = C(b); accent = C(a); pattern = p; emission = e; trail = C(t); shape = s; spikes = sp; spikeLength = spLen; unlock = u; amount = amt; eye = C(eyeHex); this.eyeGlow = eyeGlow; this.metallic = metallic; this.gloss = gloss; }
     static Color C(string hex) { ColorUtility.TryParseHtmlString(hex, out var c); return c; }
 
-    public Vector3 BodyScale => shape switch
-    {
-        SkinShape.Chubby => new Vector3(1.10f, 0.95f, 1.05f),
-        SkinShape.Tall => new Vector3(0.92f, 1.08f, 1.08f),
-        SkinShape.Flat => new Vector3(1.08f, 0.85f, 1.06f),
-        SkinShape.Pear => new Vector3(1.04f, 0.96f, 1.15f),
-        _ => new Vector3(1.0f, 1.0f, 1.08f)
-    };
+    // All spiders share identical uniform size and 3D proportions across all skins
+    public Vector3 BodyScale => new Vector3(1.0f, 1.0f, 1.08f);
 
     public string UnlockText => unlock switch
     {
@@ -40,7 +35,18 @@ public class SkinDef
 /// into Assets/TC/Resources/Skins. The spider itself is the round hypercasual body built by TCCuteSpider.
 public static class TCSkins
 {
-    public static readonly SkinDef[] All =
+    public static SkinDef[] All
+    {
+        get
+        {
+            var db = SpiderSkinDatabase.Instance;
+            if (db != null && db.skins != null && db.skins.Length > 0)
+                return db.skins;
+            return DefaultSkins;
+        }
+    }
+
+    public static readonly SkinDef[] DefaultSkins =
     {
         // Photo-style chibi spiders: skins vary only by colour/finish, eye colour, spikes and body shape.
         //          name          body       accent     pattern               emis   trail        shape             spk len    unlock                amount  eyes       eyeGlow metal gloss
@@ -64,7 +70,8 @@ public static class TCSkins
         new SkinDef("Ladybug",    "#E52521", "#18151A", SkinPattern.Dots,     0f,   "#FFA0A8",   SkinShape.Round,  0, 0f,    SkinUnlock.Coins, 15000,     "#141216", 0f,   0.05f, 0.70f),
         new SkinDef("Tiger",      "#F27818", "#181416", SkinPattern.Stripes,  0f,   "#FFCA80",   SkinShape.Flat,   4, 0.35f, SkinUnlock.Coins, 20000,     "#FFB420", 0.3f, 0.1f,  0.60f),
         new SkinDef("Tarantula",  "#2E2522", "#E65A20", SkinPattern.Dots,     0f,   "#FF8850",   SkinShape.Tall,   8, 0.50f, SkinUnlock.Coins, 25000,     "#FF3300", 0.4f, 0.15f, 0.50f),
-        new SkinDef("Golden",     "#FFE259", "#FFA751", SkinPattern.Solid,    0.85f,"#FFDF00",   SkinShape.Pear,   6, 0.55f, SkinUnlock.Coins, 100000,    "#FFF4B8", 0.9f, 0.85f, 0.95f),
+        new SkinDef("Rainbow",    "#FF3366", "#33CCFF", SkinPattern.Gradient, 0.45f,"#FF00FF",   SkinShape.Round,  7, 0.50f, SkinUnlock.Coins, 50000,     "#FFFFFF", 0.6f, 0.30f, 0.85f),
+        new SkinDef("Golden",     "#FFD700", "#FFF3A8", SkinPattern.Solid,    0.60f,"#FFDF00",   SkinShape.Pear,   8, 0.55f, SkinUnlock.Coins, 100000,    "#FFF4B8", 0.95f,0.92f, 0.98f),
     };
 
     public static bool CanAutoUnlock(int i)
@@ -100,55 +107,9 @@ public static class TCSkins
             tr.colorGradient = g; tr.enabled = true;
             tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
-        // Golden Gleam Particles (Skin 19: Golden Spider)
+        // Clean up any old particle FX
         var oldGoldFx = spider.transform.Find("GoldGleamFx");
-        if (i == 19)
-        {
-            if (!oldGoldFx)
-            {
-                var fxObj = new GameObject("GoldGleamFx");
-                fxObj.transform.SetParent(spider.transform, false);
-                fxObj.transform.localPosition = new Vector3(0, 0.2f, 0);
-
-                var ps = fxObj.AddComponent<ParticleSystem>();
-                var main = ps.main;
-                main.loop = true;
-                main.startLifetime = 1.0f;
-                main.startSpeed = 0.25f;
-                main.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.09f);
-                main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.88f, 0.35f, 1f), new Color(1f, 1f, 0.85f, 1f));
-                main.simulationSpace = ParticleSystemSimulationSpace.World;
-                main.maxParticles = 35;
-
-                var emission = ps.emission;
-                emission.rateOverTime = 16f;
-
-                var shape = ps.shape;
-                shape.shapeType = ParticleSystemShapeType.Sphere;
-                shape.radius = 0.45f;
-
-                var colOverLifetime = ps.colorOverLifetime;
-                colOverLifetime.enabled = true;
-                var grad = new Gradient();
-                grad.SetKeys(
-                    new[] { new GradientColorKey(new Color(1f, 0.85f, 0.2f), 0f), new GradientColorKey(new Color(1f, 1f, 0.9f), 0.5f), new GradientColorKey(new Color(1f, 0.75f, 0.1f), 1f) },
-                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.3f), new GradientAlphaKey(0f, 1f) }
-                );
-                colOverLifetime.color = grad;
-
-                var sizeOverLifetime = ps.sizeOverLifetime;
-                sizeOverLifetime.enabled = true;
-                var sizeCurve = new AnimationCurve(new Keyframe(0f, 0.2f), new Keyframe(0.5f, 1f), new Keyframe(1f, 0f));
-                sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
-
-                var psRenderer = fxObj.GetComponent<ParticleSystemRenderer>();
-                psRenderer.sharedMaterial = Resources.Load<Material>("Skins/Trail") ?? new Material(Shader.Find("Sprites/Default"));
-            }
-        }
-        else if (oldGoldFx)
-        {
-            Object.Destroy(oldGoldFx.gameObject);
-        }
+        if (oldGoldFx) Object.Destroy(oldGoldFx.gameObject);
     }
 
     public static Transform FindDeep(Transform t, string n)

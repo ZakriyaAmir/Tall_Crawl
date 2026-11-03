@@ -22,3 +22,6 @@ MonoBehaviour:
   purchase: {fileID: 8300000, guid: b8ed081ebfb61cf4aaa9dc23a1757ac4, type: 3}
   whoosh: {fileID: 0}
   privacyUrl: https://sites.google.com/view/zakriya-production-privacy
+  skinDatabase: {fileID: 11400000, guid: f7032f1d3f44b4475afb061b5f6104ca, type: 2}
+  spiderSkinListObj: {fileID: 8549158015567400603, guid: 3d9a7dfab1bdb4a9c88d06e24e2ce1af,
+    type: 3}

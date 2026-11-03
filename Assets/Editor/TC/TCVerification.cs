@@ -183,7 +183,9 @@ public class TCPlayModeVerifier : MonoBehaviour
                     int skinButtonsCount = 0;
                     for (int i = 0; i < 20; i++)
                     {
-                        var b = skinsPanel.transform.Find("Card/Skin" + i);
+                        var b = skinsPanel.transform.Find("Card/SkinsScrollView/Viewport/SkinsList/Skin" + i)
+                             ?? skinsPanel.transform.Find("Card/SkinsList/Skin" + i)
+                             ?? skinsPanel.transform.Find("Card/Skin" + i);
                         if (b != null) skinButtonsCount++;
                     }
                     Log("All 20 skin buttons exist in Skins panel", skinButtonsCount == 20);

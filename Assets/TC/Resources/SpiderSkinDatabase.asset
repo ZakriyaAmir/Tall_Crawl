@@ -1,0 +1,332 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 310fa32a685764053b715ee3553807fd, type: 3}
+  m_Name: SpiderSkinDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::SpiderSkinDatabase
+  spiderSkinListObjPrefab: {fileID: 8549158015567400603, guid: 3d9a7dfab1bdb4a9c88d06e24e2ce1af,
+    type: 3}
+  skins:
+  - name: Gold
+    body: {r: 0.84705883, g: 0.63529414, b: 0.2901961, a: 1}
+    accent: {r: 0.7254902, g: 0.5137255, b: 0.1882353, a: 1}
+    pattern: 0
+    emission: 0
+    trail: {r: 1, g: 1, b: 1, a: 0}
+    shape: 0
+    spikes: 0
+    spikeLength: 0
+    unlock: 0
+    amount: 0
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0.35
+    gloss: 0.55
+  - name: Sky
+    body: {r: 0.49411765, g: 0.6392157, b: 0.7607843, a: 1}
+    accent: {r: 0.37254903, g: 0.5254902, b: 0.65882355, a: 1}
+    pattern: 0
+    emission: 0
+    trail: {r: 0.8117647, g: 0.8901961, b: 0.9490196, a: 1}
+    shape: 0
+    spikes: 0
+    spikeLength: 0
+    unlock: 1
+    amount: 800
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0
+    gloss: 0.3
+  - name: Widow
+    body: {r: 0.12156863, g: 0.11764706, b: 0.13725491, a: 1}
+    accent: {r: 0.8784314, g: 0.1254902, b: 0.17254902, a: 1}
+    pattern: 0
+    emission: 0
+    trail: {r: 1, g: 0.3529412, b: 0.3529412, a: 1}
+    shape: 0
+    spikes: 0
+    spikeLength: 0
+    unlock: 1
+    amount: 1500
+    eye: {r: 0.8901961, g: 0.13333334, b: 0.18039216, a: 1}
+    eyeGlow: 0.35
+    metallic: 0
+    gloss: 0.35
+  - name: Bumble
+    body: {r: 1, g: 0.8235294, b: 0.36078432, a: 1}
+    accent: {r: 0.22745098, g: 0.2, b: 0.2509804, a: 1}
+    pattern: 1
+    emission: 0
+    trail: {r: 1, g: 0.9490196, b: 0.7019608, a: 1}
+    shape: 2
+    spikes: 3
+    spikeLength: 0.35
+    unlock: 2
+    amount: 3
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0
+    gloss: 0.35
+  - name: Bubblegum
+    body: {r: 1, g: 0.6156863, b: 0.7372549, a: 1}
+    accent: {r: 0.8784314, g: 0.32156864, b: 0.49411765, a: 1}
+    pattern: 0
+    emission: 0
+    trail: {r: 1, g: 0.7607843, b: 0.83137256, a: 1}
+    shape: 4
+    spikes: 5
+    spikeLength: 0.4
+    unlock: 1
+    amount: 3000
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0
+    gloss: 0.75
+  - name: Lava
+    body: {r: 1, g: 0.41568628, b: 0.23921569, a: 1}
+    accent: {r: 1, g: 0.7607843, b: 0.22745098, a: 1}
+    pattern: 5
+    emission: 0.8
+    trail: {r: 1, g: 0.6039216, b: 0.22745098, a: 1}
+    shape: 1
+    spikes: 7
+    spikeLength: 0.55
+    unlock: 3
+    amount: 1500
+    eye: {r: 1, g: 0.8235294, b: 0.22745098, a: 1}
+    eyeGlow: 0.8
+    metallic: 0
+    gloss: 0.35
+  - name: Frost
+    body: {r: 0.74509805, g: 0.8980392, b: 1, a: 1}
+    accent: {r: 1, g: 1, b: 1, a: 1}
+    pattern: 4
+    emission: 0.35
+    trail: {r: 0.8745098, g: 0.95686275, b: 1, a: 1}
+    shape: 3
+    spikes: 6
+    spikeLength: 0.45
+    unlock: 1
+    amount: 5000
+    eye: {r: 0.11764706, g: 0.36078432, b: 0.61960787, a: 1}
+    eyeGlow: 0.2
+    metallic: 0
+    gloss: 0.8
+  - name: Royal
+    body: {r: 0.18431373, g: 0.3647059, b: 0.5764706, a: 1}
+    accent: {r: 1, g: 0.8352941, b: 0.2901961, a: 1}
+    pattern: 2
+    emission: 0.15
+    trail: {r: 1, g: 0.8980392, b: 0.5411765, a: 1}
+    shape: 2
+    spikes: 5
+    spikeLength: 0.5
+    unlock: 4
+    amount: 60
+    eye: {r: 1, g: 0.8352941, b: 0.2901961, a: 1}
+    eyeGlow: 0.4
+    metallic: 0.3
+    gloss: 0.6
+  - name: Ghost
+    body: {r: 0.9529412, g: 0.9647059, b: 1, a: 1}
+    accent: {r: 0.7254902, g: 0.827451, b: 0.9098039, a: 1}
+    pattern: 4
+    emission: 0.6
+    trail: {r: 1, g: 1, b: 1, a: 1}
+    shape: 4
+    spikes: 0
+    spikeLength: 0
+    unlock: 2
+    amount: 6
+    eye: {r: 0.16862746, g: 0.22745098, b: 0.2901961, a: 1}
+    eyeGlow: 0
+    metallic: 0
+    gloss: 0.35
+  - name: Neon
+    body: {r: 0.11764706, g: 0.16470589, b: 0.14117648, a: 1}
+    accent: {r: 0.22352941, g: 1, b: 0.53333336, a: 1}
+    pattern: 1
+    emission: 1.2
+    trail: {r: 0.22352941, g: 1, b: 0.53333336, a: 1}
+    shape: 3
+    spikes: 9
+    spikeLength: 0.6
+    unlock: 3
+    amount: 4000
+    eye: {r: 0.22352941, g: 1, b: 0.53333336, a: 1}
+    eyeGlow: 1.2
+    metallic: 0
+    gloss: 0.35
+  - name: Mint
+    body: {r: 0.62352943, g: 0.8901961, b: 0.7882353, a: 1}
+    accent: {r: 0.42352942, g: 0.76862746, b: 0.6431373, a: 1}
+    pattern: 0
+    emission: 0
+    trail: {r: 0.8117647, g: 0.9607843, b: 0.9019608, a: 1}
+    shape: 1
+    spikes: 0
+    spikeLength: 0
+    unlock: 1
+    amount: 2000
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0
+    gloss: 0.4
+  - name: Copper
+    body: {r: 0.7607843, g: 0.45882353, b: 0.28235295, a: 1}
+    accent: {r: 0.8901961, g: 0.6039216, b: 0.40784314, a: 1}
+    pattern: 0
+    emission: 0
+    trail: {r: 0.9490196, g: 0.7058824, b: 0.5411765, a: 1}
+    shape: 0
+    spikes: 3
+    spikeLength: 0.3
+    unlock: 1
+    amount: 4000
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0.75
+    gloss: 0.6
+  - name: Chrome
+    body: {r: 0.8627451, g: 0.8862745, b: 0.91764706, a: 1}
+    accent: {r: 0.56078434, g: 0.627451, b: 0.70980394, a: 1}
+    pattern: 0
+    emission: 0
+    trail: {r: 0.91764706, g: 0.9490196, b: 1, a: 1}
+    shape: 0
+    spikes: 5
+    spikeLength: 0.45
+    unlock: 1
+    amount: 6500
+    eye: {r: 0.1764706, g: 0.54901963, b: 1, a: 1}
+    eyeGlow: 0.5
+    metallic: 0.55
+    gloss: 0.75
+  - name: Cactus
+    body: {r: 0.42745098, g: 0.74509805, b: 0.41568628, a: 1}
+    accent: {r: 0.95686275, g: 0.94509804, b: 0.78431374, a: 1}
+    pattern: 0
+    emission: 0
+    trail: {r: 0.7490196, g: 0.91764706, b: 0.6901961, a: 1}
+    shape: 2
+    spikes: 9
+    spikeLength: 0.3
+    unlock: 2
+    amount: 4
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0
+    gloss: 0.3
+  - name: Ruby
+    body: {r: 0.7607843, g: 0.15686275, b: 0.22745098, a: 1}
+    accent: {r: 1, g: 0.47843137, b: 0.5411765, a: 1}
+    pattern: 0
+    emission: 0.1
+    trail: {r: 1, g: 0.5411765, b: 0.6039216, a: 1}
+    shape: 1
+    spikes: 6
+    spikeLength: 0.4
+    unlock: 4
+    amount: 120
+    eye: {r: 1, g: 1, b: 1, a: 1}
+    eyeGlow: 0.3
+    metallic: 0.2
+    gloss: 0.85
+  - name: Bumblebee
+    body: {r: 1, g: 0.78431374, b: 0.15686275, a: 1}
+    accent: {r: 0.10980392, g: 0.09803922, b: 0.11764706, a: 1}
+    pattern: 1
+    emission: 0
+    trail: {r: 1, g: 0.95686275, b: 0.72156864, a: 1}
+    shape: 1
+    spikes: 0
+    spikeLength: 0
+    unlock: 1
+    amount: 12000
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0.05
+    gloss: 0.65
+  - name: Ladybug
+    body: {r: 0.8980392, g: 0.14509805, b: 0.12941177, a: 1}
+    accent: {r: 0.09411765, g: 0.08235294, b: 0.101960786, a: 1}
+    pattern: 2
+    emission: 0
+    trail: {r: 1, g: 0.627451, b: 0.65882355, a: 1}
+    shape: 0
+    spikes: 0
+    spikeLength: 0
+    unlock: 1
+    amount: 15000
+    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
+    eyeGlow: 0
+    metallic: 0.05
+    gloss: 0.7
+  - name: Tiger
+    body: {r: 0.9490196, g: 0.47058824, b: 0.09411765, a: 1}
+    accent: {r: 0.09411765, g: 0.078431375, b: 0.08627451, a: 1}
+    pattern: 1
+    emission: 0
+    trail: {r: 1, g: 0.7921569, b: 0.5019608, a: 1}
+    shape: 3
+    spikes: 4
+    spikeLength: 0.35
+    unlock: 1
+    amount: 20000
+    eye: {r: 1, g: 0.7058824, b: 0.1254902, a: 1}
+    eyeGlow: 0.3
+    metallic: 0.1
+    gloss: 0.6
+  - name: Tarantula
+    body: {r: 0.18039216, g: 0.14509805, b: 0.13333334, a: 1}
+    accent: {r: 0.9019608, g: 0.3529412, b: 0.1254902, a: 1}
+    pattern: 2
+    emission: 0
+    trail: {r: 1, g: 0.53333336, b: 0.3137255, a: 1}
+    shape: 2
+    spikes: 8
+    spikeLength: 0.5
+    unlock: 1
+    amount: 25000
+    eye: {r: 1, g: 0.2, b: 0, a: 1}
+    eyeGlow: 0.4
+    metallic: 0.15
+    gloss: 0.5
+  - name: Rainbow
+    body: {r: 1, g: 0.2, b: 0.4, a: 1}
+    accent: {r: 0.2, g: 0.8, b: 1, a: 1}
+    pattern: 4
+    emission: 0.45
+    trail: {r: 1, g: 0, b: 1, a: 1}
+    shape: 0
+    spikes: 7
+    spikeLength: 0.5
+    unlock: 1
+    amount: 50000
+    eye: {r: 1, g: 1, b: 1, a: 1}
+    eyeGlow: 0.6
+    metallic: 0.3
+    gloss: 0.85
+  - name: Golden
+    body: {r: 1, g: 0.84313726, b: 0, a: 1}
+    accent: {r: 1, g: 0.9529412, b: 0.65882355, a: 1}
+    pattern: 0
+    emission: 0.6
+    trail: {r: 1, g: 0.8745098, b: 0, a: 1}
+    shape: 0
+    spikes: 8
+    spikeLength: 0.55
+    unlock: 1
+    amount: 100000
+    eye: {r: 1, g: 0.95686275, b: 0.72156864, a: 1}
+    eyeGlow: 0.95
+    metallic: 0.92
+    gloss: 0.98

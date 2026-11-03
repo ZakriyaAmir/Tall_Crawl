@@ -43,6 +43,22 @@ public class TCMenuUI : MonoBehaviour
     // Android back button: close the top-most open panel (it did nothing before).
     void Update()
     {
+        // Continuously shift Rainbow card color in skins panel
+        if (skinsPanel && skinsPanel.gameObject.activeSelf && skinsPanel.alpha > 0.1f)
+        {
+            var db = skinDatabase ? skinDatabase : SpiderSkinDatabase.Instance;
+            var skins = db != null && db.skins != null && db.skins.Length > 0 ? db.skins : TCSkins.All;
+            foreach (var c in skinCards)
+            {
+                if (c.idx < skins.Length && skins[c.idx].name == "Rainbow" && c.card)
+                {
+                    float hue = Mathf.Repeat(Time.unscaledTime * 0.65f, 1f);
+                    Color rainbowCol = Color.HSVToRGB(hue, 0.85f, 1f);
+                    c.card.color = c.idx == selectedCard ? Color.Lerp(rainbowCol, Color.white, 0.35f) : rainbowCol;
+                }
+            }
+        }
+
         if (!Input.GetKeyDown(KeyCode.Escape)) return;
         foreach (var cg in new[] { dailyPanel, skinsPanel, shopPanel, settingsPanel })
             if (cg && cg.gameObject.activeSelf && cg.alpha > 0.5f) { TCUI.Hide(this, cg); return; }
@@ -274,6 +290,12 @@ public class TCMenuUI : MonoBehaviour
     }
 
     // ---------- Skins ----------
+    [Header("Skins")]
+    public SpiderSkinDatabase skinDatabase;
+    public GameObject spiderSkinListObjPrefab;
+    public RectTransform skinsListParent;
+    public ScrollRect skinsScrollRect;
+    public Scrollbar skinsScrollbar;
     readonly List<(Image card, TextMeshProUGUI label, Image lockIc, Image check, int idx)> skinCards = new List<(Image, TextMeshProUGUI, Image, Image, int)>();
     TextMeshProUGUI skinName; Button skinAction; TextMeshProUGUI skinActionText; int selectedCard;
     void BuildSkins()
@@ -282,19 +304,89 @@ public class TCMenuUI : MonoBehaviour
         skinPreviewImg = TCUI.Add<RawImage>(TCUI.Rect("Preview", card).gameObject);
         skinPreviewImg.texture = rt; skinPreviewImg.raycastTarget = false; TCUI.Place(skinPreviewImg.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -330), new Vector2(460, 460));
         skinName = TCUI.Label("Name", card, "", 56, TCUI.Cocoa); TCUI.Place(skinName.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -580), new Vector2(800, 80));
-        for (int i = 0; i < TCSkins.All.Length; i++)
+
+        // Locate existing hierarchy if already configured in scene/inspector
+        if (!skinsListParent && card)
         {
-            int idx = i; var def = TCSkins.All[i];
-            int col = i % 5, row = i / 5;
-            var b = TCUI.Btn("Skin" + i, card, "", def.body, () => { selectedCard = idx; ApplyPreview(idx); RefreshSkinGrid(); }, 30);
-            TCUI.Place((RectTransform)b.transform, new Vector2(0.5f, 1), new Vector2(-376 + col * 188, -660 - row * 175), new Vector2(140, 140));
-            var accent = TCUI.Img("Accent", b.transform, def.accent, TCUI.Circle); TCUI.Place(accent.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(64, 64));
-            var lbl = TCUI.Label("Price", b.transform, "", 28, TCUI.Cocoa); TCUI.Place(lbl.rectTransform, new Vector2(0.5f, 0), new Vector2(0, -22), new Vector2(190, 36));
-            var lk = TCUI.Img("Lock", b.transform, Color.white, TCUI.Icon("lock")); TCUI.Place(lk.rectTransform, new Vector2(1, 1), new Vector2(-22, -22), new Vector2(44, 44));
-            var ck = TCUI.Img("Check", b.transform, TCUI.Mint, TCUI.Circle); TCUI.Place(ck.rectTransform, new Vector2(1, 1), new Vector2(-18, -18), new Vector2(52, 52));
-            var ckI = TCUI.Img("I", ck.transform, Color.white, TCUI.Icon("check")); TCUI.Stretch(ckI.rectTransform, 8, 8, 8, 8);
-            skinCards.Add((b.GetComponent<Image>(), lbl, lk, ck, idx));
+            var found = card.Find("SkinsScrollView/Viewport/SkinsList")
+                     ?? card.Find("Viewport/SkinsList")
+                     ?? card.Find("SkinsList");
+            if (found) skinsListParent = (RectTransform)found;
         }
+
+        if (!skinsScrollRect && card)
+        {
+            skinsScrollRect = card.GetComponentInChildren<ScrollRect>(true);
+        }
+
+        if (!skinsScrollbar && card)
+        {
+            skinsScrollbar = card.GetComponentInChildren<Scrollbar>(true);
+        }
+
+        foreach (var c in skinCards)
+        {
+            if (c.card && c.card.gameObject)
+            {
+                if (Application.isPlaying) Destroy(c.card.gameObject);
+                else DestroyImmediate(c.card.gameObject);
+            }
+        }
+        skinCards.Clear();
+
+        if (!TCUI.Baking)
+        {
+            var db = skinDatabase ? skinDatabase : SpiderSkinDatabase.Instance;
+            var prefab = spiderSkinListObjPrefab;
+            if (!prefab && db) prefab = db.spiderSkinListObjPrefab;
+            if (!prefab && TCAssets.I) prefab = TCAssets.I.spiderSkinListObj;
+            if (!prefab) prefab = Resources.Load<GameObject>("spiderSkinListObj");
+
+            var skins = db != null && db.skins != null && db.skins.Length > 0 ? db.skins : TCSkins.All;
+            var parent = skinsListParent ? skinsListParent : card;
+
+            for (int i = 0; i < skins.Length; i++)
+            {
+                int idx = i; var def = skins[i];
+
+                GameObject itemObj;
+                if (prefab)
+                {
+                    itemObj = Instantiate(prefab, parent);
+                }
+                else
+                {
+                    var bGo = TCUI.Btn("Skin" + i, parent, "", def.body, null, 30);
+                    itemObj = bGo.gameObject;
+                }
+                itemObj.name = "Skin" + i;
+
+                var listObj = itemObj.GetComponent<SpiderSkinListObj>();
+                if (listObj)
+                {
+                    listObj.Setup(idx, def, () => { selectedCard = idx; ApplyPreview(idx); RefreshSkinGrid(); });
+                    skinCards.Add((listObj.cardImage, listObj.priceLabel, listObj.lockIcon, listObj.checkIcon, idx));
+                }
+                else
+                {
+                    var b = itemObj.GetComponent<Button>();
+                    if (!b) b = itemObj.AddComponent<Button>();
+                    b.onClick.RemoveAllListeners();
+                    b.onClick.AddListener(() => { TCAudio.Click(); selectedCard = idx; ApplyPreview(idx); RefreshSkinGrid(); });
+
+                    var cardImg = itemObj.GetComponent<Image>();
+                    var accent = itemObj.transform.Find("Accent")?.GetComponent<Image>();
+                    var lbl = itemObj.transform.Find("Price")?.GetComponent<TextMeshProUGUI>();
+                    var lk = itemObj.transform.Find("Lock")?.GetComponent<Image>();
+                    var ck = itemObj.transform.Find("Check")?.GetComponent<Image>();
+
+                    if (accent) accent.color = def.accent;
+                    if (cardImg) cardImg.color = def.body;
+                    skinCards.Add((cardImg, lbl, lk, ck, idx));
+                }
+            }
+        }
+
         skinAction = TCUI.Btn("Action", card, "SELECT", TCUI.Mint, SkinAction, 52);
         TCUI.Place((RectTransform)skinAction.transform, new Vector2(0.5f, 0), new Vector2(-160, 100), new Vector2(460, 120));
         skinActionText = skinAction.GetComponentInChildren<TextMeshProUGUI>();
@@ -306,24 +398,39 @@ public class TCMenuUI : MonoBehaviour
     void RefreshSkinGrid()
     {
         TCSkins.CheckAchievements();
+        var db = skinDatabase ? skinDatabase : SpiderSkinDatabase.Instance;
+        var skins = db != null && db.skins != null && db.skins.Length > 0 ? db.skins : TCSkins.All;
+
         foreach (var c in skinCards)
         {
-            bool owned = TCSave.SkinOwned(c.idx); var def = TCSkins.All[c.idx];
-            c.lockIc.gameObject.SetActive(!owned); c.check.gameObject.SetActive(TCSave.SelectedSkin == c.idx);
-            c.label.text = owned ? "" : def.unlock == SkinUnlock.Coins ? def.amount.ToString() : def.unlock == SkinUnlock.Ads ? "AD " + TCSave.SkinAdsWatched(c.idx) + "/" + def.amount : def.unlock == SkinUnlock.BestScore ? def.amount + "M" : def.amount + " runs";
-            c.card.color = c.idx == selectedCard ? Color.Lerp(TCSkins.All[c.idx].body, Color.white, 0.35f) : TCSkins.All[c.idx].body;
+            if (c.idx >= skins.Length) continue;
+            bool owned = TCSave.SkinOwned(c.idx); var def = skins[c.idx];
+            if (c.lockIc) c.lockIc.gameObject.SetActive(!owned);
+            if (c.check) c.check.gameObject.SetActive(TCSave.SelectedSkin == c.idx);
+            if (c.label) c.label.text = owned ? "" : def.unlock == SkinUnlock.Coins ? def.amount.ToString() : def.unlock == SkinUnlock.Ads ? "AD " + TCSave.SkinAdsWatched(c.idx) + "/" + def.amount : def.unlock == SkinUnlock.BestScore ? def.amount + "M" : def.amount + " runs";
+            if (c.card) c.card.color = c.idx == selectedCard ? Color.Lerp(skins[c.idx].body, Color.white, 0.35f) : skins[c.idx].body;
         }
-        var d = TCSkins.All[selectedCard]; skinName.text = d.name;
-        bool own = TCSave.SkinOwned(selectedCard);
-        skinAction.interactable = true;
-        if (own) skinActionText.text = TCSave.SelectedSkin == selectedCard ? "EQUIPPED" : "SELECT";
-        else if (d.unlock == SkinUnlock.Coins) { skinActionText.text = "BUY " + d.amount; skinAction.interactable = TCSave.Coins >= d.amount; }
-        else if (d.unlock == SkinUnlock.Ads) skinActionText.text = "WATCH AD (" + TCSave.SkinAdsWatched(selectedCard) + "/" + d.amount + ")";
-        else { skinActionText.text = d.UnlockText; skinAction.interactable = false; }
+        if (selectedCard >= 0 && selectedCard < skins.Length)
+        {
+            var d = skins[selectedCard];
+            if (skinName) skinName.text = d.name;
+            bool own = TCSave.SkinOwned(selectedCard);
+            if (skinAction)
+            {
+                skinAction.interactable = true;
+                if (own) skinActionText.text = TCSave.SelectedSkin == selectedCard ? "EQUIPPED" : "SELECT";
+                else if (d.unlock == SkinUnlock.Coins) { skinActionText.text = "BUY " + d.amount; skinAction.interactable = TCSave.Coins >= d.amount; }
+                else if (d.unlock == SkinUnlock.Ads) skinActionText.text = "WATCH AD (" + TCSave.SkinAdsWatched(selectedCard) + "/" + d.amount + ")";
+                else { skinActionText.text = d.UnlockText; skinAction.interactable = false; }
+            }
+        }
     }
     void SkinAction()
     {
-        int i = selectedCard; var d = TCSkins.All[i];
+        var db = skinDatabase ? skinDatabase : SpiderSkinDatabase.Instance;
+        var skins = db != null && db.skins != null && db.skins.Length > 0 ? db.skins : TCSkins.All;
+        if (selectedCard < 0 || selectedCard >= skins.Length) return;
+        int i = selectedCard; var d = skins[i];
         if (TCSave.SkinOwned(i)) { TCSave.SelectedSkin = i; Toast(d.name + " equipped!"); }
         else if (d.unlock == SkinUnlock.Coins && TCSave.Coins >= d.amount) { TCSave.Coins -= d.amount; TCSave.UnlockSkin(i); TCSave.SelectedSkin = i; TCAudio.Play(TCAssets.I.purchase); Toast("Unlocked " + d.name + "!"); TCServices.Log("skin_buy", "skin", i); }
         else if (d.unlock == SkinUnlock.Ads) TCServices.Rewarded(() => { TCSave.AddSkinAd(i); TCSkins.CheckAchievements(); if (TCSave.SkinOwned(i)) { TCSave.SelectedSkin = i; Toast("Unlocked " + d.name + "!"); } RefreshSkinGrid(); }, "skin");

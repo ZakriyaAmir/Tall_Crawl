@@ -11,6 +11,8 @@ public class TCAssets : ScriptableObject
     public RuntimeAnimatorController spiderAnimator;
     public AudioClip click, coin, purchase, whoosh;
     public string privacyUrl = "https://sites.google.com/view/zakriya-production-privacy";
+    public SpiderSkinDatabase skinDatabase;
+    public GameObject spiderSkinListObj;
 
     static TCAssets _i;
     public static TCAssets I { get { if (!_i) _i = Resources.Load<TCAssets>("TCAssets"); if (!_i) _i = CreateInstance<TCAssets>(); return _i; } }
