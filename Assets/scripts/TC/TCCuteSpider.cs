@@ -78,25 +78,25 @@ public class TCCuteSpider : MonoBehaviour
         Vector3 P(float x, float y, float z) => new Vector3(x * R, y * R - pivotY, z * R);
 
         // --- Anatomically Sleek Spider Body (Cephalothorax + Pedicel + Abdomen) ---
-        // 1. Cephalothorax (prosoma): sleek, tapered forward, low center of mass, anchors legs & head
-        Vector3 cephScale = new Vector3(1.15f, 0.72f, 1.25f) * R;
-        var ceph = Part(PrimitiveType.Sphere, bodyT, P(0, 0.62f, 0.12f), cephScale, plain).transform; ceph.name = "cephalothorax";
+        // 1. Cephalothorax (prosoma): sleek, tapered forward, low center of mass, anchors legs & head (length reduced 20%)
+        Vector3 cephScale = new Vector3(1.15f, 0.72f, 1.00f) * R;
+        var ceph = Part(PrimitiveType.Sphere, bodyT, P(0, 0.62f, 0.10f), cephScale, plain).transform; ceph.name = "cephalothorax";
         ceph.localRotation = Quaternion.Euler(-4, 0, 0);
 
         // 2. Head / Ocular Region: sleek front snout with cute rounded silhouette
         float hr = 0.65f * Mathf.Lerp(1f, s.x, 0.35f);
-        var headT = Part(PrimitiveType.Sphere, bodyT, P(0, 0.66f, 0.65f), new Vector3(1.35f, 1.15f, 1.25f) * hr * R, plain).transform; headT.name = "head";
+        var headT = Part(PrimitiveType.Sphere, bodyT, P(0, 0.66f, 0.52f), new Vector3(1.35f, 1.15f, 1.00f) * hr * R, plain).transform; headT.name = "head";
         cs.head = headT; cs.headRest = headT.localPosition;
 
         // 3. Waist (pedicel): slender anatomical junction connecting thorax to abdomen
-        Part(PrimitiveType.Cylinder, bodyT, P(0, 0.60f, -0.38f), new Vector3(0.52f, 0.16f, 0.52f) * R, plain, Quaternion.Euler(90, 0, 0)).name = "pedicel";
+        Part(PrimitiveType.Cylinder, bodyT, P(0, 0.60f, -0.30f), new Vector3(0.52f, 0.13f, 0.52f) * R, plain, Quaternion.Euler(90, 0, 0)).name = "pedicel";
 
         // 4. Abdomen (opisthosoma): lore-accurate, sleek, beautifully proportioned spider butt
         abdomenMesh = MakeSpiderAbdomenMesh();
-        Vector3 ab = Vector3.Scale(new Vector3(1.10f, 1.05f, 1.28f), s) * R;
+        Vector3 ab = Vector3.Scale(new Vector3(1.10f, 1.05f, 1.024f), s) * R;
         var abdObj = new GameObject("abdomen");
         abdObj.transform.SetParent(bodyT, false);
-        abdObj.transform.localPosition = P(0, 0.62f, -0.88f);
+        abdObj.transform.localPosition = P(0, 0.62f, -0.70f);
         abdObj.transform.localRotation = Quaternion.Euler(-2, 0, 0);
         abdObj.transform.localScale = ab;
         var abdMf = abdObj.AddComponent<MeshFilter>();
@@ -108,7 +108,7 @@ public class TCCuteSpider : MonoBehaviour
 
         // 5. Lore-accurate posterior spinnerets (silk-spinning nubs at rear-ventral apex of butt)
         var spinMat = Flat(def.body * 0.76f, bodyMat, 0, def.metallic, def.gloss);
-        float rearZ = -0.88f * R - 0.53f * ab.z;
+        float rearZ = -0.70f * R - 0.53f * ab.z;
         for (int sgn = -1; sgn <= 1; sgn += 2)
         {
             var spin = Part(PrimitiveType.Sphere, bodyT, new Vector3(0.08f * sgn * R, 0.56f * R - pivotY, rearZ), new Vector3(0.12f, 0.10f, 0.14f) * R, spinMat).transform;
@@ -172,15 +172,15 @@ public class TCCuteSpider : MonoBehaviour
             tooth.name = "fang_tip";
         }
 
-        // --- 8 Sleek, Slender Legs Seamlessly Attached with Smooth Tips and Clean Angled Joints ---
-        float[] legZ = { 0.40f, 0.18f, -0.06f, -0.28f };
-        float[] legX = { 0.38f, 0.44f, 0.44f, 0.40f };
-        float[] legY = { 0.48f, 0.50f, 0.48f, 0.46f };
-        float[] legYaw = { 36f, 68f, 114f, 146f };
-        float[] legLengthMult = { 1.05f, 1.14f, 1.10f, 1.18f };
+        // --- 6 Sleek, Slender Legs (3 on each side uniformly spaced) Seamlessly Attached with Smooth Tips ---
+        float[] legZ = { 0.28f, 0.00f, -0.28f };
+        float[] legX = { 0.40f, 0.45f, 0.41f };
+        float[] legY = { 0.49f, 0.50f, 0.47f };
+        float[] legYaw = { 42f, 90f, 138f };
+        float[] legLengthMult = { 1.08f, 1.15f, 1.12f };
 
         for (int sgn = -1; sgn <= 1; sgn += 2)
-            for (int k = 0; k < 4; k++)
+            for (int k = 0; k < 3; k++)
             {
                 float z = legZ[k];
                 float sideX = sgn * legX[k];
@@ -410,24 +410,22 @@ public class TCCuteSpider : MonoBehaviour
         float gaitFreq = Mathf.Clamp(moveSpeed * 1.5f, 12f, 26f);
 
         // Legs:
-        // Real spider gait is a wave-like alternating tetrapod gait:
-        // Left side:  L1, L3 swing while L2, L4 stand
-        // Right side: R2, R4 swing while R1, R3 stand
-        // In arachnid locomotion, adjacent contralateral pairs alternate (L1 & R2, L3 & R4, etc.)
-        // with phase propagation down the body (front legs step first, followed sequentially by rear legs)
+        // Alternating tripod gait (for 6 legs: 3 on each side):
+        // Tripod 1: L0 (front left), L2 (rear left), R1 (mid right)
+        // Tripod 2: R0 (front right), R2 (rear right), L1 (mid left)
         for (int i = 0; i < legs.Count; i++)
         {
-            bool isLeft = i < 4;
-            int legIdx = i % 4; // 0: front (L1/R1), 1: mid-front (L2/R2), 2: mid-rear (L3/R3), 3: rear (L4/R4)
+            bool isLeft = i < 3;
+            int legIdx = i % 3; // 0: front, 1: middle, 2: rear
 
-            // 1. Moving gait calculation (real spider sequential ripple tetrapod):
-            // Base alternating phase between odd and even legs, plus a realistic metachronal ripple along the body
-            float phaseOffset = (legIdx % 2 == 0 ? 0f : Mathf.PI) + (isLeft ? 0f : Mathf.PI) + (legIdx * 0.35f);
-            float ph = t * gaitFreq + phaseOffset;
+            // Tripod assignment: group A = (L0, L2, R1), group B = (R0, R2, L1)
+            bool isTripodA = isLeft ? (legIdx != 1) : (legIdx == 1);
+            float tripodPhase = isTripodA ? 0f : Mathf.PI;
+            float ph = t * gaitFreq + tripodPhase + (legIdx * 0.25f);
 
             // Forward/backward stride swing:
-            // Front legs reach forward and pull; rear legs push backward
-            float swingAmp = legIdx == 0 ? 24f : (legIdx == 3 ? 20f : 16f);
+            // Front legs reach forward and pull; rear legs push backward; mid legs stabilize
+            float swingAmp = legIdx == 0 ? 24f : (legIdx == 2 ? 22f : 18f);
             float swing = Mathf.Sin(ph) * swingAmp;
 
             // Realistic vertical lift: legs lift high during swing phase, step firmly onto surface
@@ -435,7 +433,7 @@ public class TCCuteSpider : MonoBehaviour
             // Steeper parabolic lift (quick step up and down, longer stance)
             float stepLift = Mathf.Pow(liftNormalized, 1.8f) * 22f;
 
-            // Lateral foot splay/curl during stride (spiders curl inward during lift, splay outward on stance):
+            // Lateral foot splay/curl during stride (curls inward during lift, splays outward on stance):
             float splay = Mathf.Cos(ph) * (isLeft ? -7f : 7f);
 
             Quaternion moveRot = Quaternion.Euler(0, swing, splay) * legRest[i] * Quaternion.Euler(-stepLift, 0, 0);
@@ -445,7 +443,7 @@ public class TCCuteSpider : MonoBehaviour
             // Rear legs tuck inward and stream backward
             float tuckAngle;
             float spreadAngle;
-            if (legIdx <= 1)
+            if (legIdx == 0)
             {
                 tuckAngle = -32f + Mathf.Sin(t * 12f + i) * 5f;
                 spreadAngle = (isLeft ? -18f : 18f);
@@ -463,8 +461,8 @@ public class TCCuteSpider : MonoBehaviour
             // 4. Smooth blend between Ground (walk/run/idle) and Jump poses:
             legs[i].localRotation = Quaternion.Slerp(groundRot, jumpRot, jumpBlend);
 
-            // Friendly wave in main menu
-            if (i == 4 && wave > 0)
+            // Friendly wave in main menu (uses front right leg i == 3)
+            if (i == 3 && wave > 0)
             {
                 legs[i].localRotation = Quaternion.Slerp(
                     legs[i].localRotation,

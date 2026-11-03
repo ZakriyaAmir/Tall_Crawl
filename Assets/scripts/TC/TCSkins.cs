@@ -18,8 +18,8 @@ public class SkinDef
     { name = n; body = C(b); accent = C(a); pattern = p; emission = e; trail = C(t); shape = s; spikes = sp; spikeLength = spLen; unlock = u; amount = amt; eye = C(eyeHex); this.eyeGlow = eyeGlow; this.metallic = metallic; this.gloss = gloss; }
     static Color C(string hex) { ColorUtility.TryParseHtmlString(hex, out var c); return c; }
 
-    // All spiders share identical uniform size and 3D proportions across all skins
-    public Vector3 BodyScale => new Vector3(1.0f, 1.0f, 1.08f);
+    // All spiders share identical uniform size and 3D proportions across all skins (length reduced by 20%)
+    public Vector3 BodyScale => new Vector3(1.0f, 1.0f, 0.864f);
 
     public string UnlockText => unlock switch
     {
