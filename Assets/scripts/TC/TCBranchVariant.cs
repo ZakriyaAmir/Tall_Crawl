@@ -71,16 +71,13 @@ public class TCBranchVariant : MonoBehaviour
                     var mf = r.GetComponent<MeshFilter>();
                     if (mf) bushMesh = mf.sharedMesh;
                 }
+
+                // Subtly tone down prefab bush scale so foliage does not block player sightlines
+                r.transform.localScale = Vector3.Scale(r.transform.localScale, new Vector3(0.75f, 0.75f, 0.75f));
             }
         }
 
-        // Add extra leaf clusters along the branch for lots of lush foliage
-        if (bushMesh && foliageRenderers.Count > 0)
-        {
-            AddLeafCluster(new Vector3(-0.04f, 0.06f, 0.45f), new Vector3(0.55f, 0.55f, 0.55f), Quaternion.Euler(-15f, 35f, 10f));
-            AddLeafCluster(new Vector3(0.04f, 0.04f, 0.85f), new Vector3(0.65f, 0.65f, 0.65f), Quaternion.Euler(20f, -45f, -15f));
-            AddLeafCluster(new Vector3(0.00f, 0.08f, 1.25f), new Vector3(0.70f, 0.70f, 0.70f), Quaternion.Euler(-10f, 75f, 20f));
-        }
+        // Keep branches clean and open for clear visibility (no extra cluttering bush clusters)
 
         // Ensure log arm uses the cartoon wood material
         var logObj = transform.Find("log");

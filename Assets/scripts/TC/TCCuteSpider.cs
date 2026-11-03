@@ -172,13 +172,12 @@ public class TCCuteSpider : MonoBehaviour
             tooth.name = "fang_tip";
         }
 
-        // --- 8 Chunky, Cute Legs Seamlessly Attached to the Cephalothorax ---
-        // Anatomical coxae / hip sockets ensure 100% attachment with zero gap or floating space.
-        float[] legZ = { 0.42f, 0.20f, -0.04f, -0.26f };
-        float[] legX = { 0.42f, 0.48f, 0.48f, 0.44f };
-        float[] legY = { 0.50f, 0.52f, 0.50f, 0.48f };
-        float[] legYaw = { 38f, 70f, 112f, 144f };
-        float[] legLengthMult = { 1.02f, 1.08f, 1.06f, 1.10f };
+        // --- 8 Sleek, Slender Legs Seamlessly Attached with Smooth Tips and Clean Angled Joints ---
+        float[] legZ = { 0.40f, 0.18f, -0.06f, -0.28f };
+        float[] legX = { 0.38f, 0.44f, 0.44f, 0.40f };
+        float[] legY = { 0.48f, 0.50f, 0.48f, 0.46f };
+        float[] legYaw = { 36f, 68f, 114f, 146f };
+        float[] legLengthMult = { 1.05f, 1.14f, 1.10f, 1.18f };
 
         for (int sgn = -1; sgn <= 1; sgn += 2)
             for (int k = 0; k < 4; k++)
@@ -194,38 +193,30 @@ public class TCCuteSpider : MonoBehaviour
                 float yaw = sgn * legYaw[k];
                 hip.localRotation = Quaternion.Euler(0, yaw, 0);
 
-                // Sleek, cute chunky segments
+                // Thinner, elegant, stylized proportions
                 float mult = legLengthMult[k];
-                float thUpper = 0.25f;
-                float thLower = 0.22f;
-                float upperLen = 0.60f * mult;
-                float lowerLen = 0.68f * mult;
+                float thUpper = 0.13f;
+                float thLower = 0.10f;
+                float upperLen = 0.62f * mult;
+                float lowerLen = 0.74f * mult;
 
-                // Hip socket joint (coxa): anchors deep into the body mesh so there is zero gap
-                Part(PrimitiveType.Sphere, hip, Vector3.zero, Vector3.one * (thUpper * 1.35f) * R, legMat);
-
-                // Upper leg (femur): arching outward and upward, starting directly from hip origin
-                // Capsule at Euler(60, 0, 0): Z forward/up, Y up.
-                float archAngle = 58f;
+                // Upper leg (femur): slender segment rising from the body
+                float archAngle = 55f;
                 float rad = archAngle * Mathf.Deg2Rad;
                 Vector3 midUpper = new Vector3(0, Mathf.Sin(rad) * upperLen * 0.5f * R, Mathf.Cos(rad) * upperLen * 0.5f * R);
                 var up1 = Part(PrimitiveType.Capsule, hip, midUpper, new Vector3(thUpper, upperLen * 0.5f, thUpper) * R, legMat).transform;
                 up1.localRotation = Quaternion.Euler(archAngle, 0, 0);
 
-                // Knee joint (patella): seamless rounded connector at the end of the upper leg
+                // Knee position where the two segments meet cleanly (no sphere ball)
                 Vector3 kneePos = new Vector3(0, Mathf.Sin(rad) * upperLen * R, Mathf.Cos(rad) * upperLen * R);
-                Part(PrimitiveType.Sphere, hip, kneePos, Vector3.one * (thUpper * 1.15f) * R, legMat);
 
-                // Lower leg (tibia & tarsus): steps downward from the knee joint down to ground contact
-                float downAngle = -38f;
+                // Lower leg (tibia): slender segment stepping downward from the knee to ground
+                // Capsule mesh has a naturally smooth hemisphere cap at both ends (clean joint and smooth rounded tip)
+                float downAngle = -42f;
                 float downRad = downAngle * Mathf.Deg2Rad;
                 Vector3 midLower = kneePos + new Vector3(0, Mathf.Sin(downRad) * lowerLen * 0.5f * R, Mathf.Cos(downRad) * lowerLen * 0.5f * R);
-                var lo = Part(PrimitiveType.Capsule, hip, midLower, new Vector3(thLower, lowerLen * 0.52f, thLower) * R, legMat).transform;
+                var lo = Part(PrimitiveType.Capsule, hip, midLower, new Vector3(thLower, lowerLen * 0.5f, thLower) * R, legMat).transform;
                 lo.localRotation = Quaternion.Euler(downAngle, 0, 0);
-
-                // Cute rounded foot tip (tarsus pad)
-                Vector3 footPos = kneePos + new Vector3(0, Mathf.Sin(downRad) * lowerLen * R, Mathf.Cos(downRad) * lowerLen * R);
-                Part(PrimitiveType.Sphere, hip, footPos, Vector3.one * (thLower * 1.05f) * R, legMat);
 
                 cs.legs.Add(hip); cs.legRest.Add(hip.localRotation);
             }
