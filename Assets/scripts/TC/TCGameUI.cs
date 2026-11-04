@@ -129,7 +129,8 @@ public class TCGameUI : MonoBehaviour
         {
             if (speedText != null)
             {
-                float speedMult = pl.boost ? TCConfig.I.boostMultiplier : 1.0f;
+                float baseMult = TCConfig.I.SpeedMultiplierAtDistance(pl.currentScore);
+                float speedMult = pl.boost ? baseMult * TCConfig.I.boostMultiplier : baseMult;
                 speedText.text = speedMult.ToString("0.0") + "x";
                 speedText.color = pl.boost ? TCUI.Peach : TCUI.Cocoa;
             }
@@ -159,10 +160,31 @@ public class TCGameUI : MonoBehaviour
                 Pop("+" + gameManager.CoinValue, pos, TCUI.Butter);
                 FlyCoin(pos);
                 break;
+            case "chilli_kill":
+                // 5 coins spawn and fly to coin counter with bonus coin sound
+                Pop("+5 BONUS COINS!", pos, TCUI.Hex("#FFD166"));
+                StartCoroutine(SpawnChilliBonusCoins(pos));
+                break;
             case "heart": Pop("+1 HEART", pos, TCUI.Blush); StartCoroutine(TCUI.Punch(heartsRow, 0.25f)); break;
             case "boost": Pop("BOOST", pos, TCUI.Peach); break;
             case "smash": Pop("SMASH!", pos, TCUI.Mint); break;
             case "hit": flash.alpha = 1; StartCoroutine(TCUI.Punch(heartsRow, 0.3f)); break;
+        }
+    }
+
+    IEnumerator SpawnChilliBonusCoins(Vector3 centerWorldPos)
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            // Spread 5 coins in a small circle around the enemy smash position
+            float angle = (i * 72f + Random.Range(-15f, 15f)) * Mathf.Deg2Rad;
+            float r = Random.Range(0.25f, 0.55f);
+            Vector3 coinWorld = centerWorldPos + new Vector3(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r, 0f);
+
+            FlyCoin(coinWorld);
+            if (gm) gm.addCoin();
+            TCSfx.Play("coin", 0.65f);
+            yield return new WaitForSeconds(0.06f);
         }
     }
 
@@ -451,6 +473,87 @@ public class TCGameUI : MonoBehaviour
         resTotal.text = total.ToString("N0");
         doubleBtn.interactable = gm.DistanceBonus > 0;
         TCUI.Show(this, resultPanel);
-        if (newBest) StartCoroutine(TCUI.Punch(resBest.transform, 0.35f, 0.5f));
+
+        if (newBest)
+        {
+            // Triumphant High Score Celebration!
+            TCSfx.Play("celebrate", 0.95f);
+            StartCoroutine(TCUI.Punch(resBest.transform, 0.45f, 0.5f));
+            StartCoroutine(TCUI.Punch(resMetres.transform, 0.35f, 0.4f));
+            if (resultPanel) StartCoroutine(ConfettiCelebration(resultPanel.transform));
+        }
+    }
+
+    IEnumerator ConfettiCelebration(Transform parent)
+    {
+        // Burst vibrant celebratory confetti pieces across the finish card
+        Color[] confettiColors = new Color[]
+        {
+            TCUI.Hex("#FFD166"), // Golden yellow
+            TCUI.Hex("#06D6A0"), // Mint green
+            TCUI.Hex("#118AB2"), // Vivid sky blue
+            TCUI.Hex("#EF476F"), // Coral pink
+            TCUI.Hex("#F78C6B"), // Warm orange
+            TCUI.Hex("#8338EC"), // Purple
+            TCUI.Hex("#FFFFFF")  // Pure shine white
+        };
+
+        var container = new GameObject("ConfettiContainer").AddComponent<RectTransform>();
+        container.SetParent(parent, false);
+        container.anchorMin = Vector2.zero; container.anchorMax = Vector2.one;
+        container.offsetMin = container.offsetMax = Vector2.zero;
+
+        int count = 55;
+        List<Image> pieces = new List<Image>();
+        List<Vector2> velocities = new List<Vector2>();
+        List<float> rotSpeeds = new List<float>();
+
+        for (int i = 0; i < count; i++)
+        {
+            var pImg = TCUI.Img("C" + i, container, confettiColors[Random.Range(0, confettiColors.Length)], TCUI.Round);
+            var prt = pImg.rectTransform;
+            prt.sizeDelta = new Vector2(Random.Range(18f, 32f), Random.Range(10f, 18f));
+            prt.anchoredPosition = new Vector2(Random.Range(-280f, 280f), Random.Range(180f, 440f));
+            prt.localEulerAngles = new Vector3(0, 0, Random.Range(0f, 360f));
+            pImg.raycastTarget = false;
+
+            float angle = Random.Range(30f, 150f) * Mathf.Deg2Rad;
+            float speed = Random.Range(350f, 850f);
+            velocities.Add(new Vector2(Mathf.Cos(angle) * speed * (Random.value < 0.5f ? -1f : 1f), Mathf.Sin(angle) * speed));
+            rotSpeeds.Add(Random.Range(-450f, 450f));
+            pieces.Add(pImg);
+        }
+
+        float duration = 2.4f;
+        for (float elapsed = 0; elapsed < duration; elapsed += Time.unscaledDeltaTime)
+        {
+            float dt = Time.unscaledDeltaTime;
+            float fade = elapsed > 1.6f ? (duration - elapsed) / 0.8f : 1f;
+
+            for (int i = 0; i < pieces.Count; i++)
+            {
+                if (!pieces[i]) continue;
+                var prt = pieces[i].rectTransform;
+                // Update velocity with gravity and aerodynamic sway
+                Vector2 vel = velocities[i];
+                vel.y -= 750f * dt; // gravity
+                vel.x *= Mathf.Pow(0.92f, dt * 60f); // air drag
+                velocities[i] = vel;
+
+                prt.anchoredPosition += vel * dt;
+                prt.Rotate(0, 0, rotSpeeds[i] * dt);
+
+                // Gentle fluttering stretch
+                float flutter = Mathf.Sin((elapsed + i) * 8f);
+                prt.localScale = new Vector3(Mathf.Abs(flutter), 1f, 1f);
+
+                Color c = pieces[i].color;
+                c.a = fade;
+                pieces[i].color = c;
+            }
+            yield return null;
+        }
+
+        if (container) Destroy(container.gameObject);
     }
 }

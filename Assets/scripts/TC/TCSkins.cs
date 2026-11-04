@@ -4,7 +4,7 @@ using UnityEngine;
 public enum SkinPattern { Solid, Stripes, Dots, Checker, Gradient, Zigzag }
 /// Body silhouette of the round spider. Skins only differ by colour, spikes and this shape (no props).
 public enum SkinShape { Round, Chubby, Tall, Flat, Pear }
-public enum SkinUnlock { Free, Coins, Ads, BestScore, Runs }
+public enum SkinUnlock { Free, Coins, Ads, BestScore, Runs, KillBees, KillWasps, KillSquirrels }
 
 [System.Serializable]
 public class SkinDef
@@ -27,6 +27,9 @@ public class SkinDef
         SkinUnlock.Ads => "Watch " + amount + " ads",
         SkinUnlock.BestScore => "Climb " + amount + "M",
         SkinUnlock.Runs => "Play " + amount + " runs",
+        SkinUnlock.KillBees => "Kill " + amount + " Bees (" + Mathf.Min(TCSave.BeesKilled, amount) + "/" + amount + ")",
+        SkinUnlock.KillWasps => "Kill " + amount + " Wasps (" + Mathf.Min(TCSave.WaspsKilled, amount) + "/" + amount + ")",
+        SkinUnlock.KillSquirrels => "Kill " + amount + " Squirrels (" + Mathf.Min(TCSave.SquirrelsKilled, amount) + "/" + amount + ")",
         _ => "Free"
     };
 }
@@ -72,6 +75,10 @@ public static class TCSkins
         new SkinDef("Tarantula",  "#2E2522", "#E65A20", SkinPattern.Dots,     0f,   "#FF8850",   SkinShape.Tall,   8, 0.50f, SkinUnlock.Coins, 25000,     "#FF3300", 0.4f, 0.15f, 0.50f),
         new SkinDef("Rainbow",    "#FF3366", "#33CCFF", SkinPattern.Gradient, 0.45f,"#FF00FF",   SkinShape.Round,  7, 0.50f, SkinUnlock.Coins, 50000,     "#FFFFFF", 0.6f, 0.30f, 0.85f),
         new SkinDef("Golden",     "#FFD700", "#FFF3A8", SkinPattern.Solid,    0.60f,"#FFDF00",   SkinShape.Pear,   8, 0.55f, SkinUnlock.Coins, 100000,    "#FFF4B8", 0.95f,0.92f, 0.98f),
+        // Milestone Enemy Hunter skins:
+        new SkinDef("Bees",       "#FFB81C", "#181416", SkinPattern.Stripes,  0.15f,"#FFE066",   SkinShape.Chubby, 0, 0f,    SkinUnlock.KillBees, 50,     "#141216", 0f,   0.05f, 0.60f),
+        new SkinDef("Wasp",       "#FF9900", "#0D0A08", SkinPattern.Zigzag,   0.30f,"#FFB733",   SkinShape.Tall,   5, 0.45f, SkinUnlock.KillWasps, 100,   "#FFD700", 0.5f, 0.20f, 0.70f),
+        new SkinDef("Squirrel",   "#C44E1A", "#FFF4E2", SkinPattern.Gradient, 0.10f,"#FFA066",   SkinShape.Pear,   6, 0.40f, SkinUnlock.KillSquirrels, 100,"#141216", 0f,   0.10f, 0.55f),
     };
 
     public static bool CanAutoUnlock(int i)
@@ -79,7 +86,10 @@ public static class TCSkins
         var s = All[i];
         return (s.unlock == SkinUnlock.BestScore && TCSave.Best >= s.amount)
             || (s.unlock == SkinUnlock.Runs && TCSave.Runs >= s.amount)
-            || (s.unlock == SkinUnlock.Ads && TCSave.SkinAdsWatched(i) >= s.amount);
+            || (s.unlock == SkinUnlock.Ads && TCSave.SkinAdsWatched(i) >= s.amount)
+            || (s.unlock == SkinUnlock.KillBees && TCSave.BeesKilled >= s.amount)
+            || (s.unlock == SkinUnlock.KillWasps && TCSave.WaspsKilled >= s.amount)
+            || (s.unlock == SkinUnlock.KillSquirrels && TCSave.SquirrelsKilled >= s.amount);
     }
     public static void CheckAchievements()
     {

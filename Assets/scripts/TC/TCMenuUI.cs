@@ -407,7 +407,27 @@ public class TCMenuUI : MonoBehaviour
             bool owned = TCSave.SkinOwned(c.idx); var def = skins[c.idx];
             if (c.lockIc) c.lockIc.gameObject.SetActive(!owned);
             if (c.check) c.check.gameObject.SetActive(TCSave.SelectedSkin == c.idx);
-            if (c.label) c.label.text = owned ? "" : def.unlock == SkinUnlock.Coins ? def.amount.ToString() : def.unlock == SkinUnlock.Ads ? "AD " + TCSave.SkinAdsWatched(c.idx) + "/" + def.amount : def.unlock == SkinUnlock.BestScore ? def.amount + "M" : def.amount + " runs";
+            if (c.label)
+            {
+                if (owned)
+                {
+                    c.label.text = "";
+                }
+                else
+                {
+                    c.label.text = def.unlock switch
+                    {
+                        SkinUnlock.Coins => def.amount.ToString(),
+                        SkinUnlock.Ads => "AD " + TCSave.SkinAdsWatched(c.idx) + "/" + def.amount,
+                        SkinUnlock.BestScore => def.amount + "M",
+                        SkinUnlock.Runs => def.amount + " runs",
+                        SkinUnlock.KillBees => Mathf.Min(TCSave.BeesKilled, def.amount) + "/" + def.amount + " killed",
+                        SkinUnlock.KillWasps => Mathf.Min(TCSave.WaspsKilled, def.amount) + "/" + def.amount + " killed",
+                        SkinUnlock.KillSquirrels => Mathf.Min(TCSave.SquirrelsKilled, def.amount) + "/" + def.amount + " killed",
+                        _ => "Free"
+                    };
+                }
+            }
             if (c.card) c.card.color = c.idx == selectedCard ? Color.Lerp(skins[c.idx].body, Color.white, 0.35f) : skins[c.idx].body;
         }
         if (selectedCard >= 0 && selectedCard < skins.Length)

@@ -51,6 +51,12 @@ Shader "TallCrawl/SpiderPreBaked"
             v2f vert (appdata v)
             {
                 v2f o;
+                if (_OutlineWidth <= 0.01)
+                {
+                    o.pos = float4(0, 0, 0, 0);
+                    return o;
+                }
+
                 o.pos = UnityObjectToClipPos(v.vertex);
 
                 // Normal in view space
@@ -96,12 +102,13 @@ Shader "TallCrawl/SpiderPreBaked"
             float3 viewDir;
         };
 
-        // 2-tone crisp Japanese anime cel shading with shadow attenuation
+        // 2-tone crisp Japanese anime cel shading with smooth wrapped diffuse and shadow attenuation
         half4 LightingAnimeCel (SurfaceOutput s, half3 lightDir, half atten)
         {
-            half NdotL = dot(s.Normal, lightDir);
-            half celBand = smoothstep(-0.05, 0.12, NdotL) * _CelIntensity + (1.0 - _CelIntensity);
-            half shadowFactor = lerp(_ShadowDull, 1.0, atten);
+            // When _ShadowDull == 1.0 and _CelIntensity == 0.0, completely bypass all shadows and directional darkening
+            half wrap = dot(s.Normal, lightDir) * 0.5 + 0.5;
+            half celBand = (_CelIntensity > 0.001) ? (smoothstep(0.24, 0.46, wrap) * _CelIntensity + (1.0 - _CelIntensity)) : 1.0;
+            half shadowFactor = (_ShadowDull < 0.999) ? lerp(_ShadowDull, 1.0, atten) : 1.0;
 
             half4 c;
             c.rgb = s.Albedo * (celBand * shadowFactor) + s.Emission;
@@ -114,12 +121,18 @@ Shader "TallCrawl/SpiderPreBaked"
             fixed4 tex = tex2D(_MainTex, IN.uv_MainTex);
             half3 baseCol = tex.rgb * _Color.rgb * _Brightness;
 
-            // Japanese cartoon ink stroke along curved edges and creases
-            half NdotV = saturate(dot(o.Normal, normalize(IN.viewDir)));
-            half edgeFactor = smoothstep(_EdgeThreshold, _EdgeThreshold + 0.08, NdotV);
+            // Japanese cartoon ink stroke along curved edges and creases (only if _EdgeThreshold > 0.01)
+            if (_EdgeThreshold > 0.01)
+            {
+                half NdotV = saturate(dot(o.Normal, normalize(IN.viewDir)));
+                half edgeFactor = smoothstep(_EdgeThreshold, _EdgeThreshold + 0.08, NdotV);
+                o.Albedo = lerp(_OutlineColor.rgb, baseCol, edgeFactor);
+            }
+            else
+            {
+                o.Albedo = baseCol;
+            }
 
-            // Blend dark stroke around all internal silhouette edges
-            o.Albedo = lerp(_OutlineColor.rgb, baseCol, edgeFactor);
             o.Emission = _EmissionColor.rgb;
             o.Alpha = tex.a * _Color.a;
         }

@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using UnityEngine;
 
 public enum TCEnemyType
@@ -68,7 +70,7 @@ public class TCEnemy : MonoBehaviour
     // ---------------- Procedural Materials & Textures ----------------
 
     static Material pineconeWoodMat, pineconeScaleMat, eyeGlowMat, waspBodyMat, waspBlackMat, waspWingMat;
-    static Material squirrelFurMat, squirrelBellyMat, squirrelDarkMat, squirrelEyeMat;
+    static Material squirrelMat;
 
     static Texture2D LoadTexture(string name)
     {
@@ -143,26 +145,18 @@ public class TCEnemy : MonoBehaviour
             if (tex != null) waspWingMat.mainTexture = tex;
         }
 
-        if (!squirrelFurMat)
+        if (!squirrelMat)
         {
-            var tex = LoadTexture("Squirrel_Fur");
-            squirrelFurMat = CreateCelMaterial(new Color(0.85f, 0.44f, 0.18f, 1f), tex, 1.3f, new Color(0.24f, 0.10f, 0.04f, 1f));
+            var tex = LoadTexture("Squirrel_LowPoly");
+            squirrelMat = CreateCelMaterial(Color.white, tex, 0.0f, Color.clear);
         }
-
-        if (!squirrelBellyMat)
+        if (squirrelMat)
         {
-            var tex = LoadTexture("Squirrel_Belly");
-            squirrelBellyMat = CreateCelMaterial(new Color(0.98f, 0.92f, 0.82f, 1f), tex, 1.2f, new Color(0.24f, 0.10f, 0.04f, 1f));
-        }
-
-        if (!squirrelDarkMat)
-        {
-            squirrelDarkMat = CreateCelMaterial(new Color(0.35f, 0.16f, 0.08f, 1f), null, 1.2f, new Color(0.18f, 0.07f, 0.03f, 1f));
-        }
-
-        if (!squirrelEyeMat)
-        {
-            squirrelEyeMat = CreateCelMaterial(new Color(0.08f, 0.06f, 0.08f, 1f), null, 0.8f);
+            if (squirrelMat.HasProperty("_Brightness")) squirrelMat.SetFloat("_Brightness", 1.0f);
+            if (squirrelMat.HasProperty("_EdgeThreshold")) squirrelMat.SetFloat("_EdgeThreshold", 0.0f); // NO edge stroke / black sides
+            if (squirrelMat.HasProperty("_CelIntensity")) squirrelMat.SetFloat("_CelIntensity", 0.0f);   // NO directional shadow cut
+            if (squirrelMat.HasProperty("_OutlineWidth")) squirrelMat.SetFloat("_OutlineWidth", 0.0f);   // NO inverted-hull outline
+            if (squirrelMat.HasProperty("_ShadowDull")) squirrelMat.SetFloat("_ShadowDull", 1.0f);       // Receive NO shadows (100% lit)
         }
     }
 
@@ -308,9 +302,148 @@ public class TCEnemy : MonoBehaviour
         return root;
     }
 
+    // ---------------- Low-Poly Squirrel Mesh Loader & Direct Parser ----------------
+
+    static readonly Dictionary<string, Mesh> squirrelMeshCache = new Dictionary<string, Mesh>();
+
+    static Mesh GetSquirrelMesh(string partName)
+    {
+        if (squirrelMeshCache.TryGetValue(partName, out var cached) && cached)
+            return cached;
+
+        Mesh m = null;
+#if UNITY_EDITOR
+        m = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>("Assets/TC/Resources/Enemies/Squirrel_" + partName + ".obj");
+        if (!m)
+        {
+            var go = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TC/Resources/Enemies/Squirrel_" + partName + ".obj");
+            if (go)
+            {
+                var mf = go.GetComponentInChildren<MeshFilter>();
+                if (mf) m = mf.sharedMesh;
+            }
+        }
+#endif
+        if (!m)
+        {
+            var resGo = Resources.Load<GameObject>("Enemies/Squirrel_" + partName);
+            if (resGo)
+            {
+                var mf = resGo.GetComponentInChildren<MeshFilter>();
+                if (mf) m = mf.sharedMesh;
+            }
+        }
+        if (!m) m = Resources.Load<Mesh>("Enemies/Squirrel_" + partName);
+
+        if (!m)
+        {
+            string path = System.IO.Path.Combine(Application.dataPath, "TC/Resources/Enemies/Squirrel_" + partName + ".obj");
+            m = ParseObjDirect(path);
+        }
+
+        if (m) squirrelMeshCache[partName] = m;
+        return m;
+    }
+
+    static Mesh ParseObjDirect(string path)
+    {
+        if (!System.IO.File.Exists(path)) return null;
+        var verts = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var normals = new List<Vector3>();
+        var tris = new List<int>();
+
+        var lines = System.IO.File.ReadAllLines(path);
+        foreach (var rawLine in lines)
+        {
+            var l = rawLine.Trim();
+            if (l.StartsWith("v "))
+            {
+                var parts = l.Substring(2).Trim().Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 3)
+                    verts.Add(new Vector3(float.Parse(parts[0], CultureInfo.InvariantCulture),
+                                          float.Parse(parts[1], CultureInfo.InvariantCulture),
+                                          float.Parse(parts[2], CultureInfo.InvariantCulture)));
+            }
+            else if (l.StartsWith("vt "))
+            {
+                var parts = l.Substring(3).Trim().Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 2)
+                    uvs.Add(new Vector2(float.Parse(parts[0], CultureInfo.InvariantCulture),
+                                        float.Parse(parts[1], CultureInfo.InvariantCulture)));
+            }
+            else if (l.StartsWith("vn "))
+            {
+                var parts = l.Substring(3).Trim().Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 3)
+                    normals.Add(new Vector3(float.Parse(parts[0], CultureInfo.InvariantCulture),
+                                            float.Parse(parts[1], CultureInfo.InvariantCulture),
+                                            float.Parse(parts[2], CultureInfo.InvariantCulture)));
+            }
+            else if (l.StartsWith("f "))
+            {
+                var parts = l.Substring(2).Trim().Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+                var idxs = new List<int>();
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    var s = parts[i].Split('/')[0];
+                    if (int.TryParse(s, out int idx))
+                        idxs.Add(idx - 1);
+                }
+                if (idxs.Count == 3)
+                {
+                    tris.Add(idxs[0]); tris.Add(idxs[1]); tris.Add(idxs[2]);
+                }
+                else if (idxs.Count == 4)
+                {
+                    tris.Add(idxs[0]); tris.Add(idxs[1]); tris.Add(idxs[2]);
+                    tris.Add(idxs[0]); tris.Add(idxs[2]); tris.Add(idxs[3]);
+                }
+            }
+        }
+
+        var m = new Mesh { name = System.IO.Path.GetFileNameWithoutExtension(path) };
+        m.SetVertices(verts);
+        if (uvs.Count == verts.Count) m.SetUVs(0, uvs);
+        if (normals.Count == verts.Count) m.SetNormals(normals);
+        m.SetTriangles(tris, 0);
+        if (normals.Count != verts.Count) m.RecalculateNormals();
+        m.RecalculateBounds();
+        return m;
+    }
+
+    static GameObject CreateMeshPart(string name, Mesh mesh, Transform parent, Vector3 localPos, Vector3 scale, Material mat, Quaternion? rot = null)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPos;
+        go.transform.localScale = scale;
+        if (rot.HasValue) go.transform.localRotation = rot.Value;
+
+        var mf = go.AddComponent<MeshFilter>();
+        mf.sharedMesh = mesh;
+
+        var mr = go.AddComponent<MeshRenderer>();
+        mr.sharedMaterial = mat;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        return go;
+    }
+
+    static Transform CreateLegPart(string name, Mesh legMesh, Transform parent, Vector3 localPos)
+    {
+        var pivot = new GameObject(name + "_Pivot").transform;
+        pivot.SetParent(parent, false);
+        pivot.localPosition = localPos;
+        CreateMeshPart(name + "_Model", legMesh, pivot, Vector3.zero, Vector3.one, squirrelMat);
+        return pivot;
+    }
+
     /// <summary>
-    /// Builds a cute stylized Squirrel obstacle that scampers head-first downwards along the tree trunk.
-    /// Features procedural running animation: pumping legs, bobbing head, and bouncy bushy tail!
+    /// Builds an authentic stylized Low-Poly Squirrel obstacle that scampers down the trunk facing downward.
+    /// Uses dedicated 3D low-poly meshes and a rich hand-painted fur & face texture atlas.
     /// </summary>
     public static GameObject CreateSquirrelPrefab(Transform parent)
     {
@@ -328,72 +461,60 @@ public class TCEnemy : MonoBehaviour
         mObj.transform.localPosition = new Vector3(0, 0, 0.603f);
         sComp.model = mObj.transform;
 
-        // Squirrel Body Pivot (facing downwards along tree)
+        // Squirrel Body Pivot:
+        // Local +Z points DOWN the tree trunk (-Y in world).
+        // Local +Y points RADIAL OUTWARD away from bark (+Z in world).
+        // Local -Y points at the bark.
+        // Local +/- X points around trunk circumference.
         var bodyPivot = new GameObject("BodyPivot");
         bodyPivot.transform.SetParent(mObj.transform, false);
-        bodyPivot.transform.localRotation = Quaternion.Euler(180f, 0, 0); // Face downward!
+        bodyPivot.transform.localRotation = Quaternion.Euler(90f, 0, 0);
         sComp.bodyPivot = bodyPivot.transform;
 
-        // Torso / Body (chestnut fur)
-        var torso = CreatePart(PrimitiveType.Capsule, bodyPivot.transform, new Vector3(0, 0.08f, 0), new Vector3(0.24f, 0.38f, 0.22f), squirrelFurMat);
-        // Cream belly patch
-        CreatePart(PrimitiveType.Sphere, torso.transform, new Vector3(0, 0, 0.42f), new Vector3(0.72f, 0.85f, 0.35f), squirrelBellyMat);
+        // 1. Torso / Body low-poly mesh (sleek arched back, cream belly, rich chestnut fur)
+        var bodyMesh = GetSquirrelMesh("Body");
+        CreateMeshPart("Torso", bodyMesh, bodyPivot.transform, Vector3.zero, Vector3.one, squirrelMat);
 
-        // Head Pivot
+        // 2. Head Pivot & low-poly mesh (chubby cheeks, pointed snout, perked ears, shiny eyes)
+        // Positioned at the leading front (+Z) of the body, facing downward where it heads
         var headPivot = new GameObject("HeadPivot");
         headPivot.transform.SetParent(bodyPivot.transform, false);
-        headPivot.transform.localPosition = new Vector3(0, 0.28f, 0.05f);
+        headPivot.transform.localPosition = new Vector3(0, 0.05f, 0.20f);
+        headPivot.transform.localRotation = Quaternion.Euler(10f, 0, 0);
         sComp.head = headPivot.transform;
 
-        // Head sphere
-        CreatePart(PrimitiveType.Sphere, headPivot.transform, Vector3.zero, new Vector3(0.24f, 0.22f, 0.24f), squirrelFurMat);
-        // Snout
-        CreatePart(PrimitiveType.Sphere, headPivot.transform, new Vector3(0, -0.04f, 0.12f), new Vector3(0.12f, 0.10f, 0.14f), squirrelBellyMat);
-        // Nose (dark brown)
-        CreatePart(PrimitiveType.Sphere, headPivot.transform, new Vector3(0, -0.02f, 0.19f), new Vector3(0.045f, 0.04f, 0.045f), squirrelDarkMat);
-        // Cute dark eyes
-        CreatePart(PrimitiveType.Sphere, headPivot.transform, new Vector3(-0.09f, 0.04f, 0.09f), new Vector3(0.045f, 0.045f, 0.045f), squirrelEyeMat);
-        CreatePart(PrimitiveType.Sphere, headPivot.transform, new Vector3(0.09f, 0.04f, 0.09f), new Vector3(0.045f, 0.045f, 0.045f), squirrelEyeMat);
-        // Cute ears
-        CreatePart(PrimitiveType.Capsule, headPivot.transform, new Vector3(-0.08f, 0.13f, -0.02f), new Vector3(0.05f, 0.09f, 0.04f), squirrelDarkMat, Quaternion.Euler(15f, 0, -20f));
-        CreatePart(PrimitiveType.Capsule, headPivot.transform, new Vector3(0.08f, 0.13f, -0.02f), new Vector3(0.05f, 0.09f, 0.04f), squirrelDarkMat, Quaternion.Euler(15f, 0, 20f));
+        var headMesh = GetSquirrelMesh("Head");
+        CreateMeshPart("HeadModel", headMesh, headPivot.transform, Vector3.zero, Vector3.one, squirrelMat);
 
-        // Bushy Tail Pivot (attached at lower back)
+        // 3. Iconic Bushy Tail Pivot & low-poly plume mesh (S-curved plume arching over back)
         var tailPivot = new GameObject("TailPivot");
         tailPivot.transform.SetParent(bodyPivot.transform, false);
-        tailPivot.transform.localPosition = new Vector3(0, -0.10f, -0.08f);
+        tailPivot.transform.localPosition = new Vector3(0, 0.03f, -0.22f);
         sComp.tail = tailPivot.transform;
 
-        // Big curved fluffy bushy tail made of overlapping rounded segments
-        CreatePart(PrimitiveType.Sphere, tailPivot.transform, new Vector3(0, 0.12f, -0.10f), new Vector3(0.20f, 0.26f, 0.22f), squirrelFurMat);
-        CreatePart(PrimitiveType.Sphere, tailPivot.transform, new Vector3(0, 0.28f, -0.14f), new Vector3(0.24f, 0.32f, 0.26f), squirrelFurMat);
-        CreatePart(PrimitiveType.Sphere, tailPivot.transform, new Vector3(0, 0.44f, -0.08f), new Vector3(0.22f, 0.26f, 0.22f), squirrelDarkMat);
+        var tailMesh = GetSquirrelMesh("Tail");
+        CreateMeshPart("TailModel", tailMesh, tailPivot.transform, Vector3.zero, Vector3.one, squirrelMat);
 
-        // Legs (Front & Back, Left & Right)
-        sComp.legFL = CreateLeg(bodyPivot.transform, new Vector3(-0.13f, 0.22f, 0.04f), true);
-        sComp.legFR = CreateLeg(bodyPivot.transform, new Vector3(0.13f, 0.22f, 0.04f), true);
-        sComp.legBL = CreateLeg(bodyPivot.transform, new Vector3(-0.14f, -0.04f, 0.02f), false);
-        sComp.legBR = CreateLeg(bodyPivot.transform, new Vector3(0.14f, -0.04f, 0.02f), false);
+        // 4. Four Running Low-Poly Legs & Gripping Paws
+        var legFLMesh = GetSquirrelMesh("LegFL");
+        var legFRMesh = GetSquirrelMesh("LegFR");
+        var legBLMesh = GetSquirrelMesh("LegBL");
+        var legBRMesh = GetSquirrelMesh("LegBR");
+
+        sComp.legFL = CreateLegPart("LegFL", legFLMesh, bodyPivot.transform, new Vector3(-0.11f, 0.01f, 0.12f));
+        sComp.legFR = CreateLegPart("LegFR", legFRMesh, bodyPivot.transform, new Vector3( 0.11f, 0.01f, 0.12f));
+        sComp.legBL = CreateLegPart("LegBL", legBLMesh, bodyPivot.transform, new Vector3(-0.14f, 0.04f, -0.11f));
+        sComp.legBR = CreateLegPart("LegBR", legBRMesh, bodyPivot.transform, new Vector3( 0.14f, 0.04f, -0.11f));
 
         // Trigger Collider for collision & jump/smash detection
         var col = mObj.AddComponent<SphereCollider>();
         col.isTrigger = true;
-        col.radius = 0.32f;
-        col.center = Vector3.zero;
+        col.radius = 0.34f;
+        col.center = new Vector3(0, 0, 0.08f);
 
-        root.tag = "branch"; // safe fallback for tag queries while TCEnemy handles custom interaction
+        root.tag = "branch";
         root.SetActive(false);
         return root;
-    }
-
-    static Transform CreateLeg(Transform parent, Vector3 localPos, bool isFront)
-    {
-        var pivot = new GameObject(isFront ? "LegFrontPivot" : "LegBackPivot").transform;
-        pivot.SetParent(parent, false);
-        pivot.localPosition = localPos;
-        // Upper leg / paw capsule
-        CreatePart(PrimitiveType.Capsule, pivot, new Vector3(0, -0.06f, 0.04f), new Vector3(0.065f, 0.14f, 0.065f), squirrelDarkMat, Quaternion.Euler(20f, 0, 0));
-        return pivot;
     }
 }
 
@@ -509,6 +630,7 @@ public class TCSquirrel : TCEnemy
     {
         base.Init(startY, startAngle, sweep, spd);
         runSpeed = Random.Range(1.4f, 1.9f);
+        TCSfx.Play("squirrel", 0.8f);
     }
 
     void Update()
@@ -533,28 +655,29 @@ public class TCSquirrel : TCEnemy
         if (legBL) legBL.localRotation = Quaternion.Euler(angleBL, 0, 0);
         if (legBR) legBR.localRotation = Quaternion.Euler(angleBR, 0, 0);
 
-        // 3. Body sprint bounce & gallop rhythm
+        // 3. Body sprint gallop rhythm
         float gallop = Mathf.Abs(Mathf.Sin(legCycle * 0.5f));
         if (bodyPivot)
         {
-            float pitch = 180f + Mathf.Sin(legCycle) * 7f;
+            float pitch = 90f + Mathf.Sin(legCycle) * 6f; // pitched down the trunk
             float roll = Mathf.Sin(legCycle * 0.5f) * 4f;
             bodyPivot.localRotation = Quaternion.Euler(pitch, 0, roll);
         }
 
-        // 4. Bushy tail springy wave & counter-balance
+        // 4. Bushy tail springy wave & counter-balance (arching over back)
         if (tail)
         {
-            float tailWhip = Mathf.Sin(legCycle - 1.2f) * 22f;
-            float tailSway = Mathf.Cos(legCycle * 0.5f) * 12f;
-            tail.localRotation = Quaternion.Euler(tailWhip + 15f, tailSway, 0);
+            float tailWhip = Mathf.Sin(legCycle - 1.2f) * 16f;
+            float tailSway = Mathf.Cos(legCycle * 0.5f) * 10f;
+            tail.localRotation = Quaternion.Euler(tailWhip, tailSway, 0);
         }
 
-        // 5. Alert head bobbing
+        // 5. Alert head looking downward along heading direction
         if (head)
         {
-            float headBob = Mathf.Sin(legCycle * 0.5f) * 6f;
-            head.localRotation = Quaternion.Euler(headBob - 10f, 0, 0);
+            float headBob = Mathf.Sin(legCycle * 0.5f) * 5f;
+            // Slight downward tilt toward the trunk ahead
+            head.localRotation = Quaternion.Euler(headBob + 8f, 0, 0);
         }
 
         // 6. Trunk surface positioning with scamper hop

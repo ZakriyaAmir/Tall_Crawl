@@ -79,4 +79,11 @@ public class TCConfig : ScriptableObject
     {
         return Mathf.Lerp(startSpeed, EffectiveMaxSpeed, Difficulty(metres));
     }
+
+    /// Normal climbing speed multiplier based on score/distance climbed relative to starting speed (starts at 1.0x).
+    public float SpeedMultiplierAtDistance(float metres)
+    {
+        if (startSpeed <= 0.0001f) return 1.0f;
+        return ClimbSpeedAtDistance(metres) / startSpeed;
+    }
 }

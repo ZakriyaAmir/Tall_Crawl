@@ -38,6 +38,15 @@ public static class TCSave
     public static int SkinAdsWatched(int i) => PlayerPrefs.GetInt("skin_ads_" + i);
     public static void AddSkinAd(int i) { PlayerPrefs.SetInt("skin_ads_" + i, SkinAdsWatched(i) + 1); Fire(); }
 
+    // Enemy Kill Progress for Milestone Skins:
+    public static int BeesKilled { get => PlayerPrefs.GetInt("tc_kills_bee", 0); set { PlayerPrefs.SetInt("tc_kills_bee", value); Fire(); } }
+    public static int WaspsKilled { get => PlayerPrefs.GetInt("tc_kills_wasp", 0); set { PlayerPrefs.SetInt("tc_kills_wasp", value); Fire(); } }
+    public static int SquirrelsKilled { get => PlayerPrefs.GetInt("tc_kills_squirrel", 0); set { PlayerPrefs.SetInt("tc_kills_squirrel", value); Fire(); } }
+
+    public static void AddBeeKill(int count = 1) { BeesKilled += count; }
+    public static void AddWaspKill(int count = 1) { WaspsKilled += count; }
+    public static void AddSquirrelKill(int count = 1) { SquirrelsKilled += count; }
+
     // Upgrades: 0 = Magnet time, 1 = Boost time, 2 = Extra heart, 3 = Coin value
     public static int Upgrade(int id) => PlayerPrefs.GetInt("upg_" + id);
     public static void SetUpgrade(int id, int lvl) { PlayerPrefs.SetInt("upg_" + id, lvl); Fire(); }

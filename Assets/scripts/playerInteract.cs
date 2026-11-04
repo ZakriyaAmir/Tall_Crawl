@@ -83,9 +83,18 @@ public class playerInteract : MonoBehaviour
                 TCFx.Spawn(BeesimpactParticle, transform.position);
                 Play(TCSfx.Get("thrust") ?? boostSound, 1f);
                 if (pooled) pooled.Release();
-                OnEvent?.Invoke("smash", transform.position);
                 TCFx.Shake(0.18f);
-                gameManager.Instance?.addCoin();
+                TCSave.AddBeeKill(1);
+                TCSkins.CheckAchievements();
+                if (boostDuration > 0)
+                {
+                    OnEvent?.Invoke("chilli_kill", transform.position);
+                }
+                else
+                {
+                    OnEvent?.Invoke("smash", transform.position);
+                    gameManager.Instance?.addCoin();
+                }
                 return;
             }
             if (enemy != null)
@@ -94,8 +103,19 @@ public class playerInteract : MonoBehaviour
                 Play(TCSfx.Get("thrust") ?? boostSound, 1f);
                 TCFx.Spawn(impactParticle, other.transform.position);
                 TCFx.Shake(0.2f);
-                OnEvent?.Invoke("smash", transform.position);
-                gameManager.Instance?.addCoin();
+                if (enemy.enemyType == TCEnemyType.Wasp) TCSave.AddWaspKill(1);
+                else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKill(1);
+                TCSkins.CheckAchievements();
+
+                if (boostDuration > 0)
+                {
+                    OnEvent?.Invoke("chilli_kill", other.transform.position);
+                }
+                else
+                {
+                    OnEvent?.Invoke("smash", transform.position);
+                    gameManager.Instance?.addCoin();
+                }
                 return;
             }
         }
@@ -109,7 +129,10 @@ public class playerInteract : MonoBehaviour
                 Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
                 TCFx.Spawn(impactParticle, other.transform.position);
                 TCFx.Shake(0.12f);
-                OnEvent?.Invoke("smash", transform.position);
+                if (enemy.enemyType == TCEnemyType.Wasp) TCSave.AddWaspKill(1);
+                else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKill(1);
+                TCSkins.CheckAchievements();
+                OnEvent?.Invoke("chilli_kill", other.transform.position);
                 return;
             }
             if (jumpTimer > 0 && enemy.CanJumpOver) return; // jumped over crawling enemy
@@ -153,7 +176,9 @@ public class playerInteract : MonoBehaviour
                 TCFx.Spawn(BeesimpactParticle, transform.position);
                 Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
                 if (pooled) pooled.Release();
-                OnEvent?.Invoke("smash", transform.position);
+                TCSave.AddBeeKill(1);
+                TCSkins.CheckAchievements();
+                OnEvent?.Invoke("chilli_kill", transform.position);
                 TCFx.Shake(0.1f);
                 return;
             }
