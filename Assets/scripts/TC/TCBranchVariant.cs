@@ -15,10 +15,11 @@ public class TCBranchVariant : MonoBehaviour
         None = 0,
         Red = 1,
         Yellow = 2,
-        Pink = 3
+        Pink = 3,
+        Thorn = 4
     }
 
-    static Material matNone, matRed, matYellow, matPink;
+    static Material matNone, matRed, matYellow, matPink, matThorn;
     static Mesh bushMesh;
     static Material woodMat;
 
@@ -31,6 +32,7 @@ public class TCBranchVariant : MonoBehaviour
         if (!matRed) matRed = Resources.Load<Material>("Buisson_Atlas_Red") ?? LoadMatFromPath("Assets/objects/models/bush/source/Buisson_Atlas_Red.mat");
         if (!matYellow) matYellow = Resources.Load<Material>("Buisson_Atlas_Yellow") ?? LoadMatFromPath("Assets/objects/models/bush/source/Buisson_Atlas_Yellow.mat");
         if (!matPink) matPink = Resources.Load<Material>("Buisson_Atlas_Pink") ?? LoadMatFromPath("Assets/objects/models/bush/source/Buisson_Atlas_Pink.mat");
+        if (!matThorn) matThorn = Resources.Load<Material>("Buisson_Atlas_Thorn") ?? LoadMatFromPath("Assets/TC/Resources/Buisson_Atlas_Thorn.mat");
 
         if (!woodMat) woodMat = LoadMatFromPath("Assets/objects/materials/log.mat");
     }
@@ -125,6 +127,9 @@ public class TCBranchVariant : MonoBehaviour
             case FlowerType.Pink:
                 targetMat = matPink ? matPink : matNone;
                 break;
+            case FlowerType.Thorn:
+                targetMat = matThorn ? matThorn : matNone;
+                break;
             default:
                 targetMat = matNone;
                 break;
@@ -133,6 +138,33 @@ public class TCBranchVariant : MonoBehaviour
         foreach (var mr in foliageRenderers)
         {
             if (mr && targetMat) mr.sharedMaterial = targetMat;
+        }
+
+        var thornSpikes = transform.Find("thorn_spikes");
+        if (type == FlowerType.Thorn)
+        {
+            if (!thornSpikes)
+            {
+                var spObj = new GameObject("thorn_spikes");
+                spObj.transform.SetParent(transform, false);
+                thornSpikes = spObj.transform;
+                for (int i = 0; i < 4; i++)
+                {
+                    var cone = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    var col = cone.GetComponent<Collider>(); if (col) DestroyImmediate(col);
+                    cone.transform.SetParent(thornSpikes, false);
+                    cone.transform.localPosition = new Vector3(Random.Range(-0.06f, 0.06f), 0.12f, 0.45f + i * 0.22f);
+                    cone.transform.localScale = new Vector3(0.045f, 0.12f, 0.045f);
+                    cone.transform.localRotation = Quaternion.Euler(Random.Range(20f, 40f), Random.Range(-40f, 40f), Random.Range(-25f, 25f));
+                    var mr = cone.GetComponent<MeshRenderer>();
+                    if (mr && targetMat) mr.sharedMaterial = targetMat;
+                }
+            }
+            thornSpikes.gameObject.SetActive(true);
+        }
+        else if (thornSpikes)
+        {
+            thornSpikes.gameObject.SetActive(false);
         }
     }
 }

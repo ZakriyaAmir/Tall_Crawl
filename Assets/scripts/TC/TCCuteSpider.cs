@@ -12,6 +12,7 @@ public class TCCuteSpider : MonoBehaviour
     public Transform bone; Vector3 boneRest; Animator anim; playerInteract pi;
     Transform body; readonly List<Transform> legs = new List<Transform>(); readonly List<Quaternion> legRest = new List<Quaternion>();
     Vector3 bodyRest, bodyScale; float flip, t, blink = 2.5f;
+    float rollTimer, rollDuration, rollSpinAngle;
     Transform head; Vector3 headRest; readonly List<Transform> eyes = new List<Transform>(); readonly List<Vector3> eyeRest = new List<Vector3>();
 
     static readonly Dictionary<string, Material> mats = new Dictionary<string, Material>();
@@ -347,11 +348,18 @@ public class TCCuteSpider : MonoBehaviour
     float backflipTimer, backflipDuration;
     float currentAirHeight;
     float jumpBlend; // 0 (on ground/running) -> 1 (fully in jump pose)
+    float rollBlend;
 
     public void TriggerBackflip(float duration = 0.75f)
     {
         backflipDuration = duration;
         backflipTimer = duration;
+    }
+
+    public void TriggerRoll(float duration = 1.2f)
+    {
+        rollDuration = duration;
+        rollTimer = duration;
     }
 
     void LateUpdate()
@@ -364,8 +372,14 @@ public class TCCuteSpider : MonoBehaviour
         Vector3 rigOff = bone ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
         if (rigOff.magnitude > 5f) rigOff = Vector3.zero;
 
-        // Is the spider actively moving/climbing, jumping, or idle?
+        // Is the spider actively moving/climbing, jumping, rolling, or idle?
         var playerComp = GetComponentInParent<player>();
+        bool isRolling = (pi != null && pi.boostDuration > 0) || (playerComp != null && playerComp.boost) || rollTimer > 0;
+        if (rollTimer > 0) rollTimer -= dt;
+        rollBlend = Mathf.MoveTowards(rollBlend, isRolling ? 1f : 0f, dt * 10f);
+        if (isRolling) rollSpinAngle += dt * 1440f; // Sonic spin roll at 4 rev/sec
+        else if (rollBlend <= 0.001f) rollSpinAngle = 0f;
+
         bool isIntroWalking = anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("spiderIntro");
         bool isJumping = (pi && pi.IsJumping) || (anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("SpiderJump")) || backflipTimer > 0;
         bool isMoving = (playerComp != null && !playerComp.paused && !playerComp.GameOver && !isJumping) || isIntroWalking;
@@ -459,7 +473,14 @@ public class TCCuteSpider : MonoBehaviour
             Quaternion groundRot = isMoving ? moveRot : legRest[i];
 
             // 4. Smooth blend between Ground (walk/run/idle) and Jump poses:
-            legs[i].localRotation = Quaternion.Slerp(groundRot, jumpRot, jumpBlend);
+            Quaternion targetLegPose = Quaternion.Slerp(groundRot, jumpRot, jumpBlend);
+            if (rollBlend > 0.001f)
+            {
+                // In Sonic roll attack: tuck legs tightly against the spinning body
+                Quaternion rollTuck = legRest[i] * Quaternion.Euler(isLeft ? 45f : -45f, 0, 70f);
+                targetLegPose = Quaternion.Slerp(targetLegPose, rollTuck, rollBlend);
+            }
+            legs[i].localRotation = targetLegPose;
 
             // Friendly wave in main menu (uses front right leg i == 3)
             if (i == 3 && wave > 0)
@@ -481,7 +502,19 @@ public class TCCuteSpider : MonoBehaviour
         // Death: roll on the back, cartoon style. Backflip pitch combined with death roll.
         bool dead = pi ? pi.life <= 0 : anim && anim.isActiveAndEnabled && HasBool(anim, "death") && anim.GetBool("death");
         flip = Mathf.MoveTowards(flip, dead ? 1 : 0, dt * 3f);
-        body.localRotation = Quaternion.Euler(flipPitch, 0, 180f * Mathf.SmoothStep(0, 1, flip));
+        if (dead)
+        {
+            body.localRotation = Quaternion.Euler(flipPitch, 0, 180f * Mathf.SmoothStep(0, 1, flip));
+        }
+        else if (rollBlend > 0.001f)
+        {
+            body.localRotation = Quaternion.Slerp(Quaternion.Euler(flipPitch, 0, 0), Quaternion.Euler(rollSpinAngle, 0, 0), rollBlend);
+            body.localScale = Vector3.Lerp(new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f), new Vector3(0.85f, 0.85f, 0.85f), rollBlend);
+        }
+        else
+        {
+            body.localRotation = Quaternion.Euler(flipPitch, 0, 0);
+        }
 
         // Rainbow Spider: dynamically wave colors across all parts over time
         if (isRainbow && rainbowRenderers.Count > 0)

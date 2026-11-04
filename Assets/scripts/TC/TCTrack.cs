@@ -7,10 +7,12 @@ using UnityEngine;
 public class TCTrack : MonoBehaviour
 {
     public GameObject trunkPrefab, branchPrefab, beesPrefab, coinPrefab, heartPrefab, boostPrefab;
+    public GameObject pineconePrefab, waspPrefab, squirrelPrefab;
     public Transform stemParent, hazardParent, bonusParent;
     public Transform player;
 
     TCPool trunkPool, branchPool, beePool, coinPool, heartPool, boostPool;
+    TCPool pineconePool, waspPool, squirrelPool;
     readonly List<TCPooled> live = new List<TCPooled>(256);
     readonly List<float> angles = new List<float>(8);
     float nextTrunkY, nextRowY, safeAngle, lastCoinY = -999f;
@@ -19,7 +21,7 @@ public class TCTrack : MonoBehaviour
     int rowIndex; bool lastWasBee; player pl;
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
-    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool };
+    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, pineconePool, waspPool, squirrelPool };
     TCConfig C;
 
     const float MinCoinSpacing = 0.22f; // tighter spacing for dense long coin strings
@@ -37,6 +39,15 @@ public class TCTrack : MonoBehaviour
         coinPool = new TCPool(coinPrefab, bonusParent, 120);
         heartPool = new TCPool(heartPrefab, bonusParent, 2);
         boostPool = new TCPool(boostPrefab, bonusParent, 2);
+
+        var pProto = pineconePrefab ? pineconePrefab : TCEnemy.CreatePineconePrefab(hazardParent);
+        pineconePool = new TCPool(pProto, hazardParent, 5);
+
+        var sProto = squirrelPrefab ? squirrelPrefab : TCEnemy.CreateSquirrelPrefab(hazardParent);
+        squirrelPool = new TCPool(sProto, hazardParent, 5);
+
+        var wProto = waspPrefab ? waspPrefab : TCEnemy.CreateWaspPrefab(hazardParent);
+        waspPool = new TCPool(wProto, hazardParent, 5);
 
         float py = player.position.y;
         float chunkH = C.trunkChunkHeight;
@@ -134,7 +145,8 @@ public class TCTrack : MonoBehaviour
             return;
         }
 
-        if (!lastWasBee && metres > C.beeMinMetres && Random.value < C.beeChance * d + 0.02f)
+        // Bee swarms only spawn after crossing 2000 metres
+        if (!lastWasBee && metres >= 2000f && Random.value < C.beeChance * d + 0.02f)
         {
             // Bee swarm row: full 360 jump ring hazard. Never spawns coins or pickups directly inside it.
             float beeY = y + gap * 0.4f;
@@ -169,18 +181,35 @@ public class TCTrack : MonoBehaviour
                 var b = Spawn(branchPool, "branch", y, a);
                 b.transform.rotation = Quaternion.Euler(0, a, 0);
 
-                // Apply flower/foliage variant:
-                // 4 variants: None (0), Red (1), Yellow (2), Pink (3)
-                // Each branch row or individual branch gets its own variant
+                // Apply flower/foliage variant (None, Red, Yellow, Pink, Thorn):
                 var bv = b.GetComponent<TCBranchVariant>();
                 if (!bv) bv = b.gameObject.AddComponent<TCBranchVariant>();
-                var flowerType = (TCBranchVariant.FlowerType)Random.Range(0, 4);
+                var flowerType = (TCBranchVariant.FlowerType)Random.Range(0, 5);
                 bv.SetVariant(flowerType);
             }
         }
         float prevRowY = lastHazardY;
         if (spawnBranches) lastHazardY = y;
         OnRow?.Invoke(y, newSafe, Mathf.Abs(Mathf.DeltaAngle(safeAngle, newSafe)), window, secs, metres);
+
+        // Enemy / Hurdle Spawns based on distance:
+        // - First 2000 meters: only wasps and branches
+        // - After 2000 meters: bee swarms can spawn (handled above)
+        // - After 3000 meters: squirrels can spawn
+        if (metres >= 3000f && Random.value < 0.32f)
+        {
+            float squirrelY = y + gap * 0.52f;
+            float squirrelAngle = newSafe + (Random.value < 0.5f ? -35f : 35f);
+            Spawn(squirrelPool, "squirrel", squirrelY, squirrelAngle);
+        }
+
+        // Wasps spawn from the beginning (alongside branches)
+        if (metres > 30f && Random.value < 0.22f)
+        {
+            float waspY = y + gap * 0.72f;
+            float waspAngle = newSafe + (Random.value < 0.5f ? -42f : 42f);
+            Spawn(waspPool, "wasp", waspY, waspAngle);
+        }
 
         // In the safe gap between rows, spawn strictly ONE item type (heart, chilli boost, or coins) with proper margins
         float bonusYPos = y + gap * 0.5f;
@@ -239,6 +268,14 @@ public class TCTrack : MonoBehaviour
         var p = g.GetComponent<TCPooled>();
         if (!p) p = g.AddComponent<TCPooled>();
         p.pool = pool; p.kind = kind; p.y = y;
+
+        var enemy = g.GetComponent<TCEnemy>();
+        if (enemy)
+        {
+            enemy.pooled = p;
+            enemy.Init(y, angle, Random.Range(35f, 60f), Random.Range(1.8f, 2.8f));
+        }
+
         // re-enable children that were hidden on pickup
         for (int i = 0; i < g.transform.childCount; i++) g.transform.GetChild(i).gameObject.SetActive(true);
         live.Add(p);

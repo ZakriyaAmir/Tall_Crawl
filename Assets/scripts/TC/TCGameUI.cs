@@ -10,11 +10,14 @@ public class TCGameUI : MonoBehaviour
     public static TCGameUI Instance;
     player pl; playerInteract spider; gameManager gm;
     RectTransform safe, heartsRow, coinIconTarget; TextMeshProUGUI scoreText, coinText, hintText, boostText;
+    RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText; GameObject chilliRow;
+    Vector2 panelNormalSize;
+    float currentPanelHeight;
     readonly List<Image> hearts = new List<Image>();
     CanvasGroup startOverlay, pausePanel, revivePanel, resultPanel, flash;
     RectTransform hand; Coroutine tutorialCo;
     int shownCoins = -1, shownMetres = -1, shownLife = -1;
-    bool started, turnedOnce, jumpedOnce;
+    bool started, turnedOnce, jumpedOnce, rolledOnce;
     readonly Queue<TextMeshProUGUI> popPool = new Queue<TextMeshProUGUI>();
     readonly Queue<Image> flyingCoinPool = new Queue<Image>();
     TextMeshProUGUI resMetres, resBest, resCoins, resBonus, resTotal, reviveTimer; Button doubleBtn, reviveGemBtn;
@@ -30,6 +33,7 @@ public class TCGameUI : MonoBehaviour
         playerInteract.OnEvent += OnGameEvent;
         player.OnTurned += () => turnedOnce = true;
         player.OnJumped += () => jumpedOnce = true;
+        player.OnRolled += () => rolledOnce = true;
         TCUI.Show(this, startOverlay, false);
     }
     /// Builds (or, when baked into the scene, binds to) the HUD and every in-game screen. Also run in edit mode by TCUIBake.
@@ -43,7 +47,7 @@ public class TCGameUI : MonoBehaviour
         if (fresh) { var fi = fr.gameObject.AddComponent<Image>(); fi.color = new Color(1, 0.35f, 0.4f, 0.35f); fi.raycastTarget = false; }
         flash.alpha = 0;
     }
-    void OnDestroy() { playerInteract.OnEvent -= OnGameEvent; player.OnTurned = null; player.OnJumped = null; }
+    void OnDestroy() { playerInteract.OnEvent -= OnGameEvent; player.OnTurned = null; player.OnJumped = null; player.OnRolled = null; }
 
     // ---------------- HUD ----------------
     void BuildHud()
@@ -58,6 +62,33 @@ public class TCGameUI : MonoBehaviour
         heartsRow = TCUI.Rect("Hearts", top); TCUI.Place(heartsRow, new Vector2(0, 0.5f), new Vector2(170, 10), new Vector2(300, 80));
         var pause = TCUI.Btn("Pause", top, "", TCUI.Butter, ShowPause, 40, TCUI.Icon("pause"));
         TCUI.Place((RectTransform)pause.transform, new Vector2(0, 0.5f), new Vector2(170, -110), new Vector2(110, 110));
+
+        // Speed Multiplier & Chilli Mode Panel (Left Side of HUD - baked in scene so user can edit transform)
+        speedPanel = TCUI.Rect("SpeedChilliPanel", safe);
+        if (speedPanel != null)
+        {
+            panelNormalSize = speedPanel.sizeDelta;
+            currentPanelHeight = panelNormalSize.y;
+            var sRow = speedPanel.Find("SpeedRow");
+            if (sRow != null)
+            {
+                speedText = sRow.Find("SpeedVal")?.GetComponent<TextMeshProUGUI>();
+                var boltImg = sRow.Find("BoltIcon")?.GetComponent<Image>();
+                if (boltImg != null && boltImg.sprite == null)
+                    boltImg.sprite = TCUI.Icon("bolt");
+            }
+            var cRow = speedPanel.Find("ChilliRow");
+            if (cRow != null)
+            {
+                chilliRow = cRow.gameObject;
+                chilliTimerText = cRow.Find("ChilliTime")?.GetComponent<TextMeshProUGUI>();
+                var chilliImg = cRow.Find("ChilliIcon")?.GetComponent<Image>();
+                if (chilliImg != null && chilliImg.sprite == null)
+                    chilliImg.sprite = TCUI.Icon("chilli");
+                chilliRow.SetActive(false);
+            }
+        }
+
         boostText = TCUI.Label("Boost", safe, "BOOST!", 110, TCUI.Peach); TCUI.Place(boostText.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(900, 160));
         TCUI.Outline(boostText, 0.25f); boostText.gameObject.SetActive(false);
     }
@@ -92,6 +123,31 @@ public class TCGameUI : MonoBehaviour
         if (spider.life != shownLife) { shownLife = spider.life; RefreshHearts(); }
         if (boostText.gameObject.activeSelf != pl.boost) boostText.gameObject.SetActive(pl.boost);
         if (pl.boost) boostText.transform.localScale = Vector3.one * (1 + 0.06f * Mathf.Sin(Time.time * 14));
+
+        // Speed Multiplier & Chilli Mode Panel
+        if (speedPanel != null)
+        {
+            if (speedText != null)
+            {
+                float speedMult = pl.boost ? TCConfig.I.boostMultiplier : 1.0f;
+                speedText.text = speedMult.ToString("0.0") + "x";
+                speedText.color = pl.boost ? TCUI.Peach : TCUI.Cocoa;
+            }
+
+            bool chilliActive = spider != null && spider.boostDuration > 0;
+            if (chilliRow != null && chilliRow.activeSelf != chilliActive)
+                chilliRow.SetActive(chilliActive);
+
+            if (chilliActive && chilliTimerText != null)
+                chilliTimerText.text = spider.boostDuration.ToString("0.0") + "s";
+
+            // When chilli mode is inactive, reduce panel height so only SpeedRow shows.
+            // When chilli mode is active, restore to normal full size.
+            float targetHeight = chilliActive ? panelNormalSize.y : 88f;
+            currentPanelHeight = Mathf.MoveTowards(currentPanelHeight, targetHeight, Time.deltaTime * 380f);
+            speedPanel.sizeDelta = new Vector2(panelNormalSize.x, currentPanelHeight);
+        }
+
         if (flash.alpha > 0) flash.alpha = Mathf.MoveTowards(flash.alpha, 0, Time.unscaledDeltaTime * 2.5f);
     }
 
@@ -235,11 +291,11 @@ public class TCGameUI : MonoBehaviour
         hintText.text = "DRAG LEFT / RIGHT\nto dodge branches";
         float t = 0; while (!turnedOnce && t < 6) { t += Time.deltaTime; yield return null; }
         yield return new WaitForSeconds(1.5f);
-        hintText.text = "SWIPE UP or DOUBLE-TAP\nto jump over bee swarms!";
+        hintText.text = "SWIPE UP to jump!\nDOUBLE TAP to flip!";
         hand.gameObject.SetActive(false);
         t = 0; while (!jumpedOnce && t < 6) { t += Time.deltaTime; yield return null; }
-        hintText.text = "Grab coins, hearts\nand chilli boosts!";
-        yield return new WaitForSeconds(2.2f);
+        hintText.text = "Grab CHILLI PEPPERS\nto roll & smash!";
+        yield return new WaitForSeconds(2.0f);
         TCSave.TutorialDone = true;
         TCUI.Hide(this, startOverlay);
     }

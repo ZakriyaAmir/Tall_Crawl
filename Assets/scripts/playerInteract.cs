@@ -15,12 +15,13 @@ public class playerInteract : MonoBehaviour
     public AudioClip woodImpactSound, beesImpactSound, deathSound, boostSound, coinSound, healthSound, jumpSound;
 
     public int MaxLife { get; private set; }
-    public bool Invulnerable => invulnTimer > 0 || boostDuration > 0;
+    public bool Invulnerable => invulnTimer > 0 || boostDuration > 0 || IsRolling;
     public bool IsJumping => jumpTimer > 0;
+    public bool IsRolling => boostDuration > 0 || (p != null && p.boost);
     public static System.Action<string, Vector3> OnEvent; // "coin","hit","heart","boost","smash","death"
 
     AudioSource audioSource; player p; Animator animator; Renderer[] renderers;
-    float invulnTimer, jumpTimer; bool blinking;
+    float invulnTimer, jumpTimer, rollTimer; bool blinking;
 
     void Start()
     {
@@ -39,6 +40,7 @@ public class playerInteract : MonoBehaviour
     {
         float dt = Time.deltaTime;
         if (jumpTimer > 0) jumpTimer -= dt;
+        if (rollTimer > 0) rollTimer -= dt;
         if (invulnTimer > 0)
         {
             invulnTimer -= dt;
@@ -61,6 +63,64 @@ public class playerInteract : MonoBehaviour
     {
         if (p == null || p.GameOver) return;
         var pooled = other.GetComponentInParent<TCPooled>();
+        var enemy = other.GetComponentInParent<TCEnemy>();
+
+        // Sonic Roll Attack: smashes through branches, bees, and enemies!
+        if (IsRolling)
+        {
+            if (other.CompareTag("branch"))
+            {
+                TCFx.Spawn(impactParticle, other.transform.position);
+                if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);
+                Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+                OnEvent?.Invoke("smash", transform.position);
+                TCFx.Shake(0.18f);
+                gameManager.Instance?.addCoin();
+                return;
+            }
+            if (other.CompareTag("bees"))
+            {
+                TCFx.Spawn(BeesimpactParticle, transform.position);
+                Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+                if (pooled) pooled.Release();
+                OnEvent?.Invoke("smash", transform.position);
+                TCFx.Shake(0.18f);
+                gameManager.Instance?.addCoin();
+                return;
+            }
+            if (enemy != null)
+            {
+                enemy.Smash();
+                Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+                TCFx.Spawn(impactParticle, other.transform.position);
+                TCFx.Shake(0.2f);
+                OnEvent?.Invoke("smash", transform.position);
+                gameManager.Instance?.addCoin();
+                return;
+            }
+        }
+
+        // Enemy collision handling (when not in roll attack mode)
+        if (enemy != null)
+        {
+            if (boostDuration > 0)
+            {
+                enemy.Smash();
+                Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
+                TCFx.Spawn(impactParticle, other.transform.position);
+                TCFx.Shake(0.12f);
+                OnEvent?.Invoke("smash", transform.position);
+                return;
+            }
+            if (jumpTimer > 0 && enemy.CanJumpOver) return; // jumped over crawling enemy
+            if (invulnTimer > 0) return;
+
+            Play(TCSfx.Get("hit") ?? woodImpactSound, 0.85f);
+            TCFx.Spawn(impactParticle, transform.position);
+            Damage();
+            return;
+        }
+
         if (other.CompareTag("branch"))
         {
             TCFx.Spawn(impactParticle, other.transform.position);
@@ -169,6 +229,11 @@ public class playerInteract : MonoBehaviour
     }
 
     public void jump(float duration = 0.6f) { jumpTimer = duration; Play(TCSfx.Get("jump") ?? jumpSound, 0.7f); }
+
+    public void roll(float duration = 1.2f)
+    {
+        // Rolling is now automatic during chilli pepper boost mode.
+    }
 
     public void doubleJump(float duration = 0.85f)
     {

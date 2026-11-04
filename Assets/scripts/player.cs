@@ -11,8 +11,9 @@ public class player : MonoBehaviour
     public bool paused = true, GameOver, boost;
     public float currentScore, calcSpeed;
     public bool jumpAllowed = true;
+    public bool IsRolling => boost; // Roll animation happens during chilli mode
 
-    public static System.Action OnJumped, OnTurned;
+    public static System.Action OnJumped, OnTurned, OnRolled;
     public static float DebugSteer; // used by the automated screenshot tour
 
     TCConfig C;
@@ -41,7 +42,8 @@ public class player : MonoBehaviour
         if (paused || GameOver) return;
         float dt = Time.deltaTime;
         float baseSpeed = C.ClimbSpeedAtDistance(currentScore);
-        calcSpeed = boost ? baseSpeed * C.boostMultiplier : baseSpeed;
+        float speedMult = boost ? C.boostMultiplier : 1f;
+        calcSpeed = baseSpeed * speedMult;
         var pos = p1.position; pos.y += calcSpeed * dt; p1.position = pos;
         currentScore = (pos.y - startY) * C.metresPerUnit;
 
@@ -144,5 +146,10 @@ public class player : MonoBehaviour
         if (anim) anim.SetTrigger("jump");
         if (spider) spider.jump(jumpDur);
         OnJumped?.Invoke();
+    }
+
+    public void roll(float duration = 1.2f)
+    {
+        // Rolling is now automatic during chilli pepper boost mode.
     }
 }

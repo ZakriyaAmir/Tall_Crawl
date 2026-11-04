@@ -137,6 +137,17 @@ public static class TCUI
                 d = Mathf.Min(d, SegDist(p, new Vector2(0.25f, 0f), new Vector2(-0.25f, -0.8f))) - 0.14f;
                 return Fill(d, Hex("#FFB13B"));
             }
+            case "chilli":
+            {
+                // Curved red pepper body + green stem cap
+                Vector2 cp = p; cp.x -= cp.y * cp.y * 0.45f;
+                float dBody = Mathf.Max(Mathf.Abs(cp.x) - (0.38f - cp.y * 0.28f), Mathf.Abs(cp.y + 0.1f) - 0.65f);
+                float dTip = Vector2.Distance(p, new Vector2(0.35f, -0.72f)) - 0.08f;
+                float dPepper = Mathf.Min(dBody, dTip);
+                var cPepper = Fill(dPepper, Hex("#FF3B30"));
+                float dStem = Mathf.Min(SegDist(p, new Vector2(-0.05f, 0.55f), new Vector2(-0.25f, 0.82f)) - 0.1f, Vector2.Distance(p, new Vector2(0f, 0.55f)) - 0.22f);
+                return Over(cPepper, Fill(dStem, Hex("#4CD964")));
+            }
             case "star":
             {
                 float a = Mathf.Atan2(p.y, p.x) + Mathf.PI / 2; float r = p.magnitude;
