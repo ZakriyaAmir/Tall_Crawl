@@ -252,6 +252,15 @@ public class TCEnemy : MonoBehaviour
         wComp.enemyType = TCEnemyType.Wasp;
         wComp.radius = 0.68f;
 
+        var audio = root.AddComponent<AudioSource>();
+        audio.playOnAwake = false;
+        audio.loop = false;
+        audio.spatialBlend = 0.6f;
+        audio.minDistance = 1.0f;
+        audio.maxDistance = 12.0f;
+        audio.rolloffMode = AudioRolloffMode.Linear;
+        wComp.audioSrc = audio;
+
         var mObj = new GameObject("Model");
         mObj.transform.SetParent(root.transform, false);
         mObj.transform.localPosition = new Vector3(0, 0, 0.68f);
@@ -574,11 +583,85 @@ public class TCWasp : TCEnemy
 {
     public Transform wingL, wingR;
     public Transform abdomen, head;
+    public AudioSource audioSrc;
+
+    bool hasPlayedBuzz;
+    static player cachedPlayer;
+
+    void Awake()
+    {
+        if (!audioSrc) audioSrc = GetComponent<AudioSource>();
+        if (audioSrc) audioSrc.loop = false;
+    }
+
+    void OnEnable()
+    {
+        if (!audioSrc) audioSrc = GetComponent<AudioSource>();
+        if (audioSrc) audioSrc.loop = false;
+    }
+
+    public override void Init(float startY, float startAngle, float sweep = 40f, float spd = 2.2f)
+    {
+        base.Init(startY, startAngle, sweep, spd);
+        hasPlayedBuzz = false;
+        if (!audioSrc) audioSrc = GetComponent<AudioSource>();
+        if (audioSrc)
+        {
+            var clip = TCSfx.Get("wasp");
+            if (clip && audioSrc.clip != clip) audioSrc.clip = clip;
+            audioSrc.loop = false;
+            audioSrc.volume = 0.85f;
+        }
+    }
+
+    void OnDisable()
+    {
+        if (audioSrc && audioSrc.isPlaying) audioSrc.Stop();
+    }
+
+    public override void Smash()
+    {
+        if (audioSrc && audioSrc.isPlaying) audioSrc.Stop();
+        base.Smash();
+    }
+
+    void PlayBuzz()
+    {
+        var clip = TCSfx.Get("wasp");
+        if (clip)
+        {
+            if (audioSrc)
+            {
+                audioSrc.loop = false;
+                audioSrc.volume = 0.85f;
+                audioSrc.PlayOneShot(clip, 0.85f);
+            }
+            else
+            {
+                TCSfx.Play("wasp", 0.85f);
+            }
+        }
+    }
 
     void Update()
     {
         if (isSmashed) return;
         float t = Time.time;
+
+        // Proximity buzz warning sound when spider approaches within 4.5m - plays ONCE, never in a loop
+        if (!hasPlayedBuzz)
+        {
+            if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
+            if (cachedPlayer != null)
+            {
+                float dy = y - cachedPlayer.transform.position.y;
+                if (dy > -0.5f && dy < 4.5f)
+                {
+                    hasPlayedBuzz = true;
+                    PlayBuzz();
+                }
+            }
+        }
 
         // 1. High-frequency 70Hz wing flutter with pitch stroke angling
         float flap = Mathf.Sin(t * 70f) * 44f;

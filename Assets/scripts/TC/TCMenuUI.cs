@@ -242,14 +242,31 @@ public class TCMenuUI : MonoBehaviour
         var gear = TCUI.Btn("Settings", safe, "", TCUI.Butter, () => TCUI.Show(this, settingsPanel), 40, TCUI.Icon("gear"));
         TCUI.Place((RectTransform)gear.transform, new Vector2(1, 1), new Vector2(-100, -90), new Vector2(120, 120));
 
-        var howToPlay = TCUI.Btn("HowToPlay", safe, "", TCUI.Lilac, StartTutorialGame, 40, TCUI.Icon("help"));
-        TCUI.Place((RectTransform)howToPlay.transform, new Vector2(1, 1), new Vector2(-235, -90), new Vector2(120, 120));
-        var htpLbl = TCUI.Label("HTPLabel", howToPlay.transform, "HOW TO PLAY", 20, TCUI.Cocoa);
-        TCUI.Place(htpLbl.rectTransform, new Vector2(0.5f, 0), new Vector2(0, -22), new Vector2(180, 36));
-        var lblBtn = htpLbl.gameObject.AddComponent<Button>();
-        lblBtn.targetGraphic = htpLbl;
-        lblBtn.onClick.AddListener(() => howToPlay.onClick.Invoke());
-        htpLbl.raycastTarget = true;
+        // How To Play button exists in MainMenu scene directly so user can edit visuals/transform in the Inspector
+        var htpTr = safe ? safe.Find("HowToPlay") : null;
+        if (htpTr)
+        {
+            var htpBtn = htpTr.GetComponent<Button>();
+            if (htpBtn)
+            {
+                htpBtn.onClick.RemoveListener(StartTutorialGame);
+                htpBtn.onClick.AddListener(StartTutorialGame);
+            }
+            var htpLblTr = htpTr.Find("HTPLabel");
+            if (htpLblTr)
+            {
+                var lblBtn = htpLblTr.GetComponent<Button>();
+                if (lblBtn)
+                {
+                    lblBtn.onClick.RemoveAllListeners();
+                    lblBtn.onClick.AddListener(() =>
+                    {
+                        if (htpBtn) htpBtn.onClick.Invoke();
+                        else StartTutorialGame();
+                    });
+                }
+            }
+        }
 
         if (TCAssets.I.logo)
         {

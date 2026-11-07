@@ -138,7 +138,14 @@ public class playerInteract : MonoBehaviour
             if (jumpTimer > 0 && enemy.CanJumpOver) return; // jumped over crawling enemy
             if (invulnTimer > 0) return;
 
-            Play(TCSfx.Get("hit") ?? woodImpactSound, 0.85f);
+            if (enemy.enemyType == TCEnemyType.Wasp)
+            {
+                Play(TCSfx.Get("wasp") ?? woodImpactSound, 0.95f);
+            }
+            else
+            {
+                Play(TCSfx.Get("hit") ?? woodImpactSound, 0.85f);
+            }
             TCFx.Spawn(impactParticle, transform.position);
             Damage();
             return;

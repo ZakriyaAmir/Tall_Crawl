@@ -839,8 +839,20 @@ public class TCGameUI : MonoBehaviour
         }, 48, TCUI.Icon("gem"));
         TCUI.Place((RectTransform)reviveGemBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -100), new Vector2(680, 120));
 
-        var skipBtn = TCUI.Btn("Skip", card, "NO THANKS", TCUI.Grey, SkipRevive, 42);
-        TCUI.Place((RectTransform)skipBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -240), new Vector2(440, 95));
+        var skipBtn = TCUI.Btn("Skip", card, "NO THANKS", Color.clear, SkipRevive, 42);
+        TCUI.Place((RectTransform)skipBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -385), new Vector2(440, 95));
+        skipBtn.transition = Selectable.Transition.None;
+        var skipImg = skipBtn.GetComponent<Image>();
+        if (skipImg) skipImg.color = new Color(skipImg.color.r, skipImg.color.g, skipImg.color.b, 0f);
+        var skipOutline = skipBtn.GetComponent<UnityEngine.UI.Outline>();
+        if (skipOutline) skipOutline.enabled = false;
+        foreach (var f in card.GetComponentsInChildren<TCFollowRect>(true))
+        {
+            if (f && f.target == skipBtn.transform)
+            {
+                f.gameObject.SetActive(false);
+            }
+        }
     }
     Coroutine reviveCo;
     void StopReviveTimer() { if (reviveCo != null) { StopCoroutine(reviveCo); reviveCo = null; } }
