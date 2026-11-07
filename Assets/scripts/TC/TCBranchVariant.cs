@@ -20,8 +20,17 @@ public class TCBranchVariant : MonoBehaviour
     }
 
     static Material matNone, matRed, matYellow, matPink, matThorn;
-    static Mesh bushMesh;
+    static Mesh bushMesh, sharedCylinderMesh;
     static Material woodMat;
+
+    static Mesh GetCylinderMesh()
+    {
+        if (sharedCylinderMesh) return sharedCylinderMesh;
+        var temp = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        sharedCylinderMesh = temp.GetComponent<MeshFilter>().sharedMesh;
+        if (Application.isPlaying) Destroy(temp); else DestroyImmediate(temp);
+        return sharedCylinderMesh;
+    }
 
     readonly List<MeshRenderer> foliageRenderers = new List<MeshRenderer>(8);
     bool initialized;
@@ -88,6 +97,29 @@ public class TCBranchVariant : MonoBehaviour
             var mr = logObj.GetComponent<MeshRenderer>();
             if (mr) mr.sharedMaterial = woodMat;
         }
+
+        // Pre-create thorn spikes container and meshes so SetVariant never instantiates or destroys at runtime
+        var existingThornSpikes = transform.Find("thorn_spikes");
+        if (!existingThornSpikes)
+        {
+            var spObj = new GameObject("thorn_spikes");
+            spObj.transform.SetParent(transform, false);
+            var cylMesh = GetCylinderMesh();
+            for (int i = 0; i < 4; i++)
+            {
+                var cone = new GameObject("spike_" + i);
+                cone.transform.SetParent(spObj.transform, false);
+                cone.transform.localPosition = new Vector3(Random.Range(-0.06f, 0.06f), 0.12f, 0.45f + i * 0.22f);
+                cone.transform.localScale = new Vector3(0.045f, 0.12f, 0.045f);
+                cone.transform.localRotation = Quaternion.Euler(Random.Range(20f, 40f), Random.Range(-40f, 40f), Random.Range(-25f, 25f));
+                var mf = cone.AddComponent<MeshFilter>();
+                mf.sharedMesh = cylMesh;
+                var mr = cone.AddComponent<MeshRenderer>();
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+            }
+            spObj.SetActive(false);
+        }
     }
 
     void AddLeafCluster(Vector3 localPos, Vector3 scale, Quaternion localRot)
@@ -143,24 +175,14 @@ public class TCBranchVariant : MonoBehaviour
         var thornSpikes = transform.Find("thorn_spikes");
         if (type == FlowerType.Thorn)
         {
-            if (!thornSpikes)
+            if (thornSpikes)
             {
-                var spObj = new GameObject("thorn_spikes");
-                spObj.transform.SetParent(transform, false);
-                thornSpikes = spObj.transform;
-                for (int i = 0; i < 4; i++)
+                thornSpikes.gameObject.SetActive(true);
+                foreach (var mr in thornSpikes.GetComponentsInChildren<MeshRenderer>(true))
                 {
-                    var cone = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    var col = cone.GetComponent<Collider>(); if (col) DestroyImmediate(col);
-                    cone.transform.SetParent(thornSpikes, false);
-                    cone.transform.localPosition = new Vector3(Random.Range(-0.06f, 0.06f), 0.12f, 0.45f + i * 0.22f);
-                    cone.transform.localScale = new Vector3(0.045f, 0.12f, 0.045f);
-                    cone.transform.localRotation = Quaternion.Euler(Random.Range(20f, 40f), Random.Range(-40f, 40f), Random.Range(-25f, 25f));
-                    var mr = cone.GetComponent<MeshRenderer>();
                     if (mr && targetMat) mr.sharedMaterial = targetMat;
                 }
             }
-            thornSpikes.gameObject.SetActive(true);
         }
         else if (thornSpikes)
         {

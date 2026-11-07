@@ -13,11 +13,19 @@ public class TCFollowRect : MonoBehaviour
     {
         if (!target) { Destroy(gameObject); return; }
         if (!me) me = (RectTransform)transform;
-        gameObject.SetActive(true);
-        me.anchorMin = target.anchorMin; me.anchorMax = target.anchorMax; me.pivot = target.pivot;
-        me.sizeDelta = target.sizeDelta; me.anchoredPosition = target.anchoredPosition + offset;
-        me.localScale = target.localScale;
-        var tImg = target.GetComponent<Graphic>(); var mine = GetComponent<Graphic>();
-        if (tImg && mine) mine.enabled = tImg.isActiveAndEnabled;
+        if (!gameObject.activeSelf) gameObject.SetActive(true);
+
+        Vector2 targetPos = target.anchoredPosition + offset;
+        if (me.anchoredPosition != targetPos) me.anchoredPosition = targetPos;
+        if (me.sizeDelta != target.sizeDelta) me.sizeDelta = target.sizeDelta;
+        if (me.localScale != target.localScale) me.localScale = target.localScale;
+        if (me.pivot != target.pivot) me.pivot = target.pivot;
+        if (me.anchorMin != target.anchorMin) me.anchorMin = target.anchorMin;
+        if (me.anchorMax != target.anchorMax) me.anchorMax = target.anchorMax;
+
+        var tImg = target.GetComponent<Graphic>();
+        var mine = GetComponent<Graphic>();
+        if (tImg && mine && mine.enabled != tImg.isActiveAndEnabled)
+            mine.enabled = tImg.isActiveAndEnabled;
     }
 }

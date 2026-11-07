@@ -22,6 +22,11 @@ public class TCGameUI : MonoBehaviour
     readonly Queue<Image> flyingCoinPool = new Queue<Image>();
     TextMeshProUGUI resMetres, resBest, resCoins, resBonus, resTotal, reviveTimer; Button doubleBtn, reviveGemBtn;
     Camera cam;
+    RectTransform fxRoot;
+    Canvas fxCanvas;
+    int lastSpeedTenths = -1;
+    int lastChilliTenths = -1;
+    Coroutine coinPunchCo;
 
     void Awake() { Instance = this; }
 
@@ -119,20 +124,36 @@ public class TCGameUI : MonoBehaviour
         }
         int m = (int)pl.currentScore;
         if (m != shownMetres) { shownMetres = m; scoreText.text = m + "M"; }
-        if (gm.coinsCollected != shownCoins) { if (shownCoins >= 0) StartCoroutine(TCUI.Punch(coinText.transform.parent, 0.15f, 0.18f)); shownCoins = gm.coinsCollected; coinText.text = shownCoins.ToString(); }
+        if (gm.coinsCollected != shownCoins)
+        {
+            if (shownCoins >= 0 && coinPunchCo == null && coinText != null)
+                coinPunchCo = StartCoroutine(CoinPunch(coinText.transform.parent));
+            shownCoins = gm.coinsCollected;
+            coinText.text = shownCoins.ToString();
+        }
         if (spider.life != shownLife) { shownLife = spider.life; RefreshHearts(); }
-        if (boostText.gameObject.activeSelf != pl.boost) boostText.gameObject.SetActive(pl.boost);
+        if (boostText.gameObject.activeSelf != pl.boost)
+        {
+            boostText.gameObject.SetActive(pl.boost);
+            if (!pl.boost) boostText.transform.localScale = Vector3.one;
+        }
         if (pl.boost) boostText.transform.localScale = Vector3.one * (1 + 0.06f * Mathf.Sin(Time.time * 14));
 
-        // Speed Multiplier & Chilli Mode Panel
+        // Speed Multiplier & Chilli Mode Panel (dirtied only when values change)
         if (speedPanel != null)
         {
             if (speedText != null)
             {
                 float baseMult = TCConfig.I.SpeedMultiplierAtDistance(pl.currentScore);
                 float speedMult = pl.boost ? baseMult * TCConfig.I.boostMultiplier : baseMult;
-                speedText.text = speedMult.ToString("0.0") + "x";
-                speedText.color = pl.boost ? TCUI.Peach : TCUI.Cocoa;
+                int speedTenths = Mathf.RoundToInt(speedMult * 10f);
+                if (speedTenths != lastSpeedTenths)
+                {
+                    lastSpeedTenths = speedTenths;
+                    speedText.text = (speedTenths / 10f).ToString("0.0") + "x";
+                }
+                Color targetCol = pl.boost ? TCUI.Peach : TCUI.Cocoa;
+                if (speedText.color != targetCol) speedText.color = targetCol;
             }
 
             bool chilliActive = spider != null && spider.boostDuration > 0;
@@ -140,13 +161,27 @@ public class TCGameUI : MonoBehaviour
                 chilliRow.SetActive(chilliActive);
 
             if (chilliActive && chilliTimerText != null)
-                chilliTimerText.text = spider.boostDuration.ToString("0.0") + "s";
+            {
+                int chilliTenths = Mathf.CeilToInt(spider.boostDuration * 10f);
+                if (chilliTenths != lastChilliTenths)
+                {
+                    lastChilliTenths = chilliTenths;
+                    chilliTimerText.text = (chilliTenths / 10f).ToString("0.0") + "s";
+                }
+            }
 
-            // When chilli mode is inactive, reduce panel height so only SpeedRow shows.
-            // When chilli mode is active, restore to normal full size.
+            // Only adjust panel sizeDelta when transitioning between chilli mode and normal
             float targetHeight = chilliActive ? panelNormalSize.y : 88f;
-            currentPanelHeight = Mathf.MoveTowards(currentPanelHeight, targetHeight, Time.deltaTime * 380f);
-            speedPanel.sizeDelta = new Vector2(panelNormalSize.x, currentPanelHeight);
+            if (Mathf.Abs(currentPanelHeight - targetHeight) > 0.05f)
+            {
+                currentPanelHeight = Mathf.MoveTowards(currentPanelHeight, targetHeight, Time.deltaTime * 380f);
+                speedPanel.sizeDelta = new Vector2(panelNormalSize.x, currentPanelHeight);
+            }
+            else if (speedPanel.sizeDelta.y != targetHeight)
+            {
+                currentPanelHeight = targetHeight;
+                speedPanel.sizeDelta = new Vector2(panelNormalSize.x, targetHeight);
+            }
         }
 
         if (flash.alpha > 0) flash.alpha = Mathf.MoveTowards(flash.alpha, 0, Time.unscaledDeltaTime * 2.5f);
@@ -188,15 +223,45 @@ public class TCGameUI : MonoBehaviour
         }
     }
 
+    void EnsureFxCanvas()
+    {
+        if (fxRoot) return;
+        var fxObj = new GameObject("TC_GameUI_FX");
+        fxObj.transform.SetParent(safe ? safe.parent : transform, false);
+        var c = fxObj.AddComponent<Canvas>();
+        c.overrideSorting = true;
+        c.sortingOrder = 15; // Above normal HUD, isolated from HUD redraws
+        fxCanvas = c;
+        fxRoot = fxObj.GetComponent<RectTransform>();
+        TCUI.Stretch(fxRoot);
+    }
+
+    IEnumerator CoinPunch(Transform target)
+    {
+        if (!target) yield break;
+        Vector3 orig = Vector3.one;
+        float duration = 0.14f;
+        for (float elapsed = 0; elapsed < duration; elapsed += Time.deltaTime)
+        {
+            float t = elapsed / duration;
+            float s = 1f + Mathf.Sin(t * Mathf.PI) * 0.16f;
+            target.localScale = orig * s;
+            yield return null;
+        }
+        target.localScale = orig;
+        coinPunchCo = null;
+    }
+
     void FlyCoin(Vector3 worldPos)
     {
         if (!cam) cam = Camera.main;
         if (!cam || !safe || !coinIconTarget) return;
+        EnsureFxCanvas();
 
         var img = flyingCoinPool.Count > 0 ? flyingCoinPool.Dequeue() : null;
         if (!img)
         {
-            img = TCUI.Img("FlyCoin", safe.parent, Color.white, TCUI.Icon("coin"));
+            img = TCUI.Img("FlyCoin", fxRoot, Color.white, TCUI.Icon("coin"));
             img.rectTransform.sizeDelta = new Vector2(56, 56);
             img.raycastTarget = false;
         }
@@ -241,10 +306,10 @@ public class TCGameUI : MonoBehaviour
             yield return null;
         }
 
-        // Punch the Coins UI pill on arrival
-        if (coinIconTarget && coinIconTarget.parent)
+        // Punch the Coins UI pill on arrival (coalesced so rapid streaks don't fight)
+        if (coinIconTarget && coinIconTarget.parent && coinPunchCo == null)
         {
-            StartCoroutine(TCUI.Punch(coinIconTarget.parent, 0.12f, 0.14f));
+            coinPunchCo = StartCoroutine(CoinPunch(coinIconTarget.parent));
         }
 
         coinImg.gameObject.SetActive(false);
@@ -254,8 +319,9 @@ public class TCGameUI : MonoBehaviour
     void Pop(string text, Vector3 world, Color c)
     {
         if (!cam) cam = Camera.main; if (!cam) return;
+        EnsureFxCanvas();
         var t = popPool.Count > 0 ? popPool.Dequeue() : null;
-        if (!t) { t = TCUI.Label("Pop", safe.parent, "", 64, c); t.rectTransform.sizeDelta = new Vector2(400, 100); TCUI.Outline(t, 0.22f); }
+        if (!t) { t = TCUI.Label("Pop", fxRoot, "", 64, c); t.rectTransform.sizeDelta = new Vector2(400, 100); TCUI.Outline(t, 0.22f); t.raycastTarget = false; }
         t.text = text; t.color = c; t.gameObject.SetActive(true);
         StartCoroutine(PopRoutine(t, cam.WorldToScreenPoint(world)));
     }

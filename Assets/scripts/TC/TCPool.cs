@@ -10,12 +10,35 @@ public class TCPool
     public TCPool(GameObject prefab, Transform parent, int prewarm)
     {
         this.prefab = prefab; this.parent = parent;
-        for (int i = 0; i < prewarm; i++) { var g = Object.Instantiate(prefab, parent); Created++; g.SetActive(false); free.Push(g); }
+        for (int i = 0; i < prewarm; i++)
+        {
+            var g = Object.Instantiate(prefab, parent);
+            Created++;
+            var tag = g.GetComponent<TCPooled>();
+            if (!tag) tag = g.AddComponent<TCPooled>();
+            tag.pool = this;
+            tag.inPool = true;
+            g.SetActive(false);
+            free.Push(g);
+        }
     }
     public GameObject Get(Vector3 pos, Quaternion rot)
     {
-        GameObject g; if (free.Count > 0) g = free.Pop(); else { g = Object.Instantiate(prefab, parent); Created++; }
-        var tag = g.GetComponent<TCPooled>(); if (tag) tag.inPool = false;
+        GameObject g;
+        if (free.Count > 0)
+        {
+            g = free.Pop();
+        }
+        else
+        {
+            g = Object.Instantiate(prefab, parent);
+            Created++;
+            var newTag = g.GetComponent<TCPooled>();
+            if (!newTag) newTag = g.AddComponent<TCPooled>();
+            newTag.pool = this;
+        }
+        var tag = g.GetComponent<TCPooled>();
+        if (tag) tag.inPool = false;
         g.transform.SetPositionAndRotation(pos, rot);
         g.SetActive(true);
         return g;
