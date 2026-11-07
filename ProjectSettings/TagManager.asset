@@ -7,6 +7,7 @@ TagManager:
   - playerReflection
   - health
   - boost
+  - cooldown
   - points
   - branch
   - bees

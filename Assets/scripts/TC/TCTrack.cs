@@ -7,21 +7,22 @@ using UnityEngine;
 public class TCTrack : MonoBehaviour
 {
     public GameObject trunkPrefab, branchPrefab, beesPrefab, coinPrefab, heartPrefab, boostPrefab;
-    public GameObject pineconePrefab, waspPrefab, squirrelPrefab;
+    public GameObject pineconePrefab, waspPrefab, squirrelPrefab, cooldownPrefab;
     public Transform stemParent, hazardParent, bonusParent;
     public Transform player;
 
-    TCPool trunkPool, branchPool, beePool, coinPool, heartPool, boostPool;
+    TCPool trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool;
     TCPool pineconePool, waspPool, squirrelPool;
     readonly List<TCPooled> live = new List<TCPooled>(256);
     readonly List<float> angles = new List<float>(8);
     float nextTrunkY, nextRowY, safeAngle, lastCoinY = -999f;
     float lastHazardY = -999f, lastBonusY = -999f;
     float nextHeartEligibleTime;
+    float runActiveTimer;
     int rowIndex; bool lastWasBee; player pl;
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
-    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, pineconePool, waspPool, squirrelPool };
+    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool, pineconePool, waspPool, squirrelPool };
     public static TCTrack Instance;
     TCConfig C;
 
@@ -45,6 +46,8 @@ public class TCTrack : MonoBehaviour
         coinPool = new TCPool(coinPrefab, bonusParent, 120);
         heartPool = new TCPool(heartPrefab, bonusParent, 2);
         boostPool = new TCPool(boostPrefab, bonusParent, 2);
+        var cProto = cooldownPrefab ? cooldownPrefab : TCTimeDilation.CreateCooldownPickupPrefab(bonusParent);
+        cooldownPool = new TCPool(cProto, bonusParent, 3);
 
         var pProto = pineconePrefab ? pineconePrefab : TCEnemy.CreatePineconePrefab(hazardParent);
         pineconePool = new TCPool(pProto, hazardParent, 5);
@@ -63,6 +66,7 @@ public class TCTrack : MonoBehaviour
         lastCoinY = -999f;
         lastHazardY = -999f;
         lastBonusY = -999f;
+        runActiveTimer = 0f;
         nextHeartEligibleTime = Time.time + 10f; // heart check every 10 seconds
 
         // Safe start: welcome string of coins straight up
@@ -81,6 +85,11 @@ public class TCTrack : MonoBehaviour
 
     void Tick()
     {
+        if (pl && !pl.paused && !pl.GameOver)
+        {
+            runActiveTimer += Time.deltaTime;
+        }
+
         float py = player.position.y;
         float metres = pl ? pl.currentScore : 0f; // same distance the HUD/difficulty uses
         while (nextTrunkY < py + C.chunksAhead * C.trunkChunkHeight)
@@ -140,6 +149,11 @@ public class TCTrack : MonoBehaviour
             else if (canSpawnBreatherBonus && Random.value < C.boostChance * 2f)
             {
                 Spawn(boostPool, "boost", bonusY, safeAngle);
+                lastBonusY = bonusY;
+            }
+            else if (canSpawnBreatherBonus && runActiveTimer >= C.cooldownDelaySeconds && Random.value < C.cooldownChance * 2f)
+            {
+                Spawn(cooldownPool, "cooldown", bonusY, safeAngle);
                 lastBonusY = bonusY;
             }
             else
@@ -233,6 +247,11 @@ public class TCTrack : MonoBehaviour
         else if (canSpawnBonus && Random.value < C.boostChance)
         {
             Spawn(boostPool, "boost", bonusYPos, newSafe);
+            lastBonusY = bonusYPos;
+        }
+        else if (canSpawnBonus && runActiveTimer >= C.cooldownDelaySeconds && Random.value < C.cooldownChance)
+        {
+            Spawn(cooldownPool, "cooldown", bonusYPos, newSafe);
             lastBonusY = bonusYPos;
         }
         else if (Random.value < C.coinTrailChance)
@@ -333,7 +352,7 @@ public class TCTrack : MonoBehaviour
         b.transform.rotation = Quaternion.Euler(0, angle, 0);
         var bv = b.GetComponent<TCBranchVariant>();
         if (!bv) bv = b.gameObject.AddComponent<TCBranchVariant>();
-        bv.SetVariant(TCBranchVariant.FlowerType.Thorn);
+        bv.SetVariant(TCBranchVariant.FlowerType.Red);
         return b;
     }
 
@@ -353,5 +372,10 @@ public class TCTrack : MonoBehaviour
     public TCPooled SpawnTutorialChilli(float y, float angle)
     {
         return Spawn(boostPool, "boost", y, angle);
+    }
+
+    public TCPooled SpawnTutorialCooldown(float y, float angle)
+    {
+        return Spawn(cooldownPool, "cooldown", y, angle);
     }
 }

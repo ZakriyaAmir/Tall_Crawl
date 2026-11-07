@@ -528,19 +528,21 @@ public class TCMenuUI : MonoBehaviour
             var row = TCUI.Img("Upg" + id, card, Color.white); TCUI.Place(row.rectTransform, new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(880, 120));
             var name = TCUI.Label("N", row.transform, upgNames[id], 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Stretch(name.rectTransform, 30, 400, 0, 40);
             var pips = TCUI.Label("P", row.transform, "", 34, TCUI.Mint, TextAlignmentOptions.Left); TCUI.Stretch(pips.rectTransform, 30, 400, 60, 0);
-            var buy = TCUI.Btn("Buy", row.transform, "0", TCUI.Butter, () =>
+            var buy = TCUI.Btn("Buy", row.transform, "0", TCUI.Sky, () =>
             {
                 int lvl = TCSave.Upgrade(u); if (lvl >= upgMax[u]) return; int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
-                if (TCSave.Coins < cost) { Toast("Not enough coins"); return; }
-                TCSave.Coins -= cost; TCSave.SetUpgrade(u, lvl + 1); TCAudio.Play(TCAssets.I.purchase); Toast(upgNames[u] + " upgraded!"); TCServices.Log("upgrade", "id", u);
-            }, 40, TCUI.Icon("coin"));
+                if (TCSave.Gems < cost) { Toast("Not enough gems"); return; }
+                TCSave.Gems -= cost; TCSave.SetUpgrade(u, lvl + 1); TCAudio.Play(TCAssets.I.purchase); Toast(upgNames[u] + " upgraded!"); TCServices.Log("upgrade", "id", u);
+            }, 40, TCUI.Icon("gem"));
             TCUI.Place((RectTransform)buy.transform, new Vector2(1, 0.5f), new Vector2(-170, 0), new Vector2(300, 96));
             var bt = buy.GetComponentInChildren<TextMeshProUGUI>();
+            var iconImg = buy.transform.Find("Icon")?.GetComponent<Image>();
+            if (iconImg != null) iconImg.sprite = TCUI.Icon("gem");
             refreshers.Add(() =>
             {
                 int lvl = TCSave.Upgrade(u); pips.text = "Level " + lvl + " / " + upgMax[u];
                 bool max = lvl >= upgMax[u]; int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
-                if (bt) bt.text = max ? "MAX" : cost.ToString(); buy.interactable = !max && TCSave.Coins >= cost;
+                if (bt) bt.text = max ? "MAX" : cost.ToString(); buy.interactable = !max && TCSave.Gems >= cost;
             });
         }
         // Standalone gem packs: exactly 10 gems per USD.

@@ -34,6 +34,8 @@ MonoBehaviour:
   coinTrailChance: 0.55
   heartChance: 0.06
   boostChance: 0.12
+  cooldownChance: 0.042
+  cooldownDelaySeconds: 2
   defaultSensitivity: 1
   dragDegreesPerScreenWidth: 300
   deadZonePixels: 6
@@ -46,7 +48,7 @@ MonoBehaviour:
   gemEveryMetres: 2000
   reviveCostGems: 5
   startingCoins: 50
-  dailyRewards: 0f00000014000000190000001e000000280000003c00000001000000
+  dailyRewards: 0f00000014000000190000001e00000028000000640000003c000000
   interstitialEveryNRuns: 3
-  upgradeCosts: fa00000058020000b004000098080000ac0d0000
+  upgradeCosts: 0f0000001e0000003c0000006900000096000000
   adCoinReward: 20

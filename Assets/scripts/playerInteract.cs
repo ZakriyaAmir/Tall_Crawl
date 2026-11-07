@@ -18,7 +18,8 @@ public class playerInteract : MonoBehaviour
     public bool Invulnerable => invulnTimer > 0 || boostDuration > 0 || IsRolling;
     public bool IsJumping => jumpTimer > 0;
     public bool IsRolling => boostDuration > 0 || (p != null && p.boost);
-    public static System.Action<string, Vector3> OnEvent; // "coin","hit","heart","boost","smash","death"
+    public static System.Action<string, Vector3> OnEvent; // "coin","hit","heart","boost","smash","death","cooldown"
+    public static int CooldownInventory = 0; // Stored slow-mo cooldown power ups
 
     AudioSource audioSource; player p; Animator animator; Renderer[] renderers;
     float invulnTimer, jumpTimer, rollTimer; bool blinking;
@@ -32,7 +33,9 @@ public class playerInteract : MonoBehaviour
         if (GameOverScreen) GameOverScreen.SetActive(false);
         MaxLife = TCConfig.I.baseHearts + Mathf.Min(2, TCSave.Upgrade(2));
         life = MaxLife;
+        CooldownInventory = 0;
         TCSkins.Apply(gameObject, TCSave.SelectedSkin);
+        if (!GetComponentInChildren<TCFireEffects>()) gameObject.AddComponent<TCFireEffects>();
         renderers = System.Array.FindAll(GetComponentsInChildren<Renderer>(true), r => r.enabled); // skip the hidden realistic mesh
     }
 
@@ -219,6 +222,15 @@ public class playerInteract : MonoBehaviour
             Play(TCSfx.Get("chilli"), 0.8f);
             StartBoost(3f + 0.75f * TCSave.Upgrade(1));
             TCFx.Shake(0.12f);
+        }
+        else if (other.CompareTag("cooldown"))
+        {
+            if (!other.gameObject.activeSelf) return;
+            other.gameObject.SetActive(false);
+            Play(TCSfx.Get("cooldown_collect") ?? TCSfx.Get("coin"), 0.85f);
+            CooldownInventory++;
+            OnEvent?.Invoke("cooldown", transform.position);
+            TCFx.Shake(0.08f);
         }
     }
 

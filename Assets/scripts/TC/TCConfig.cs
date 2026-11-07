@@ -31,6 +31,8 @@ public class TCConfig : ScriptableObject
     [Range(0, 1)] public float coinTrailChance = 0.55f;
     [Range(0, 1)] public float heartChance = 0.06f;
     [Range(0, 1)] public float boostChance = 0.12f;
+    [Range(0, 1)] [Tooltip("Probability of spawning cooldown slow-mo pickup in safe gap")] public float cooldownChance = 0.042f; // Reduced by 70% (from 0.14f)
+    [Tooltip("Seconds after starting the run before slow-mo power ups can spawn")] public float cooldownDelaySeconds = 2.0f;
 
     [Header("Player")]
     public float defaultSensitivity = 1f;
@@ -52,9 +54,9 @@ public class TCConfig : ScriptableObject
     [Tooltip("Gems awarded per this many metres in one run (0 = off)")] public int gemEveryMetres = 2000;
     public int reviveCostGems = 5;
     public int startingCoins = 50;
-    public int[] dailyRewards = { 15, 20, 25, 30, 40, 60, 1 /*gems*/ };
+    public int[] dailyRewards = { 15, 20, 25, 30, 40, 100, 60 /*gems*/ };
     public int interstitialEveryNRuns = 3;
-    public int[] upgradeCosts = { 250, 600, 1200, 2200, 3500 };
+    public int[] upgradeCosts = { 15, 30, 60, 105, 150 }; // Tripled gem costs for shop upgrades
     [Tooltip("Coins from the shop's free rewarded ad")] public int adCoinReward = 20;
 
     static TCConfig _inst;

@@ -11,10 +11,13 @@ public class TCGameUI : MonoBehaviour
     player pl; playerInteract spider; gameManager gm;
     RectTransform safe, heartsRow, coinIconTarget; TextMeshProUGUI scoreText, coinText, hintText, boostText;
     RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText; GameObject chilliRow;
+    Button cooldownBtn; TextMeshProUGUI cooldownBadgeText; Image cooldownCooldownOverlay;
+    int lastCooldownCount = -1;
     Vector2 panelNormalSize;
     float currentPanelHeight;
     readonly List<Image> hearts = new List<Image>();
-    CanvasGroup startOverlay, pausePanel, revivePanel, resultPanel, flash;
+    CanvasGroup startOverlay, pausePanel, revivePanel, resultPanel, flash, frozenOverlay;
+    Image frozenOverlayImg;
     RectTransform hand; Coroutine tutorialCo;
     int shownCoins = -1, shownMetres = -1, shownLife = -1;
     bool started, turnedOnce, jumpedOnce, rolledOnce;
@@ -27,7 +30,7 @@ public class TCGameUI : MonoBehaviour
     int lastSpeedTenths = -1;
     int lastChilliTenths = -1;
     Coroutine coinPunchCo;
-    enum HandAnimMode { Horizontal, SwipeUp, Hidden }
+    enum HandAnimMode { Horizontal, SwipeUp, PointCooldown, Hidden }
     HandAnimMode handMode = HandAnimMode.Horizontal;
     float currentTargetTimeScale = 1f;
 
@@ -36,6 +39,11 @@ public class TCGameUI : MonoBehaviour
     void Start()
     {
         pl = FindObjectOfType<player>(); spider = FindObjectOfType<playerInteract>(); gm = gameManager.Instance; cam = Camera.main;
+        if (!FindObjectOfType<TCTimeDilation>())
+        {
+            var tdObj = new GameObject("TCTimeDilation");
+            tdObj.AddComponent<TCTimeDilation>();
+        }
         BuildUI();
         hintText.text = TCSave.TutorialDone ? "TOUCH TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk";
         playerInteract.OnEvent += OnGameEvent;
@@ -54,6 +62,24 @@ public class TCGameUI : MonoBehaviour
         flash = TCUI.Add<CanvasGroup>(fr.gameObject); TCUI.Stretch(fr);
         if (fresh) { var fi = fr.gameObject.AddComponent<Image>(); fi.color = new Color(1, 0.35f, 0.4f, 0.35f); fi.raycastTarget = false; }
         flash.alpha = 0;
+
+        // Frozen screen frame overlay for slow-motion cooldown power up
+        var fz = TCUI.Rect("FrozenOverlay", canvas.transform); bool freshFz = TCUI.Fresh(fz);
+        frozenOverlay = TCUI.Add<CanvasGroup>(fz.gameObject); TCUI.Stretch(fz);
+        if (freshFz)
+        {
+            frozenOverlayImg = fz.gameObject.AddComponent<Image>();
+            frozenOverlayImg.sprite = Resources.Load<Sprite>("TCUI/overlay_frozen");
+            frozenOverlayImg.color = Color.white;
+            frozenOverlayImg.raycastTarget = false;
+        }
+        else
+        {
+            frozenOverlayImg = fz.GetComponent<Image>();
+            if (frozenOverlayImg && !frozenOverlayImg.sprite)
+                frozenOverlayImg.sprite = Resources.Load<Sprite>("TCUI/overlay_frozen");
+        }
+        frozenOverlay.alpha = 0f;
     }
     void OnDestroy()
     {
@@ -106,6 +132,34 @@ public class TCGameUI : MonoBehaviour
 
         boostText = TCUI.Label("Boost", safe, "BOOST!", 110, TCUI.Peach); TCUI.Place(boostText.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(900, 160));
         TCUI.Outline(boostText, 0.25f); boostText.gameObject.SetActive(false);
+
+        // Cooldown Slow-Mo Button (placed in bottom-right corner for easy thumb reach)
+        cooldownBtn = TCUI.Btn("CooldownBtn", safe, "", TCUI.Hex("#4EA8DE"), OnClickCooldown, 40, TCUI.Icon("cooldown"));
+        var cdRect = (RectTransform)cooldownBtn.transform;
+        TCUI.Place(cdRect, new Vector2(1f, 0f), new Vector2(-110, 140), new Vector2(130, 130));
+
+        // Circular count badge on the button
+        var badgeObj = TCUI.Img("Badge", cdRect, TCUI.Hex("#FF3B30"), TCUI.Icon("round"));
+        TCUI.Place(badgeObj.rectTransform, new Vector2(1f, 1f), new Vector2(-5, -5), new Vector2(46, 46));
+        cooldownBadgeText = TCUI.Label("Count", badgeObj.transform, "1", 28, Color.white);
+        TCUI.Stretch(cooldownBadgeText.rectTransform);
+
+        // Radial / visual cooldown overlay when active
+        cooldownCooldownOverlay = TCUI.Img("Overlay", cdRect, new Color(1f, 1f, 1f, 0.35f), TCUI.Icon("round"));
+        TCUI.Stretch(cooldownCooldownOverlay.rectTransform);
+        cooldownCooldownOverlay.raycastTarget = false;
+        cooldownCooldownOverlay.gameObject.SetActive(false);
+
+        cooldownBtn.gameObject.SetActive(false); // only visible when player holds at least 1 cooldown item or active
+    }
+
+    void OnClickCooldown()
+    {
+        if (playerInteract.CooldownInventory > 0)
+        {
+            TCTimeDilation.TriggerCooldown();
+            if (cooldownBtn != null) StartCoroutine(TCUI.Punch((RectTransform)cooldownBtn.transform, 0.2f));
+        }
     }
 
     void RefreshHearts()
@@ -162,15 +216,16 @@ public class TCGameUI : MonoBehaviour
         {
             if (speedText != null)
             {
+                bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
                 float baseMult = TCConfig.I.SpeedMultiplierAtDistance(pl.currentScore);
-                float speedMult = pl.boost ? baseMult * TCConfig.I.boostMultiplier : baseMult;
+                float speedMult = slowActive ? (baseMult * Time.timeScale) : (pl.boost ? baseMult * TCConfig.I.boostMultiplier : baseMult);
                 int speedTenths = Mathf.RoundToInt(speedMult * 10f);
                 if (speedTenths != lastSpeedTenths)
                 {
                     lastSpeedTenths = speedTenths;
                     speedText.text = (speedTenths / 10f).ToString("0.0") + "x";
                 }
-                Color targetCol = pl.boost ? TCUI.Peach : TCUI.Cocoa;
+                Color targetCol = slowActive ? TCUI.Hex("#3A9BDC") : (pl.boost ? TCUI.Peach : TCUI.Cocoa);
                 if (speedText.color != targetCol) speedText.color = targetCol;
             }
 
@@ -202,7 +257,53 @@ public class TCGameUI : MonoBehaviour
             }
         }
 
+        // Cooldown Power Up Button & Inventory Display
+        if (cooldownBtn != null)
+        {
+            int cdCount = playerInteract.CooldownInventory;
+            bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
+            bool shouldShow = (cdCount > 0) || slowActive;
+
+            if (cooldownBtn.gameObject.activeSelf != shouldShow)
+                cooldownBtn.gameObject.SetActive(shouldShow);
+
+            if (shouldShow)
+            {
+                if (cdCount != lastCooldownCount)
+                {
+                    lastCooldownCount = cdCount;
+                    if (cooldownBadgeText != null) cooldownBadgeText.text = cdCount.ToString();
+                    if (cooldownBadgeText != null) cooldownBadgeText.transform.parent.gameObject.SetActive(cdCount > 0);
+                }
+
+                // If slow-motion is currently active, pulse button slightly and show overlay
+                if (slowActive)
+                {
+                    cooldownBtn.transform.localScale = Vector3.one * (1f + 0.06f * Mathf.Sin(Time.unscaledTime * 10f));
+                    if (cooldownCooldownOverlay != null && !cooldownCooldownOverlay.gameObject.activeSelf)
+                        cooldownCooldownOverlay.gameObject.SetActive(true);
+                }
+                else
+                {
+                    cooldownBtn.transform.localScale = Vector3.one;
+                    if (cooldownCooldownOverlay != null && cooldownCooldownOverlay.gameObject.activeSelf)
+                        cooldownCooldownOverlay.gameObject.SetActive(false);
+                }
+            }
+        }
+
         if (flash.alpha > 0) flash.alpha = Mathf.MoveTowards(flash.alpha, 0, Time.unscaledDeltaTime * 2.5f);
+
+        // Smooth fade-in and fade-out of the frozen screen frame overlay during cooldown slow-mo
+        if (frozenOverlay != null)
+        {
+            bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
+            float targetAlpha = slowActive ? (0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * 5f)) : 0f;
+            float fadeSpeed = slowActive ? 3.5f : 2.2f;
+            frozenOverlay.alpha = Mathf.MoveTowards(frozenOverlay.alpha, targetAlpha, Time.unscaledDeltaTime * fadeSpeed);
+            if (frozenOverlay.gameObject.activeSelf != (frozenOverlay.alpha > 0.001f || slowActive))
+                frozenOverlay.gameObject.SetActive(frozenOverlay.alpha > 0.001f || slowActive);
+        }
     }
 
     void OnGameEvent(string e, Vector3 pos)
@@ -220,6 +321,7 @@ public class TCGameUI : MonoBehaviour
                 break;
             case "heart": Pop("+1 HEART", pos, TCUI.Blush); StartCoroutine(TCUI.Punch(heartsRow, 0.25f)); break;
             case "boost": Pop("BOOST", pos, TCUI.Peach); break;
+            case "cooldown": Pop("SLOW-MO +1", pos, TCUI.Hex("#4EA8DE")); if (cooldownBtn) StartCoroutine(TCUI.Punch((RectTransform)cooldownBtn.transform, 0.25f)); break;
             case "smash": Pop("SMASH!", pos, TCUI.Mint); break;
             case "hit": flash.alpha = 1; StartCoroutine(TCUI.Punch(heartsRow, 0.3f)); break;
         }
@@ -421,9 +523,24 @@ public class TCGameUI : MonoBehaviour
                         img.color = c;
                     }
                 }
+                else if (handMode == HandAnimMode.PointCooldown)
+                {
+                    if (!hand.gameObject.activeSelf) hand.gameObject.SetActive(true);
+                    if (cooldownBtn != null)
+                    {
+                        var cdPos = ((RectTransform)cooldownBtn.transform).position;
+                        hand.position = cdPos + new Vector3(-35f, 55f, 0f);
+                        hand.localEulerAngles = new Vector3(0, 0, -45f); // point finger down-right at button
+                        float pulse = 1f + 0.12f * Mathf.Sin(Time.unscaledTime * 8f);
+                        hand.localScale = Vector3.one * pulse;
+                    }
+                    var img = hand.GetComponent<Image>();
+                    if (img && img.color != Color.white) img.color = Color.white;
+                }
                 else
                 {
                     if (hand.gameObject.activeSelf) hand.gameObject.SetActive(false);
+                    hand.localScale = Vector3.one;
                 }
             }
             if (hintText && hintText.gameObject.activeInHierarchy)
@@ -759,6 +876,72 @@ public class TCGameUI : MonoBehaviour
 
         // Wait until spider grabs the chilli
         while (chilli != null && chilli.gameObject.activeSelf && (chilliY - SpiderY) > -0.2f)
+        {
+            yield return null;
+        }
+
+        yield return new WaitForSeconds(1.8f);
+
+        // -------------------------------------------------------------
+        // STEP 6: SLOW MOTION POWER UP
+        // -------------------------------------------------------------
+        // Restrict steering left/right until slow-mo power up is collected
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
+        // Spawn a cooldown slow-mo pickup directly in the spider's forward path
+        float cdAngle = pl.CurrentYaw;
+        float cdY = SpiderY + 4.2f;
+        var cdPickup = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialCooldown(cdY, cdAngle) : null;
+        hintText.text = "COLLECT SLOW-MO ITEM!";
+        handMode = HandAnimMode.Hidden;
+
+        // Approach cooldown pickup
+        while (cdPickup != null && cdPickup.gameObject.activeSelf && (cdY - SpiderY) > 0.1f)
+        {
+            yield return null;
+        }
+
+        // Wait until collected
+        while (playerInteract.CooldownInventory <= 0)
+        {
+            yield return null;
+        }
+
+        // Wait for 2 seconds after collecting before showing the activation tutorial
+        hintText.text = "";
+        yield return new WaitForSeconds(2.0f);
+
+        // Spawn a hurdle ahead to dodge using slow motion
+        float hurdleAngle = pl.CurrentYaw;
+        float hurdleY = SpiderY + 5.0f;
+        var hurdle = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBranch(hurdleY, hurdleAngle) : null;
+
+        // Approach hurdle until 2.2m away
+        while (hurdle != null && (hurdleY - SpiderY) > 2.2f)
+        {
+            yield return null;
+        }
+
+        // Freeze time slightly and show animated hand icon pointing to the slow-mo button
+        hintText.text = "TAP SLOW-MO BUTTON\nto dodge tricky hurdles!";
+        handMode = HandAnimMode.PointCooldown;
+        yield return StartCoroutine(SmoothTimeScale(0.15f, 0.2f));
+
+        // Wait until player taps the cooldown button
+        while (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive)
+        {
+            yield return null;
+        }
+
+        // Hide hand pointer and re-enable full steering & jump control to dodge the hurdle!
+        handMode = HandAnimMode.Hidden;
+        hintText.text = "DODGE THE HURDLE!";
+        pl.SetSteerAllowed(true);
+        pl.SetJumpAllowed(true);
+
+        // Wait until the hurdle is passed
+        while (hurdle != null && (hurdleY - SpiderY) > -0.5f)
         {
             yield return null;
         }

@@ -148,6 +148,22 @@ public static class TCUI
                 float dStem = Mathf.Min(SegDist(p, new Vector2(-0.05f, 0.55f), new Vector2(-0.25f, 0.82f)) - 0.1f, Vector2.Distance(p, new Vector2(0f, 0.55f)) - 0.22f);
                 return Over(cPepper, Fill(dStem, Hex("#4CD964")));
             }
+            case "cooldown":
+            case "clock":
+            {
+                // Stylized cyan stopwatch / clock with hands and top pin
+                float dRing = Mathf.Abs(p.magnitude - 0.72f) - 0.12f;
+                var cFace = Over(Fill(p.magnitude - 0.84f, Hex("#3A9BDC")), Fill(p.magnitude - 0.62f, Hex("#EAF7FF")));
+                // Top pin
+                var pin = new Vector2(Mathf.Abs(p.x) - 0.12f, Mathf.Abs(p.y - 0.88f) - 0.10f);
+                cFace = Over(Fill(Mathf.Max(pin.x, pin.y), Hex("#2C689C")), cFace);
+                // Center hub + clock hands pointing to ~10:10
+                float hub = p.magnitude - 0.10f;
+                float hand1 = SegDist(p, Vector2.zero, new Vector2(-0.35f, 0.28f)) - 0.08f;
+                float hand2 = SegDist(p, Vector2.zero, new Vector2(0.38f, 0.22f)) - 0.07f;
+                float hands = Mathf.Min(hub, Mathf.Min(hand1, hand2));
+                return Over(cFace, Fill(hands, Hex("#2C689C")));
+            }
             case "star":
             {
                 float a = Mathf.Atan2(p.y, p.x) + Mathf.PI / 2; float r = p.magnitude;
