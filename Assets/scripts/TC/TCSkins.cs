@@ -53,10 +53,9 @@ public static class TCSkins
     {
         // Photo-style chibi spiders: skins vary only by colour/finish, eye colour, spikes and body shape.
         //          name          body       accent     pattern               emis   trail        shape             spk len    unlock                amount  eyes       eyeGlow metal gloss
-        new SkinDef("Gold",       "#D8A24A", "#B98330", SkinPattern.Solid,    0f,   "#FFFFFF00", SkinShape.Round,  0, 0f,    SkinUnlock.Free, 0,          "#141216", 0f,   0.35f, 0.55f),
+        new SkinDef("Brownie",    "#D8A24A", "#B98330", SkinPattern.Solid,    0f,   "#FFFFFF00", SkinShape.Round,  0, 0f,    SkinUnlock.Free, 0,          "#141216", 0f,   0.35f, 0.55f),
         new SkinDef("Sky",        "#7EA3C2", "#5F86A8", SkinPattern.Solid,    0f,   "#CFE3F2",   SkinShape.Round,  0, 0f,    SkinUnlock.Coins, 800,       "#141216", 0f,   0f,    0.3f),
         new SkinDef("Widow",      "#1F1E23", "#E0202C", SkinPattern.Solid,    0f,   "#FF5A5A",   SkinShape.Round,  0, 0f,    SkinUnlock.Coins, 1500,      "#E3222E", 0.35f,0f,    0.35f),
-        new SkinDef("Bumble",     "#FFD25C", "#3A3340", SkinPattern.Stripes,  0f,   "#FFF2B3",   SkinShape.Tall,   3, 0.35f, SkinUnlock.Ads, 3),
         new SkinDef("Bubblegum",  "#FF9DBC", "#E0527E", SkinPattern.Solid,    0f,   "#FFC2D4",   SkinShape.Pear,   5, 0.4f,  SkinUnlock.Coins, 3000,      "#141216", 0f,   0f,    0.75f),
         new SkinDef("Lava",       "#FF6A3D", "#FFC23A", SkinPattern.Zigzag,   0.8f, "#FF9A3A",   SkinShape.Chubby, 7, 0.55f, SkinUnlock.BestScore, 1500,  "#FFD23A", 0.8f),
         new SkinDef("Frost",      "#BEE5FF", "#FFFFFF", SkinPattern.Gradient, 0.35f,"#DFF4FF",   SkinShape.Flat,   6, 0.45f, SkinUnlock.Coins, 5000,      "#1E5C9E", 0.2f, 0f,    0.8f),
@@ -69,16 +68,15 @@ public static class TCSkins
         new SkinDef("Cactus",     "#6DBE6A", "#F4F1C8", SkinPattern.Solid,    0f,   "#BFEAB0",   SkinShape.Tall,   9, 0.3f,  SkinUnlock.Ads, 4,           "#141216", 0f,   0f,    0.3f),
         new SkinDef("Ruby",       "#C2283A", "#FF7A8A", SkinPattern.Solid,    0.1f, "#FF8A9A",   SkinShape.Chubby, 6, 0.4f,  SkinUnlock.Runs, 120,        "#FFFFFF", 0.3f, 0.2f,  0.85f),
         // Premium special skins:
-        new SkinDef("Bumblebee",  "#FFC828", "#1C191E", SkinPattern.Stripes,  0f,   "#FFF4B8",   SkinShape.Chubby, 0, 0f,    SkinUnlock.Coins, 12000,     "#141216", 0f,   0.05f, 0.65f),
         new SkinDef("Ladybug",    "#E52521", "#18151A", SkinPattern.Dots,     0f,   "#FFA0A8",   SkinShape.Round,  0, 0f,    SkinUnlock.Coins, 15000,     "#141216", 0f,   0.05f, 0.70f),
         new SkinDef("Tiger",      "#F27818", "#181416", SkinPattern.Stripes,  0f,   "#FFCA80",   SkinShape.Flat,   4, 0.35f, SkinUnlock.Coins, 20000,     "#FFB420", 0.3f, 0.1f,  0.60f),
         new SkinDef("Tarantula",  "#2E2522", "#E65A20", SkinPattern.Dots,     0f,   "#FF8850",   SkinShape.Tall,   8, 0.50f, SkinUnlock.Coins, 25000,     "#FF3300", 0.4f, 0.15f, 0.50f),
         new SkinDef("Rainbow",    "#FF3366", "#33CCFF", SkinPattern.Gradient, 0.45f,"#FF00FF",   SkinShape.Round,  7, 0.50f, SkinUnlock.Coins, 50000,     "#FFFFFF", 0.6f, 0.30f, 0.85f),
-        new SkinDef("Golden",     "#FFD700", "#FFF3A8", SkinPattern.Solid,    0.60f,"#FFDF00",   SkinShape.Pear,   8, 0.55f, SkinUnlock.Coins, 100000,    "#FFF4B8", 0.95f,0.92f, 0.98f),
+        new SkinDef("Golden",     "#FFE01A", "#FFF8B0", SkinPattern.Solid,    0.70f,"#FFE633",   SkinShape.Pear,   8, 0.55f, SkinUnlock.Coins, 100000,    "#FFFDE0", 1.0f, 0.95f, 0.98f),
         // Milestone Enemy Hunter skins:
-        new SkinDef("Bees",       "#FFB81C", "#181416", SkinPattern.Stripes,  0.15f,"#FFE066",   SkinShape.Chubby, 0, 0f,    SkinUnlock.KillBees, 50,     "#141216", 0f,   0.05f, 0.60f),
-        new SkinDef("Wasp",       "#FF9900", "#0D0A08", SkinPattern.Zigzag,   0.30f,"#FFB733",   SkinShape.Tall,   5, 0.45f, SkinUnlock.KillWasps, 100,   "#FFD700", 0.5f, 0.20f, 0.70f),
-        new SkinDef("Squirrel",   "#C44E1A", "#FFF4E2", SkinPattern.Gradient, 0.10f,"#FFA066",   SkinShape.Pear,   6, 0.40f, SkinUnlock.KillSquirrels, 100,"#141216", 0f,   0.10f, 0.55f),
+        new SkinDef("Bee",        "#FFB81C", "#181416", SkinPattern.Stripes,  0.15f,"#FFE066",   SkinShape.Chubby, 0, 0f,    SkinUnlock.KillBees, 50,     "#141216", 0f,   0.05f, 0.60f),
+        new SkinDef("Wasp",       "#FFB800", "#141018", SkinPattern.Zigzag,   0.30f,"#FFB733",   SkinShape.Tall,   5, 0.45f, SkinUnlock.KillWasps, 100,   "#FFD700", 0.5f, 0.20f, 0.70f),
+        new SkinDef("Squirrel",   "#D4571E", "#FFF6E8", SkinPattern.Gradient, 0.10f,"#FFA066",   SkinShape.Pear,   6, 0.40f, SkinUnlock.KillSquirrels, 100,"#141216", 0f,   0.10f, 0.55f),
     };
 
     public static bool CanAutoUnlock(int i)

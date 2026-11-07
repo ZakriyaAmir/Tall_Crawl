@@ -172,6 +172,102 @@ public static class TCSetup
         for (int y = 0; y < N; y++) for (int x = 0; x < N; x++)
         {
             float u = x / (float)N, v = y / (float)N; bool acc = false; float k = 0;
+
+            // Custom iconic patterns for Golden, Bee, Wasp and Squirrel skins
+            if (d.name == "Golden")
+            {
+                float d_spine = Mathf.Abs(u - 0.25f);
+                if (d_spine > 0.5f) d_spine = 1.0f - d_spine;
+                float radiance = Mathf.Exp(-d_spine * 14.0f) * 0.35f;
+                float sheen = Mathf.Sin((v * 1.5f + u * 2.0f) * Mathf.PI * 4.0f) * 0.04f;
+                Color baseCol = Color.Lerp(new Color(1.0f, 0.88f, 0.10f), new Color(1.0f, 0.98f, 0.72f), radiance);
+                float curv = 0.82f + 0.18f * Mathf.Sin(v * Mathf.PI * 0.5f);
+                float s = 0.92f + 0.08f * Mathf.Cos(d_spine * Mathf.PI * 2.0f);
+                baseCol *= curv * s * (1.0f + sheen);
+                baseCol.a = 1f;
+                t.SetPixel(x, y, baseCol);
+                continue;
+            }
+            if (d.name == "Bee" || d.name == "Bees")
+            {
+                float d_spine = Mathf.Abs(u - 0.25f);
+                if (d_spine > 0.5f) d_spine = 1.0f - d_spine;
+                float wave = Mathf.Sin(d_spine * Mathf.PI * 2.0f) * 0.04f;
+                float band_coord = v * 5.2f + wave;
+                float band_frac = Mathf.Repeat(band_coord, 1.0f);
+                int band_idx = (int)band_coord;
+                bool is_dark = (band_idx % 2 == 1);
+                float transition = Mathf.Min(band_frac, 1.0f - band_frac) * 6.0f;
+                float blend = Mathf.Clamp01(transition);
+
+                Color gold = Color.Lerp(new Color(1f, 0.76f, 0.09f), new Color(0.93f, 0.66f, 0.05f), d_spine * 1.5f);
+                Color charcoal = new Color(0.09f, 0.08f, 0.10f);
+                Color baseBee;
+                if (v < 0.06f || v > 0.91f) baseBee = charcoal;
+                else if (is_dark) baseBee = Color.Lerp(gold, charcoal, blend);
+                else baseBee = Color.Lerp(charcoal, gold, blend);
+
+                float curv = 0.74f + 0.26f * Mathf.Sin(v * Mathf.PI * 0.5f);
+                float s = 0.93f + 0.07f * Mathf.Cos(d_spine * Mathf.PI * 2f);
+                baseBee *= curv * s; baseBee.a = 1f;
+                t.SetPixel(x, y, baseBee);
+                continue;
+            }
+            if (d.name == "Wasp")
+            {
+                float d_spine = Mathf.Abs(u - 0.25f);
+                if (d_spine > 0.5f) d_spine = 1.0f - d_spine;
+                float chevron = d_spine * 0.42f;
+                float seg_phase = Mathf.Repeat(v * 6.5f + chevron, 1.0f);
+                int seg_idx = (int)(v * 6.5f + chevron);
+                bool is_black = (seg_idx % 2 == 1);
+                if (d_spine < 0.06f && seg_phase > 0.35f) is_black = true;
+                if (!is_black && (d_spine > 0.08f && d_spine < 0.18f) && (seg_phase > 0.35f && seg_phase < 0.65f) && (v > 0.15f && v < 0.85f)) is_black = true;
+                if (v < 0.08f || v > 0.88f) is_black = true;
+
+                Color cWasp = is_black ? new Color(0.09f, 0.07f, 0.10f) : (d_spine < 0.08f ? new Color(1f, 0.83f, 0.12f) : new Color(0.97f, 0.73f, 0.04f));
+                float curv = 0.72f + 0.28f * Mathf.Sin(v * Mathf.PI * 0.5f);
+                float s = 0.92f + 0.08f * Mathf.Cos(d_spine * Mathf.PI * 2f);
+                cWasp *= curv * s; cWasp.a = 1f;
+                t.SetPixel(x, y, cWasp);
+                continue;
+            }
+            if (d.name == "Squirrel")
+            {
+                float d_spine = Mathf.Abs(u - 0.25f);
+                if (d_spine > 0.5f) d_spine = 1.0f - d_spine;
+                float d_belly = Mathf.Abs(u - 0.75f);
+                if (d_belly > 0.5f) d_belly = 1.0f - d_belly;
+
+                Color baseCol;
+                if (d_belly < 0.15f) baseCol = new Color(1f, 0.96f, 0.90f);
+                else if (d_belly < 0.23f)
+                {
+                    float f = (d_belly - 0.15f) / 0.08f;
+                    baseCol = Color.Lerp(new Color(1f, 0.96f, 0.90f), new Color(0.84f, 0.35f, 0.12f), f);
+                }
+                else if (d_spine < 0.040f && v > 0.10f && v < 0.88f) baseCol = new Color(0.28f, 0.11f, 0.05f);
+                else if (d_spine < 0.080f && v > 0.12f && v < 0.86f)
+                {
+                    float f = Mathf.Abs(d_spine - 0.060f) / 0.020f;
+                    baseCol = Color.Lerp(new Color(0.99f, 0.89f, 0.76f), new Color(0.84f, 0.35f, 0.12f), f * 0.4f);
+                }
+                else if (d_spine < 0.115f && v > 0.15f && v < 0.82f) baseCol = new Color(0.41f, 0.16f, 0.08f);
+                else baseCol = v < 0.4f ? new Color(0.88f, 0.38f, 0.13f) : new Color(0.82f, 0.33f, 0.11f);
+
+                if (v > 0.80f)
+                {
+                    float tailF = (v - 0.80f) / 0.20f;
+                    baseCol = Color.Lerp(baseCol, new Color(0.45f, 0.18f, 0.08f), tailF * 0.65f);
+                }
+
+                float curv = 0.76f + 0.24f * Mathf.Sin(v * Mathf.PI * 0.5f);
+                float s = 0.94f + 0.06f * Mathf.Cos(d_spine * Mathf.PI * 2f);
+                baseCol *= curv * s; baseCol.a = 1f;
+                t.SetPixel(x, y, baseCol);
+                continue;
+            }
+
             switch (d.pattern)
             {
                 case SkinPattern.Stripes: acc = Mathf.Repeat(v * 8, 1) < 0.45f; break;

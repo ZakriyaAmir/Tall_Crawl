@@ -15,7 +15,7 @@ MonoBehaviour:
   spiderSkinListObjPrefab: {fileID: 8549158015567400603, guid: 3d9a7dfab1bdb4a9c88d06e24e2ce1af,
     type: 3}
   skins:
-  - name: Gold
+  - name: Brownie
     body: {r: 0.84705883, g: 0.63529414, b: 0.2901961, a: 1}
     accent: {r: 0.7254902, g: 0.5137255, b: 0.1882353, a: 1}
     pattern: 0
@@ -58,21 +58,6 @@ MonoBehaviour:
     amount: 1500
     eye: {r: 0.8901961, g: 0.13333334, b: 0.18039216, a: 1}
     eyeGlow: 0.35
-    metallic: 0
-    gloss: 0.35
-  - name: Bumble
-    body: {r: 1, g: 0.8235294, b: 0.36078432, a: 1}
-    accent: {r: 0.22745098, g: 0.2, b: 0.2509804, a: 1}
-    pattern: 1
-    emission: 0
-    trail: {r: 1, g: 0.9490196, b: 0.7019608, a: 1}
-    shape: 2
-    spikes: 3
-    spikeLength: 0.35
-    unlock: 2
-    amount: 3
-    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
-    eyeGlow: 0
     metallic: 0
     gloss: 0.35
   - name: Bubblegum
@@ -240,21 +225,6 @@ MonoBehaviour:
     eyeGlow: 0.3
     metallic: 0.2
     gloss: 0.85
-  - name: Bumblebee
-    body: {r: 1, g: 0.78431374, b: 0.15686275, a: 1}
-    accent: {r: 0.10980392, g: 0.09803922, b: 0.11764706, a: 1}
-    pattern: 1
-    emission: 0
-    trail: {r: 1, g: 0.95686275, b: 0.72156864, a: 1}
-    shape: 1
-    spikes: 0
-    spikeLength: 0
-    unlock: 1
-    amount: 12000
-    eye: {r: 0.078431375, g: 0.07058824, b: 0.08627451, a: 1}
-    eyeGlow: 0
-    metallic: 0.05
-    gloss: 0.65
   - name: Ladybug
     body: {r: 0.8980392, g: 0.14509805, b: 0.12941177, a: 1}
     accent: {r: 0.09411765, g: 0.08235294, b: 0.101960786, a: 1}
@@ -316,21 +286,21 @@ MonoBehaviour:
     metallic: 0.3
     gloss: 0.85
   - name: Golden
-    body: {r: 1, g: 0.84313726, b: 0, a: 1}
-    accent: {r: 1, g: 0.9529412, b: 0.65882355, a: 1}
+    body: {r: 1, g: 0.8784314, b: 0.101960786, a: 1}
+    accent: {r: 1, g: 0.972549, b: 0.6901961, a: 1}
     pattern: 0
-    emission: 0.6
-    trail: {r: 1, g: 0.8745098, b: 0, a: 1}
+    emission: 0.7
+    trail: {r: 1, g: 0.9019608, b: 0.2, a: 1}
     shape: 0
     spikes: 8
     spikeLength: 0.55
     unlock: 1
     amount: 100000
-    eye: {r: 1, g: 0.95686275, b: 0.72156864, a: 1}
-    eyeGlow: 0.95
-    metallic: 0.92
+    eye: {r: 1, g: 0.99215686, b: 0.8784314, a: 1}
+    eyeGlow: 1
+    metallic: 0.95
     gloss: 0.98
-  - name: Bees
+  - name: Bee
     body: {r: 1, g: 0.72156864, b: 0.10980392, a: 1}
     accent: {r: 0.09411765, g: 0.078431375, b: 0.08627451, a: 1}
     pattern: 1
@@ -346,8 +316,8 @@ MonoBehaviour:
     metallic: 0.05
     gloss: 0.6
   - name: Wasp
-    body: {r: 1, g: 0.6, b: 0, a: 1}
-    accent: {r: 0.050980393, g: 0.039215688, b: 0.03137255, a: 1}
+    body: {r: 1, g: 0.72156864, b: 0, a: 1}
+    accent: {r: 0.078431375, g: 0.0627451, b: 0.09411765, a: 1}
     pattern: 5
     emission: 0.3
     trail: {r: 1, g: 0.7176471, b: 0.2, a: 1}
@@ -361,8 +331,8 @@ MonoBehaviour:
     metallic: 0.2
     gloss: 0.7
   - name: Squirrel
-    body: {r: 0.76862746, g: 0.30588236, b: 0.101960786, a: 1}
-    accent: {r: 1, g: 0.95686275, b: 0.8862745, a: 1}
+    body: {r: 0.83137256, g: 0.34117648, b: 0.11764706, a: 1}
+    accent: {r: 1, g: 0.9647059, b: 0.9098039, a: 1}
     pattern: 4
     emission: 0.1
     trail: {r: 1, g: 0.627451, b: 0.4, a: 1}

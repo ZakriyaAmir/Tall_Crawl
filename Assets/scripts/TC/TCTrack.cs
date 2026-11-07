@@ -25,7 +25,7 @@ public class TCTrack : MonoBehaviour
     public static TCTrack Instance;
     TCConfig C;
 
-    const float MinCoinSpacing = 0.22f; // tighter spacing for dense long coin strings
+    const float UniformCoinSpacing = 0.38f; // Constant uniform distance between consecutive coins in any string
     const float MinHazardSpacing = 1.0f;
     const float MinBonusSpacing = 1.5f;
     const float BonusCoinMargin = 0.8f; // absolute clearance between any bonus pickup and any coin
@@ -66,7 +66,7 @@ public class TCTrack : MonoBehaviour
         nextHeartEligibleTime = Time.time + 10f; // heart check every 10 seconds
 
         // Safe start: welcome string of coins straight up
-        SpawnCoinTrail(py + 1.2f, py + 1.2f + 6 * MinCoinSpacing, safeAngle, safeAngle, 7);
+        SpawnCoinTrail(py + 1.2f, py + 1.2f + 6 * UniformCoinSpacing, safeAngle, safeAngle, 7);
         Tick();
     }
 
@@ -145,7 +145,7 @@ public class TCTrack : MonoBehaviour
             else
             {
                 // Coin spiral that guarantees no overlap with hazards or powerups
-                float spiralStartY = Mathf.Max(y + 0.3f, Mathf.Max(lastCoinY + MinCoinSpacing, lastBonusY + BonusCoinMargin));
+                float spiralStartY = Mathf.Max(y + 0.3f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
                 float spiralEndY = y + gap - 0.3f;
                 SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
             }
@@ -237,15 +237,13 @@ public class TCTrack : MonoBehaviour
         }
         else if (Random.value < C.coinTrailChance)
         {
-            // Long shape string of coins (5-10 coins) along the safe climbing trajectory
+            // String of uniformly spaced coins (5-10 coins) along the safe climbing trajectory
             // Placed before the hazard row leading smoothly into the safe gap
             int stringCount = Random.Range(5, 11); // 5 to 10 coins
-            float trailSpan = (stringCount - 1) * MinCoinSpacing;
+            float trailSpan = (stringCount - 1) * UniformCoinSpacing;
             float trailEndY = y - 0.35f;
             float trailStartY = Mathf.Max(trailEndY - trailSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
-            // Recalculate actual count if space between rows was slightly constrained
-            int actualCount = Mathf.Clamp(Mathf.RoundToInt((trailEndY - trailStartY) / MinCoinSpacing) + 1, 5, stringCount);
-            SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.70f), newSafe, actualCount);
+            SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.70f), newSafe, stringCount);
         }
 
         safeAngle = newSafe;
@@ -254,18 +252,48 @@ public class TCTrack : MonoBehaviour
 
     void SpawnCoinTrail(float startY, float endY, float fromAngle, float toAngle, int preferredCount = 0)
     {
-        float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + MinCoinSpacing, lastBonusY + BonusCoinMargin));
-        float span = endY - minY;
-        if (span < MinCoinSpacing * 0.7f) return;
+        float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+        float spanY = endY - minY;
+        if (spanY <= 0.05f) return;
 
-        int count = preferredCount > 0 ? preferredCount : Mathf.Max(1, Mathf.RoundToInt(span / MinCoinSpacing));
-        float step = count > 1 ? span / (count - 1) : span;
+        // Trunk cylinder surface metric: distance ds^2 = dy^2 + (R * da_radians)^2
+        const float trunkRadius = 0.603f;
+        float deltaAngleDeg = Mathf.DeltaAngle(fromAngle, toAngle);
+        float deltaAngleRad = deltaAngleDeg * Mathf.Deg2Rad;
+        float arcDistance = trunkRadius * deltaAngleRad;
+        float totalPathLength = Mathf.Sqrt(spanY * spanY + arcDistance * arcDistance);
 
-        for (int i = 0; i < count; i++)
+        if (totalPathLength < UniformCoinSpacing * 0.7f) return;
+
+        // Calculate exact count of coins so that the spacing between consecutive coins is exactly UniformCoinSpacing
+        int steps = Mathf.Max(1, Mathf.RoundToInt(totalPathLength / UniformCoinSpacing));
+        int count = steps + 1;
+        if (preferredCount > 0)
         {
-            float cy = count > 1 ? minY + i * step : minY + 0.5f * span;
-            float t = (count <= 1) ? 0.5f : (float)i / (count - 1);
-            float ca = Mathf.LerpAngle(fromAngle, toAngle, t);
+            count = Mathf.Min(count, preferredCount);
+            steps = count - 1;
+        }
+
+        if (count < 2)
+        {
+            Spawn(coinPool, "coin", minY + spanY * 0.5f, Mathf.LerpAngle(fromAngle, toAngle, 0.5f));
+            lastCoinY = minY + spanY * 0.5f;
+            return;
+        }
+
+        // Advance along the path in strictly uniform surface arc/linear distance steps
+        float actualTotalDist = steps * UniformCoinSpacing;
+        float frac = Mathf.Clamp01(actualTotalDist / totalPathLength);
+        float actualSpanY = spanY * frac;
+        float actualDeltaAngle = deltaAngleDeg * frac;
+
+        float stepY = actualSpanY / steps;
+        float stepAngle = actualDeltaAngle / steps;
+
+        for (int i = 0; i <= steps; i++)
+        {
+            float cy = minY + i * stepY;
+            float ca = fromAngle + i * stepAngle;
             Spawn(coinPool, "coin", cy, ca);
             lastCoinY = cy;
         }

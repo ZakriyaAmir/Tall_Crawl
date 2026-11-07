@@ -65,12 +65,37 @@ public class TCCuteSpider : MonoBehaviour
         }
         // Photo look (3D-printed chibi spider): one solid plastic colour for head + legs, the abdomen carries the skin pattern.
         // Tuned to medium tone so spider parts are not overly bright.
-        var plain = Flat(def.body * 0.85f, null, 0, def.metallic, def.gloss);
-        var legMat = Flat(def.body * 0.80f, null, 0, def.metallic, def.gloss);
+        // Bee: warm velvet charcoal head & legs with golden fuzz. Wasp: sleek black head & legs. Squirrel: deep warm chestnut head with russet legs.
+        // Golden: vibrant solid 24k polished gold across all parts with bright golden luster.
+        Color headBodyCol = def.body * 0.85f;
+        Color legCol = def.body * 0.80f;
+        if (def.name == "Golden")
+        {
+            headBodyCol = new Color(1.0f, 0.88f, 0.12f); // Pure vibrant 24k gold
+            legCol = new Color(0.96f, 0.80f, 0.08f);      // Gleaming golden legs
+        }
+        else if (def.name == "Bee" || def.name == "Bees")
+        {
+            headBodyCol = new Color(0.12f, 0.10f, 0.14f); // Charcoal velvety bee head
+            legCol = new Color(0.14f, 0.12f, 0.16f);      // Fuzzy bee legs
+        }
+        else if (def.name == "Wasp")
+        {
+            headBodyCol = new Color(0.10f, 0.08f, 0.12f); // Sleek hornet black head/thorax
+            legCol = new Color(0.12f, 0.10f, 0.14f);      // Black wasp legs
+        }
+        else if (def.name == "Squirrel")
+        {
+            headBodyCol = new Color(0.72f, 0.28f, 0.09f); // Rich warm squirrel chestnut
+            legCol = new Color(0.65f, 0.25f, 0.08f);
+        }
+
+        var plain = Flat(headBodyCol, null, def.emission * 0.5f, def.metallic, def.gloss);
+        var legMat = Flat(legCol, null, def.emission * 0.35f, def.metallic, def.gloss);
         var spikeMat = Flat(def.accent * 0.95f, null, def.emission, def.metallic, def.gloss);
         var eyeMat = Flat(def.eye, null, def.eyeGlow, 0.1f, 0.92f);
         var shine = Flat(new Color(0.92f, 0.92f, 0.92f, 1f), null, 0.5f, 0, 0.9f);
-        var fangMat = Flat(def.body * 0.70f, null, 0, def.metallic, def.gloss);
+        var fangMat = Flat(headBodyCol * 0.85f, null, def.emission * 0.4f, def.metallic, def.gloss);
 
         Vector3 s = def.BodyScale;
         float pivotY = R * 0.70f;
@@ -108,7 +133,9 @@ public class TCCuteSpider : MonoBehaviour
         var abd = abdObj.transform;
 
         // 5. Lore-accurate posterior spinnerets (silk-spinning nubs at rear-ventral apex of butt)
-        var spinMat = Flat(def.body * 0.76f, bodyMat, 0, def.metallic, def.gloss);
+        // For wasp: sharp black stinger cone/spinneret tip
+        Color spinCol = (def.name == "Wasp") ? new Color(0.08f, 0.06f, 0.09f) : (def.body * 0.76f);
+        var spinMat = Flat(spinCol, bodyMat, 0, def.metallic, def.gloss);
         float rearZ = -0.70f * R - 0.53f * ab.z;
         for (int sgn = -1; sgn <= 1; sgn += 2)
         {
@@ -275,7 +302,24 @@ public class TCCuteSpider : MonoBehaviour
                 // Diverse spike coloring based on skin pattern and accent/body contrast
                 Color spkColor;
                 float spkEmis = def.emission;
-                switch (def.pattern)
+                if (def.name == "Golden")
+                {
+                    // Brilliant 24k polished gold spikes with radiant golden emission
+                    spkColor = (k % 2 == 0) ? new Color(1.0f, 0.94f, 0.50f) : new Color(1.0f, 0.84f, 0.10f);
+                    spkEmis = 0.75f;
+                }
+                else if (def.name == "Wasp")
+                {
+                    // Alternating sharp black and luminous yellow-amber wasp stinger thorns
+                    spkColor = (k % 2 == 0) ? new Color(0.10f, 0.08f, 0.12f) : new Color(1f, 0.85f, 0.15f);
+                    if (k % 2 != 0) spkEmis = 0.45f;
+                }
+                else if (def.name == "Squirrel")
+                {
+                    // Warm rustic gradient matching squirrel coat from chestnut to russet orange
+                    spkColor = Color.Lerp(new Color(0.42f, 0.16f, 0.08f), new Color(0.92f, 0.45f, 0.18f), (float)k / Mathf.Max(1, def.spikes - 1));
+                }
+                else switch (def.pattern)
                 {
                     case SkinPattern.Stripes:
                     case SkinPattern.Checker:

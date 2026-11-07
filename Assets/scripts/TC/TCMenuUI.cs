@@ -11,7 +11,7 @@ public class TCMenuUI : MonoBehaviour
     RectTransform safe; Canvas canvas;
     TextMeshProUGUI coinsText, gemsText, bestText; Image dailyBadge;
     CanvasGroup skinsPanel, shopPanel, settingsPanel, dailyPanel, consentPanel, toastGroup; TextMeshProUGUI toastText;
-    GameObject previewSpider; RenderTexture rt; Camera previewCam; RawImage previewImg, skinPreviewImg; int previewSkin = -1;
+    GameObject previewSpider; RenderTexture rt; [SerializeField] Camera previewCam; RawImage previewImg, skinPreviewImg; int previewSkin = -1;
     readonly List<System.Action> refreshers = new List<System.Action>();
 
     void Start()
@@ -21,11 +21,11 @@ public class TCMenuUI : MonoBehaviour
         BuildUI();
         TCSave.Changed += Refresh; Refresh();
         StartCoroutine(Entrance());
-        { float d = 0.9f; foreach (Transform c in safe) { if (c.GetComponent<CanvasGroup>() || c.name == "Preview" || c.name.StartsWith("Shadow")) continue; StartCoroutine(PopIn(c, d)); d += 0.06f; } }
         ApplyMenuMusic();
         TCSkins.CheckAchievements();
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
         TCServices.Banner(true);
+        if (TCSave.DailyAvailable(out _)) OpenDaily();
     }
     /// Builds (or, when baked into the scene, binds to) every menu screen. Also run in edit mode by TCUIBake.
     public void BuildUI()
@@ -88,13 +88,13 @@ public class TCMenuUI : MonoBehaviour
                 tex.Apply();
             }
             var ri = bg.gameObject.AddComponent<RawImage>(); ri.texture = tex; ri.raycastTarget = false;
-        }
-        for (int i = 0; i < 14; i++)
-        {
-            var dot = TCUI.Img("Bubble", bg, new Color(1, 1, 1, Random.Range(0.18f, 0.4f)), TCUI.Circle);
-            if (TCUI.Fresh(dot)) { float s = Random.Range(40, 160); dot.rectTransform.sizeDelta = new Vector2(s, s); }
-            dot.rectTransform.anchorMin = dot.rectTransform.anchorMax = new Vector2(Random.value, Random.value);
-            Co(Float(dot.rectTransform, Random.Range(0.2f, 0.6f)));
+
+            for (int i = 0; i < 14; i++)
+            {
+                var dot = TCUI.Img("Bubble", bg, new Color(1, 1, 1, Random.Range(0.18f, 0.4f)), TCUI.Circle);
+                float s = Random.Range(40, 160); dot.rectTransform.sizeDelta = new Vector2(s, s);
+                dot.rectTransform.anchorMin = dot.rectTransform.anchorMax = new Vector2(Random.value, Random.value);
+            }
         }
     }
     IEnumerator Float(RectTransform r, float speed)
@@ -113,11 +113,39 @@ public class TCMenuUI : MonoBehaviour
     {
         var a = TCAssets.I;
         rt = new RenderTexture(768, 768, 16) { antiAliasing = 2 };
-        var root = new GameObject("SkinPreviewStage"); root.transform.position = new Vector3(0, -500, 0);
-        var camGo = new GameObject("PreviewCam"); camGo.transform.SetParent(root.transform, false);
-        previewCam = camGo.AddComponent<Camera>(); previewCam.clearFlags = CameraClearFlags.SolidColor; previewCam.backgroundColor = new Color(0, 0, 0, 0);
-        previewCam.targetTexture = rt; previewCam.fieldOfView = 30; previewCam.cullingMask = 1 << 0; previewCam.nearClipPlane = 0.01f;
-        var light = new GameObject("PreviewLight").AddComponent<Light>(); light.type = LightType.Directional; light.transform.SetParent(root.transform); light.transform.rotation = Quaternion.Euler(35, -25, 0); light.intensity = 1.25f; // key light from the camera side (face lit) light.shadows = LightShadows.None;
+
+        // Use preview camera already present in the scene, or locate by name
+        if (!previewCam)
+        {
+            var existingCam = GameObject.Find("PreviewCam");
+            if (existingCam) previewCam = existingCam.GetComponent<Camera>();
+        }
+
+        Transform stageParent = null;
+        if (previewCam)
+        {
+            previewCam.targetTexture = rt;
+            stageParent = previewCam.transform.parent;
+        }
+
+        var root = GameObject.Find("SkinPreviewStage");
+        if (!root)
+        {
+            root = new GameObject("SkinPreviewStage");
+            root.transform.position = new Vector3(0, -500, 0);
+            if (stageParent) root.transform.SetParent(stageParent, true);
+        }
+
+        if (!GameObject.Find("PreviewLight"))
+        {
+            var light = new GameObject("PreviewLight").AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.transform.SetParent(root.transform);
+            light.transform.rotation = Quaternion.Euler(35, -25, 0);
+            light.intensity = 1.25f;
+            light.shadows = LightShadows.None;
+        }
+
         if (a.spiderModel)
         {
             previewSpider = Instantiate(a.spiderModel, root.transform);
@@ -127,9 +155,7 @@ public class TCMenuUI : MonoBehaviour
             var smr = previewSpider.GetComponentInChildren<SkinnedMeshRenderer>();
             var b = smr ? smr.bounds : new Bounds(previewSpider.transform.position, Vector3.one);
             float size = b.size.magnitude;
-            var aim = b.center + Vector3.up * size * 0.22f; // new chibi spider sits taller: frame its full body
-            previewCam.transform.position = aim + new Vector3(0, size * 0.6f, -size * 1.7f);
-            previewCam.transform.LookAt(aim); previewSize = size;
+            previewSize = size;
         }
         ApplyPreview(TCSave.SelectedSkin);
     }
@@ -271,7 +297,6 @@ public class TCMenuUI : MonoBehaviour
         if (TCAssets.I.logo)
         {
             var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.83f), Vector2.zero, new Vector2(760, 428)); // cute & awesome 3D title logo
-            Co(Bob(logo.rectTransform, 10, 1.8f));
         }
         else { var t = TCUI.Label("Title", safe, "TALL CRAWL", 120, TCUI.Cocoa); TCUI.Place(t.rectTransform, new Vector2(0.5f, 0.85f), Vector2.zero, new Vector2(1000, 200)); }
 
@@ -284,9 +309,7 @@ public class TCMenuUI : MonoBehaviour
         var play = TCUI.Btn("Play", safe, "PLAY", TCUI.Mint, () => StartCoroutine(LoadGame()), 96, TCUI.Icon("play")); // no game-start sound
         TCUI.Place((RectTransform)play.transform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(640, 190));
         { var glow = TCUI.Img("Glow", safe, new Color(1f, 0.95f, 0.55f, 0.55f), TCUI.Circle); glow.raycastTarget = false;
-          TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(820, 290)); if (TCUI.Fresh(glow)) glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1);
-          Co(Glow(glow)); }
-        Co(Pulse(play.transform)); Co(Breathe(play.transform));
+          TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(820, 290)); if (TCUI.Fresh(glow)) glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1); }
 
         SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 110), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel); });
         SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 110), () => TCUI.Show(this, shopPanel));
