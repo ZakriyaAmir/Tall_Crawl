@@ -9,7 +9,7 @@ using UnityEngine;
 public static class TCUIBake
 {
     const string SpriteDir = "Assets/TC/Resources/TCUI", MatDir = "Assets/TC/UI";
-    static readonly string[] IconNames = { "coin", "gem", "hand", "heart", "heartEmpty", "home", "pause", "play", "restart", "check", "gear", "lock", "shirt", "bag", "gift" };
+    static readonly string[] IconNames = { "coin", "gem", "hand", "heart", "heartEmpty", "home", "pause", "play", "restart", "check", "gear", "lock", "shirt", "bag", "gift", "chilli", "help" };
 
     [MenuItem("Tools/Tall Crawl/Bake UI Into Scenes")]
     public static void BakeAll()

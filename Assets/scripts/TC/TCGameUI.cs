@@ -27,6 +27,9 @@ public class TCGameUI : MonoBehaviour
     int lastSpeedTenths = -1;
     int lastChilliTenths = -1;
     Coroutine coinPunchCo;
+    enum HandAnimMode { Horizontal, SwipeUp, Hidden }
+    HandAnimMode handMode = HandAnimMode.Horizontal;
+    float currentTargetTimeScale = 1f;
 
     void Awake() { Instance = this; }
 
@@ -34,7 +37,7 @@ public class TCGameUI : MonoBehaviour
     {
         pl = FindObjectOfType<player>(); spider = FindObjectOfType<playerInteract>(); gm = gameManager.Instance; cam = Camera.main;
         BuildUI();
-        hintText.text = TCSave.TutorialDone ? "TAP TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk";
+        hintText.text = TCSave.TutorialDone ? "TOUCH TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk";
         playerInteract.OnEvent += OnGameEvent;
         player.OnTurned += () => turnedOnce = true;
         player.OnJumped += () => jumpedOnce = true;
@@ -52,7 +55,14 @@ public class TCGameUI : MonoBehaviour
         if (fresh) { var fi = fr.gameObject.AddComponent<Image>(); fi.color = new Color(1, 0.35f, 0.4f, 0.35f); fi.raycastTarget = false; }
         flash.alpha = 0;
     }
-    void OnDestroy() { playerInteract.OnEvent -= OnGameEvent; player.OnTurned = null; player.OnJumped = null; player.OnRolled = null; }
+    void OnDestroy()
+    {
+        Time.timeScale = 1f;
+        playerInteract.OnEvent -= OnGameEvent;
+        player.OnTurned = null;
+        player.OnJumped = null;
+        player.OnRolled = null;
+    }
 
     // ---------------- HUD ----------------
     void BuildHud()
@@ -115,9 +125,17 @@ public class TCGameUI : MonoBehaviour
         }
     }
 
+    public bool Started => started;
+    float SpiderY => (spider != null) ? spider.transform.position.y : (pl != null ? pl.p1.position.y : 0f);
+
     void Update()
     {
         if (!pl) return;
+        if (!started)
+        {
+            bool fingerDown = (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began) || Input.GetMouseButtonDown(0);
+            if (fingerDown) StartRun();
+        }
         if (Input.GetKeyDown(KeyCode.Escape)) // Android back: pause / resume
         {
             if (pausePanel.gameObject.activeSelf) HidePause(); else ShowPause();
@@ -346,28 +364,84 @@ public class TCGameUI : MonoBehaviour
     {
         var root = TCUI.Rect("Start", safe); bool fresh = TCUI.Fresh(root); TCUI.Stretch(root);
         startOverlay = TCUI.Add<CanvasGroup>(root.gameObject);
-        if (fresh) { var hit = root.gameObject.AddComponent<Image>(); hit.color = new Color(0, 0, 0, 0.001f); }
-        var b = TCUI.Add<Button>(root.gameObject); if (fresh) b.transition = Selectable.Transition.None; b.onClick.AddListener(StartRun);
-        hintText = TCUI.Label("Hint", root, TCSave.TutorialDone ? "TAP TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk", 72, Color.white);
+        startOverlay.blocksRaycasts = false;
+        var hit = root.GetComponent<Image>(); if (hit) hit.raycastTarget = false;
+        var b = root.GetComponent<Button>(); if (b) b.enabled = false;
+        hintText = TCUI.Label("Hint", root, TCSave.TutorialDone ? "TOUCH TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk", 72, Color.white);
         TCUI.Outline(hintText, 0.25f);
+        hintText.raycastTarget = false;
         TCUI.Place(hintText.rectTransform, new Vector2(0.5f, 0.3f), Vector2.zero, new Vector2(1000, 260));
-        hand = TCUI.Img("Hand", root, Color.white, TCUI.Icon("hand")).rectTransform; TCUI.Place(hand, new Vector2(0.5f, 0.2f), Vector2.zero, new Vector2(150, 150));
+        hand = TCUI.Img("Hand", root, Color.white, TCUI.Icon("hand")).rectTransform;
+        hand.GetComponent<Image>().raycastTarget = false;
+        TCUI.Place(hand, new Vector2(0.5f, 0.2f), Vector2.zero, new Vector2(150, 150));
         if (Application.isPlaying) StartCoroutine(HandWiggle());
     }
+    IEnumerator SmoothTimeScale(float targetScale, float duration)
+    {
+        currentTargetTimeScale = targetScale;
+        float start = Time.timeScale;
+        if (duration <= 0.001f)
+        {
+            Time.timeScale = targetScale;
+            yield break;
+        }
+        for (float elapsed = 0; elapsed < duration; elapsed += Time.unscaledDeltaTime)
+        {
+            Time.timeScale = Mathf.Lerp(start, targetScale, elapsed / duration);
+            yield return null;
+        }
+        Time.timeScale = targetScale;
+    }
+
     IEnumerator HandWiggle()
     {
         while (true)
         {
-            if (hand && hand.gameObject.activeInHierarchy) hand.anchoredPosition = new Vector2(Mathf.Sin(Time.unscaledTime * 3) * 180, 0);
-            hintText.transform.localScale = Vector3.one * (1 + 0.04f * Mathf.Sin(Time.unscaledTime * 4));
+            if (hand)
+            {
+                if (handMode == HandAnimMode.Horizontal)
+                {
+                    if (!hand.gameObject.activeSelf) hand.gameObject.SetActive(true);
+                    hand.localEulerAngles = Vector3.zero;
+                    hand.anchoredPosition = new Vector2(Mathf.Sin(Time.unscaledTime * 3.5f) * 180f, 0);
+                    var img = hand.GetComponent<Image>();
+                    if (img && img.color != Color.white) img.color = Color.white;
+                }
+                else if (handMode == HandAnimMode.SwipeUp)
+                {
+                    if (!hand.gameObject.activeSelf) hand.gameObject.SetActive(true);
+                    hand.localEulerAngles = new Vector3(0, 0, 90f); // point finger upwards
+                    float t = Mathf.Repeat(Time.unscaledTime * 1.6f, 1f);
+                    hand.anchoredPosition = new Vector2(0, Mathf.Lerp(-70f, 110f, t));
+                    var img = hand.GetComponent<Image>();
+                    if (img)
+                    {
+                        Color c = Color.white;
+                        c.a = (t < 0.2f) ? t / 0.2f : (t > 0.8f ? (1f - t) / 0.2f : 1f);
+                        img.color = c;
+                    }
+                }
+                else
+                {
+                    if (hand.gameObject.activeSelf) hand.gameObject.SetActive(false);
+                }
+            }
+            if (hintText && hintText.gameObject.activeInHierarchy)
+            {
+                hintText.transform.localScale = Vector3.one * (1 + 0.04f * Mathf.Sin(Time.unscaledTime * 4));
+            }
             yield return null;
         }
     }
 
-    void StartRun()
+    public void StartRun()
     {
         if (started) return; started = true;
         startOverlay.blocksRaycasts = false;
+        var b = startOverlay.GetComponentInChildren<Button>(); if (b) b.enabled = false;
+        var hit = startOverlay.GetComponent<Image>(); if (hit) hit.raycastTarget = false;
+        if (hintText) hintText.raycastTarget = false;
+        if (hand) { var hi = hand.GetComponent<Image>(); if (hi) hi.raycastTarget = false; }
         gm.BeginRun();
         if (TCSave.TutorialDone) TCUI.Hide(this, startOverlay);
         else tutorialCo = StartCoroutine(Tutorial());
@@ -375,16 +449,332 @@ public class TCGameUI : MonoBehaviour
 
     IEnumerator Tutorial()
     {
-        turnedOnce = jumpedOnce = false;
-        hintText.text = "DRAG LEFT / RIGHT\nto dodge branches";
-        float t = 0; while (!turnedOnce && t < 6) { t += Time.deltaTime; yield return null; }
-        yield return new WaitForSeconds(1.5f);
-        hintText.text = "SWIPE UP to jump!\nDOUBLE TAP to flip!";
-        hand.gameObject.SetActive(false);
-        t = 0; while (!jumpedOnce && t < 6) { t += Time.deltaTime; yield return null; }
-        hintText.text = "Grab CHILLI PEPPERS\nto roll & smash!";
-        yield return new WaitForSeconds(2.0f);
+        // -------------------------------------------------------------
+        // STEP 1: ROTATE LEFT / RIGHT
+        // -------------------------------------------------------------
+        pl.SetSteerAllowed(true);
+        pl.SetJumpAllowed(false);
+        handMode = HandAnimMode.Horizontal;
+        hintText.text = "DRAG LEFT / RIGHT\nto circle the trunk";
+        TCUI.Show(this, startOverlay);
+
+        float initialYaw = pl.CurrentYaw;
+        turnedOnce = false;
+
+        // Wait until player moves left or right
+        while (!turnedOnce && Mathf.Abs(Mathf.DeltaAngle(initialYaw, pl.CurrentYaw)) < 4f)
+        {
+            if (Input.GetAxisRaw("Horizontal") != 0f || (Input.touchCount > 0 && Mathf.Abs(Input.GetTouch(0).deltaPosition.x) > 2f))
+            {
+                break;
+            }
+            yield return null;
+        }
+
+        // As requested: prompt goes away immediately after the player swipes left/right!
+        hintText.text = "";
+        handMode = HandAnimMode.Hidden;
+        pl.SetSteerAllowed(false);
+        yield return new WaitForSeconds(0.7f);
+
+        // -------------------------------------------------------------
+        // STEP 2: DODGE THE BRANCH
+        // -------------------------------------------------------------
+        // Spawn a spiky branch directly in the spider's path ahead
+        float branchAngle = pl.CurrentYaw;
+        float branchY = SpiderY + 4.5f;
+        var branch = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBranch(branchY, branchAngle) : null;
+
+        // Approach branch at normal speed until 2.0m away
+        while (branch != null && (branchY - SpiderY) > 2.0f)
+        {
+            yield return null;
+        }
+
+        // Approach in slow motion until frozen 2x farther from the obstacle (0.90m)
+        yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
+        while (branch != null && (branchY - SpiderY) > 0.90f)
+        {
+            yield return null;
+        }
+
+        // Freeze right in front of the branch!
+        Time.timeScale = 0f;
+        currentTargetTimeScale = 0f;
+
+        pl.SetSteerAllowed(true);
+        pl.SetJumpAllowed(false);
+        handMode = HandAnimMode.Horizontal;
+        hintText.text = "DRAG TO DODGE\nthe branch!";
+
+        // Wait until player turns away from the branch's angle by at least 24 degrees
+        while (Mathf.Abs(Mathf.DeltaAngle(branchAngle, pl.CurrentYaw)) < 24f)
+        {
+            yield return null;
+        }
+
+        // Dodge performed! Clear prompt immediately and resume real time!
+        hintText.text = "";
+        handMode = HandAnimMode.Hidden;
+        Time.timeScale = 1.0f;
+        currentTargetTimeScale = 1.0f;
+
+        // Wait until spider climbs past the branch
+        while (SpiderY < branchY + 0.6f)
+        {
+            yield return null;
+        }
+
+        // Lock steering again
+        pl.SetSteerAllowed(false);
+        yield return new WaitForSeconds(0.6f);
+
+        // -------------------------------------------------------------
+        // STEP 3: DODGE THE WASP
+        // -------------------------------------------------------------
+        // Spawn a wasp directly in the spider's path ahead
+        float waspAngle = pl.CurrentYaw;
+        float waspY = SpiderY + 4.5f;
+        var wasp = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialWasp(waspY, waspAngle) : null;
+
+        // Climb forward until approaching the wasp (2.0m away)
+        while (wasp != null && (waspY - SpiderY) > 2.0f)
+        {
+            yield return null;
+        }
+
+        // Approach in slow motion until frozen 2x farther from the obstacle (0.90m)
+        yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
+        while (wasp != null && (waspY - SpiderY) > 0.90f)
+        {
+            yield return null;
+        }
+
+        // Freeze the spider completely right in front of the wasp!
+        Time.timeScale = 0f;
+        currentTargetTimeScale = 0f;
+
+        pl.SetSteerAllowed(true);
+        pl.SetJumpAllowed(false);
+        handMode = HandAnimMode.Horizontal;
+        hintText.text = "DRAG TO DODGE\nthe wasp!";
+
+        // Wait until player turns away from the wasp's angle by at least 22 degrees
+        while (Mathf.Abs(Mathf.DeltaAngle(waspAngle, pl.CurrentYaw)) < 22f)
+        {
+            yield return null;
+        }
+
+        // Dodge performed! Clear prompt immediately and resume real time!
+        hintText.text = "";
+        handMode = HandAnimMode.Hidden;
+        Time.timeScale = 1.0f;
+        currentTargetTimeScale = 1.0f;
+
+        // Wait until spider climbs past the wasp
+        while (SpiderY < waspY + 0.6f)
+        {
+            yield return null;
+        }
+
+        // Lock steering again
+        pl.SetSteerAllowed(false);
+        yield return new WaitForSeconds(0.6f);
+
+        // -------------------------------------------------------------
+        // STEP 4: JUMP OVER BEES
+        // -------------------------------------------------------------
+        // Spawn bees into the scene ahead
+        float beeY = SpiderY + 4.5f;
+        var bees = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBees(beeY) : null;
+
+        // Climb forward until approaching bees (2.0m away)
+        while (bees != null && (beeY - SpiderY) > 2.0f)
+        {
+            yield return null;
+        }
+
+        // Approach in slow motion until frozen 2x farther from the obstacle (0.90m)
+        yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
+        while (bees != null && (beeY - SpiderY) > 0.90f)
+        {
+            yield return null;
+        }
+
+        // Freeze completely right in front of the bees!
+        Time.timeScale = 0f;
+        currentTargetTimeScale = 0f;
+
+        pl.SetJumpAllowed(true);
+        handMode = HandAnimMode.SwipeUp;
+        hintText.text = "SWIPE UP TO JUMP\nover hazards!";
+
+        jumpedOnce = false;
+        Vector2 touchDownPos = Vector2.zero;
+        bool isDown = false;
+        float tutLastTapTime = -1f;
+        Vector2 tutLastTapPos = Vector2.zero;
+
+        // Wait until player jumps (listen for swipe up, double tap, or spacebar)
+        while (!jumpedOnce && (spider == null || !spider.IsJumping))
+        {
+            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                pl.jump();
+                jumpedOnce = true;
+                break;
+            }
+            if (Input.touchCount > 0)
+            {
+                var t = Input.GetTouch(0);
+                if (t.phase == TouchPhase.Began) { touchDownPos = t.position; isDown = true; }
+                else if (isDown)
+                {
+                    float upDist = t.position.y - touchDownPos.y;
+                    float sideDist = Mathf.Abs(t.position.x - touchDownPos.x);
+                    if (upDist > Screen.height * 0.055f && upDist > sideDist * 1.35f)
+                    {
+                        tutLastTapTime = -1f;
+                        pl.jump();
+                        jumpedOnce = true;
+                        break;
+                    }
+                }
+                else if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled)
+                {
+                    if (isDown && Vector2.Distance(t.position, touchDownPos) < Screen.height * 0.04f)
+                    {
+                        // Double tap required: single tap does NOT jump
+                        if (tutLastTapTime > 0 && (Time.unscaledTime - tutLastTapTime) < 0.35f
+                            && Vector2.Distance(t.position, tutLastTapPos) < Screen.height * 0.12f)
+                        {
+                            tutLastTapTime = -1f;
+                            pl.jump();
+                            jumpedOnce = true;
+                            break;
+                        }
+                        else
+                        {
+                            tutLastTapTime = Time.unscaledTime;
+                            tutLastTapPos = t.position;
+                        }
+                    }
+                    else
+                    {
+                        tutLastTapTime = -1f;
+                    }
+                    isDown = false;
+                }
+            }
+            else
+            {
+                if (Input.GetMouseButtonDown(0)) { touchDownPos = Input.mousePosition; isDown = true; }
+                else if (isDown)
+                {
+                    float upDist = ((Vector2)Input.mousePosition).y - touchDownPos.y;
+                    float sideDist = Mathf.Abs(((Vector2)Input.mousePosition).x - touchDownPos.x);
+                    if (upDist > Screen.height * 0.055f && upDist > sideDist * 1.35f)
+                    {
+                        tutLastTapTime = -1f;
+                        pl.jump();
+                        jumpedOnce = true;
+                        break;
+                    }
+                }
+                else if (Input.GetMouseButtonUp(0))
+                {
+                    if (isDown && Vector2.Distance(Input.mousePosition, touchDownPos) < Screen.height * 0.04f)
+                    {
+                        // Double click required: single click does NOT jump
+                        if (tutLastTapTime > 0 && (Time.unscaledTime - tutLastTapTime) < 0.35f
+                            && Vector2.Distance(Input.mousePosition, tutLastTapPos) < Screen.height * 0.12f)
+                        {
+                            tutLastTapTime = -1f;
+                            pl.jump();
+                            jumpedOnce = true;
+                            break;
+                        }
+                        else
+                        {
+                            tutLastTapTime = Time.unscaledTime;
+                            tutLastTapPos = Input.mousePosition;
+                        }
+                    }
+                    else
+                    {
+                        tutLastTapTime = -1f;
+                    }
+                    isDown = false;
+                }
+            }
+            yield return null;
+        }
+
+        // Jump performed! Instantly restore normal time so player sees the full jump!
+        hintText.text = "";
+        handMode = HandAnimMode.Hidden;
+        Time.timeScale = 1.0f;
+        currentTargetTimeScale = 1.0f;
+
+        // Let the player sail safely over the bees
+        while (SpiderY < beeY + 0.6f)
+        {
+            yield return null;
+        }
+
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+        yield return new WaitForSeconds(0.6f);
+
+        // -------------------------------------------------------------
+        // STEP 5: REACH THE CHILLI & COMPLETE TUTORIAL
+        // -------------------------------------------------------------
+        // Spawn a chilli ahead in the spider's path
+        float chilliAngle = pl.CurrentYaw;
+        float chilliY = SpiderY + 4.2f;
+        var chilli = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialChilli(chilliY, chilliAngle) : null;
+        hintText.text = "GRAB THE CHILLI\nfor Sonic Boost!";
+        handMode = HandAnimMode.Hidden;
+
+        // Climb forward until approaching the chilli (1.8m away)
+        while (chilli != null && chilli.gameObject.activeSelf && (chilliY - SpiderY) > 1.8f)
+        {
+            yield return null;
+        }
+
+        // Slow motion approach towards the chilli without freezing
+        yield return StartCoroutine(SmoothTimeScale(0.2f, 0.2f));
+
+        // Keep moving in slow motion until very close to the chilli (0.25m away)
+        while (chilli != null && chilli.gameObject.activeSelf && (chilliY - SpiderY) > 0.25f)
+        {
+            yield return null;
+        }
+
+        // Spider is very close to the chilli: restore normal time scale right before contact!
+        Time.timeScale = 1.0f;
+        currentTargetTimeScale = 1.0f;
+        pl.SetSteerAllowed(true);
+        pl.SetJumpAllowed(true);
+
+        // Wait until spider grabs the chilli
+        while (chilli != null && chilli.gameObject.activeSelf && (chilliY - SpiderY) > -0.2f)
+        {
+            yield return null;
+        }
+
+        // Complete the tutorial!
         TCSave.TutorialDone = true;
+        if (TCTrack.Instance != null)
+        {
+            TCTrack.Instance.OnTutorialFinished();
+        }
+
+        hintText.text = "ALL SET!\nYOU'RE GOOD TO GO!";
+        TCSfx.Play("celebrate", 0.95f);
+        StartCoroutine(TCUI.Punch(hintText.transform, 0.35f, 0.45f));
+
+        yield return new WaitForSeconds(2.0f);
         TCUI.Hide(this, startOverlay);
     }
 
@@ -420,7 +810,15 @@ public class TCGameUI : MonoBehaviour
         if (!started || pl.GameOver || pausePanel.gameObject.activeSelf) return;
         gm.Pause(true); TCUI.Show(this, pausePanel);
     }
-    void HidePause() { if (!pausePanel.gameObject.activeSelf) return; TCUI.Hide(this, pausePanel, () => gm.Pause(false)); }
+    void HidePause()
+    {
+        if (!pausePanel.gameObject.activeSelf) return;
+        TCUI.Hide(this, pausePanel, () =>
+        {
+            gm.Pause(false);
+            Time.timeScale = currentTargetTimeScale;
+        });
+    }
 
     // ---------------- Revive ----------------
     void BuildRevive()
@@ -448,6 +846,8 @@ public class TCGameUI : MonoBehaviour
     void StopReviveTimer() { if (reviveCo != null) { StopCoroutine(reviveCo); reviveCo = null; } }
     public void ShowGameOver(bool canRevive)
     {
+        Time.timeScale = 1f;
+        if (pl) pl.SetSteerAllowed(true);
         // A death during the first-run tutorial left its overlay up over the results
         if (tutorialCo != null) { StopCoroutine(tutorialCo); tutorialCo = null; TCSave.TutorialDone = true; }
         if (startOverlay.alpha > 0) TCUI.Hide(this, startOverlay);

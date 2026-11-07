@@ -217,6 +217,11 @@ public class playerInteract : MonoBehaviour
 
     void Damage()
     {
+        if (!TCSave.TutorialDone)
+        {
+            invulnTimer = 0.8f;
+            return;
+        }
         TCServices.Haptic();
         TCFx.Shake(0.25f);
         life--;

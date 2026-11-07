@@ -22,12 +22,18 @@ public class TCTrack : MonoBehaviour
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
     public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, pineconePool, waspPool, squirrelPool };
+    public static TCTrack Instance;
     TCConfig C;
 
     const float MinCoinSpacing = 0.22f; // tighter spacing for dense long coin strings
     const float MinHazardSpacing = 1.0f;
     const float MinBonusSpacing = 1.5f;
     const float BonusCoinMargin = 0.8f; // absolute clearance between any bonus pickup and any coin
+
+    void Awake()
+    {
+        Instance = this;
+    }
 
     void Start()
     {
@@ -52,7 +58,7 @@ public class TCTrack : MonoBehaviour
         float py = player.position.y;
         float chunkH = C.trunkChunkHeight;
         nextTrunkY = Mathf.Floor((py - 2f * chunkH) / chunkH) * chunkH;
-        nextRowY = py + C.safeStartHeight;
+        nextRowY = py + (TCSave.TutorialDone ? C.safeStartHeight : 100f);
         safeAngle = TCPlayerAngle();
         lastCoinY = -999f;
         lastHazardY = -999f;
@@ -82,7 +88,10 @@ public class TCTrack : MonoBehaviour
             Spawn(trunkPool, "trunk", nextTrunkY, 0);
             nextTrunkY += C.trunkChunkHeight;
         }
-        while (nextRowY < py + 12f) GenerateRow(metres + (nextRowY - py) * C.metresPerUnit);
+        if (TCSave.TutorialDone)
+        {
+            while (nextRowY < py + 12f) GenerateRow(metres + (nextRowY - py) * C.metresPerUnit);
+        }
 
         // Recycle everything far below the player (iterate backwards, no allocations)
         float cut = py - 3.5f;
@@ -280,5 +289,41 @@ public class TCTrack : MonoBehaviour
         for (int i = 0; i < g.transform.childCount; i++) g.transform.GetChild(i).gameObject.SetActive(true);
         live.Add(p);
         return p;
+    }
+
+    public void OnTutorialFinished()
+    {
+        float py = player ? player.position.y : 0f;
+        nextRowY = py + C.safeStartHeight;
+        lastHazardY = py;
+        lastBonusY = py;
+    }
+
+    public TCPooled SpawnTutorialBranch(float y, float angle)
+    {
+        var b = Spawn(branchPool, "branch", y, angle);
+        b.transform.rotation = Quaternion.Euler(0, angle, 0);
+        var bv = b.GetComponent<TCBranchVariant>();
+        if (!bv) bv = b.gameObject.AddComponent<TCBranchVariant>();
+        bv.SetVariant(TCBranchVariant.FlowerType.Thorn);
+        return b;
+    }
+
+    public TCWasp SpawnTutorialWasp(float y, float angle)
+    {
+        var p = Spawn(waspPool, "wasp", y, angle);
+        var wasp = p.GetComponent<TCWasp>();
+        if (wasp) wasp.Init(y, angle, 0f, 0f);
+        return wasp;
+    }
+
+    public TCPooled SpawnTutorialBees(float y)
+    {
+        return Spawn(beePool, "bees", y, 0);
+    }
+
+    public TCPooled SpawnTutorialChilli(float y, float angle)
+    {
+        return Spawn(boostPool, "boost", y, angle);
     }
 }

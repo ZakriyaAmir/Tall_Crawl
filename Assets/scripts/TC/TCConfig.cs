@@ -34,10 +34,10 @@ public class TCConfig : ScriptableObject
 
     [Header("Player")]
     public float defaultSensitivity = 1f;
-    public float dragDegreesPerScreenWidth = 300f;
-    public float deadZonePixels = 6f;
-    public float rotationSmoothing = 18f;
-    public float keyboardTurnSpeed = 220f;
+    public float dragDegreesPerScreenWidth = 420f;
+    public float deadZonePixels = 0f;
+    public float rotationSmoothing = 26f;
+    public float keyboardTurnSpeed = 260f;
     public float swipeUpThreshold = 0.06f; // fraction of screen height
     [Tooltip("Max seconds between two taps for a double-tap jump")] public float doubleTapWindow = 0.3f;
     [Tooltip("A tap must be released within this many seconds")] public float doubleTapMaxHold = 0.22f;

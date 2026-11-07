@@ -242,6 +242,15 @@ public class TCMenuUI : MonoBehaviour
         var gear = TCUI.Btn("Settings", safe, "", TCUI.Butter, () => TCUI.Show(this, settingsPanel), 40, TCUI.Icon("gear"));
         TCUI.Place((RectTransform)gear.transform, new Vector2(1, 1), new Vector2(-100, -90), new Vector2(120, 120));
 
+        var howToPlay = TCUI.Btn("HowToPlay", safe, "", TCUI.Lilac, StartTutorialGame, 40, TCUI.Icon("help"));
+        TCUI.Place((RectTransform)howToPlay.transform, new Vector2(1, 1), new Vector2(-235, -90), new Vector2(120, 120));
+        var htpLbl = TCUI.Label("HTPLabel", howToPlay.transform, "HOW TO PLAY", 20, TCUI.Cocoa);
+        TCUI.Place(htpLbl.rectTransform, new Vector2(0.5f, 0), new Vector2(0, -22), new Vector2(180, 36));
+        var lblBtn = htpLbl.gameObject.AddComponent<Button>();
+        lblBtn.targetGraphic = htpLbl;
+        lblBtn.onClick.AddListener(() => howToPlay.onClick.Invoke());
+        htpLbl.raycastTarget = true;
+
         if (TCAssets.I.logo)
         {
             var logo = TCUI.Img("Logo", safe, Color.white, TCAssets.I.logo); logo.preserveAspect = true; TCUI.Place(logo.rectTransform, new Vector2(0.5f, 0.83f), Vector2.zero, new Vector2(760, 428)); // cute & awesome 3D title logo
@@ -282,8 +291,16 @@ public class TCMenuUI : MonoBehaviour
     IEnumerator Glow(Image g) { while (g) { float k = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3f); g.color = new Color(1f, 0.95f, 0.55f, 0.25f + 0.35f * k); g.transform.localScale = Vector3.one * (0.95f + 0.1f * k); yield return null; } }
     IEnumerator Breathe(Transform t) { yield return new WaitForSecondsRealtime(1.6f); while (t) { float k = Mathf.Sin(Time.unscaledTime * 3f) * 0.04f; t.localScale = new Vector3(1 + k, 1 - k * 0.6f, 1); yield return null; } }
     IEnumerator Pulse(Transform t) { var ic = t.Find("Icon"); while (ic) { ic.localScale = Vector3.one * (1 + 0.12f * Mathf.Sin(Time.unscaledTime * 5)); yield return null; } }
+    bool loadingGame;
+    void StartTutorialGame()
+    {
+        TCSave.TutorialDone = false;
+        StartCoroutine(LoadGame());
+    }
     IEnumerator LoadGame()
     {
+        if (loadingGame) yield break;
+        loadingGame = true;
         var fade = TCUI.Rect("Fade", canvas.transform); TCUI.Stretch(fade); var img = fade.gameObject.AddComponent<Image>(); img.color = new Color(1, 0.97f, 0.93f, 0);
         for (float t = 0; t < 0.3f; t += Time.unscaledDeltaTime) { img.color = new Color(1, 0.97f, 0.93f, t / 0.3f); yield return null; }
         SceneManager.LoadScene("gameplay");
@@ -527,7 +544,7 @@ public class TCMenuUI : MonoBehaviour
         var sl = TCUI.Label("SensL", card, "Control sensitivity", 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Place(sl.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 50), new Vector2(700, 70));
         var slider = BuildSlider(card, new Vector2(0, -30)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity; slider.onValueChanged.AddListener(v => TCSave.Sensitivity = v);
         TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => Application.OpenURL(TCAssets.I.privacyUrl), 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -170), new Vector2(620, 110));
-        TCUI.Place((RectTransform)TCUI.Btn("Tutorial", card, "REPLAY TUTORIAL", TCUI.Blush, () => { TCSave.TutorialDone = false; Toast("Tutorial will show next run"); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -310), new Vector2(620, 110));
+        TCUI.Place((RectTransform)TCUI.Btn("Tutorial", card, "REPLAY TUTORIAL", TCUI.Blush, StartTutorialGame, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -310), new Vector2(620, 110));
         TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => TCUI.Hide(this, settingsPanel), 50).transform, new Vector2(0.5f, 0), new Vector2(0, 110), new Vector2(420, 120));
     }
     Slider BuildSlider(RectTransform parent, Vector2 pos)

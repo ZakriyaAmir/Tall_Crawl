@@ -196,6 +196,19 @@ public static class TCUI
                 float tip = Mathf.Max(Mathf.Abs(ap.x) * 1.2f - (ap.y + 0.22f) * 0.9f, Mathf.Abs(ap.y) - 0.25f);
                 return Fill(Mathf.Min(arc, tip), Color.white);
             }
+            case "help":
+            {
+                // Question mark: top arc + hook + stem + dot
+                Vector2 c1 = new Vector2(0f, 0.30f);
+                float dist_c1 = Vector2.Distance(p, c1);
+                float arc = Mathf.Abs(dist_c1 - 0.28f) - 0.10f;
+                if (p.x < -0.05f && p.y < 0.30f) arc = 9f;
+                float hook = SegDist(p, new Vector2(0.28f, 0.30f), new Vector2(0f, 0.08f)) - 0.10f;
+                float stem = SegDist(p, new Vector2(0f, 0.08f), new Vector2(0f, -0.16f)) - 0.10f;
+                float dot = Vector2.Distance(p, new Vector2(0f, -0.48f)) - 0.11f;
+                float d = Mathf.Min(Mathf.Min(arc, hook), Mathf.Min(stem, dot));
+                return Fill(d, Color.white);
+            }
         }
         return Color.clear;
     }
