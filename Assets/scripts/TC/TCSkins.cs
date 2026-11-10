@@ -57,7 +57,7 @@ public static class TCSkins
         new SkinDef("Sky",        "#7EA3C2", "#5F86A8", SkinPattern.Solid,    0f,   "#CFE3F2",   SkinShape.Round,  0, 0f,    SkinUnlock.Coins, 800,       "#141216", 0f,   0f,    0.3f),
         new SkinDef("Widow",      "#1F1E23", "#E0202C", SkinPattern.Solid,    0f,   "#FF5A5A",   SkinShape.Round,  0, 0f,    SkinUnlock.Coins, 1500,      "#E3222E", 0.35f,0f,    0.35f),
         new SkinDef("Bubblegum",  "#FF9DBC", "#E0527E", SkinPattern.Solid,    0f,   "#FFC2D4",   SkinShape.Pear,   5, 0.4f,  SkinUnlock.Coins, 3000,      "#141216", 0f,   0f,    0.75f),
-        new SkinDef("Lava",       "#FF6A3D", "#FFC23A", SkinPattern.Zigzag,   0.8f, "#FF9A3A",   SkinShape.Chubby, 7, 0.55f, SkinUnlock.BestScore, 1500,  "#FFD23A", 0.8f),
+        new SkinDef("Lava",       "#1E171E", "#FF6A14", SkinPattern.Zigzag,   0.9f, "#FF8A20",   SkinShape.Chubby, 7, 0.55f, SkinUnlock.BestScore, 1500,  "#FFD23A", 0.85f),
         new SkinDef("Frost",      "#BEE5FF", "#FFFFFF", SkinPattern.Gradient, 0.35f,"#DFF4FF",   SkinShape.Flat,   6, 0.45f, SkinUnlock.Coins, 5000,      "#1E5C9E", 0.2f, 0f,    0.8f),
         new SkinDef("Royal",      "#2F5D93", "#FFD54A", SkinPattern.Dots,     0.15f,"#FFE58A",   SkinShape.Tall,   5, 0.5f,  SkinUnlock.Runs, 60,         "#FFD54A", 0.4f, 0.3f,  0.6f),
         new SkinDef("Ghost",      "#F3F6FF", "#B9D3E8", SkinPattern.Gradient, 0.6f, "#FFFFFF",   SkinShape.Pear,   0, 0f,    SkinUnlock.Ads, 6,           "#2B3A4A", 0f),

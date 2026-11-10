@@ -32,7 +32,7 @@ public class TCConfig : ScriptableObject
     [Range(0, 1)] public float heartChance = 0.06f;
     [Range(0, 1)] public float boostChance = 0.12f;
     [Range(0, 1)] [Tooltip("Probability of spawning cooldown slow-mo pickup in safe gap")] public float cooldownChance = 0.042f; // Reduced by 70% (from 0.14f)
-    [Tooltip("Seconds after starting the run before slow-mo power ups can spawn")] public float cooldownDelaySeconds = 2.0f;
+    [Tooltip("Minimum metres climbed before slow-mo cooldown power ups can spawn")] public float cooldownMinMetres = 200f;
 
     [Header("Player")]
     public float defaultSensitivity = 1f;

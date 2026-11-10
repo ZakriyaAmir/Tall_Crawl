@@ -35,7 +35,7 @@ MonoBehaviour:
   heartChance: 0.06
   boostChance: 0.12
   cooldownChance: 0.042
-  cooldownDelaySeconds: 2
+  cooldownMinMetres: 200
   defaultSensitivity: 1
   dragDegreesPerScreenWidth: 300
   deadZonePixels: 6

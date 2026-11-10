@@ -76,18 +76,18 @@ MonoBehaviour:
     metallic: 0
     gloss: 0.75
   - name: Lava
-    body: {r: 1, g: 0.41568628, b: 0.23921569, a: 1}
-    accent: {r: 1, g: 0.7607843, b: 0.22745098, a: 1}
+    body: {r: 0.11764706, g: 0.09019608, b: 0.11764706, a: 1}
+    accent: {r: 1, g: 0.41568628, b: 0.078431375, a: 1}
     pattern: 5
-    emission: 0.8
-    trail: {r: 1, g: 0.6039216, b: 0.22745098, a: 1}
+    emission: 0.9
+    trail: {r: 1, g: 0.5411765, b: 0.1254902, a: 1}
     shape: 1
     spikes: 7
     spikeLength: 0.55
     unlock: 3
     amount: 1500
     eye: {r: 1, g: 0.8235294, b: 0.22745098, a: 1}
-    eyeGlow: 0.8
+    eyeGlow: 0.85
     metallic: 0
     gloss: 0.35
   - name: Frost

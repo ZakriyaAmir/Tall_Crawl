@@ -267,6 +267,56 @@ public static class TCSetup
                 t.SetPixel(x, y, baseCol);
                 continue;
             }
+            if (d.name == "Ladybug")
+            {
+                float d_spine = Mathf.Abs(u - 0.25f);
+                if (d_spine > 0.5f) d_spine = 1.0f - d_spine;
+
+                // 7 distinct black spots on red elytra
+                Vector3[] spots = new Vector3[] {
+                    new Vector3(0.25f, 0.19f, 0.045f),
+                    new Vector3(0.25f - 0.11f, 0.35f, 0.048f),
+                    new Vector3(0.25f + 0.11f, 0.35f, 0.048f),
+                    new Vector3(0.25f - 0.075f, 0.58f, 0.050f),
+                    new Vector3(0.25f + 0.075f, 0.58f, 0.050f),
+                    new Vector3(0.25f - 0.115f, 0.77f, 0.044f),
+                    new Vector3(0.25f + 0.115f, 0.77f, 0.044f),
+                };
+
+                float min_d = 999.0f;
+                for (int sp = 0; sp < spots.Length; sp++)
+                {
+                    float du = u - spots[sp].x;
+                    if (du > 0.5f) du -= 1.0f;
+                    else if (du < -0.5f) du += 1.0f;
+                    float dist = Mathf.Sqrt((du * 1.5f) * (du * 1.5f) + (v - spots[sp].y) * (v - spots[sp].y));
+                    float delta = dist - spots[sp].z;
+                    if (delta < min_d) min_d = delta;
+                }
+
+                bool is_seam = (d_spine < 0.008f) && (v > 0.10f && v < 0.88f);
+                bool is_collar = (v < 0.07f) || (v > 0.91f);
+                bool is_belly = d_spine > 0.28f;
+
+                Color redCol = new Color(0.93f, 0.15f, 0.15f);
+                Color blackCol = new Color(0.08f, 0.07f, 0.09f);
+                Color cLady;
+
+                if (is_collar || is_belly || is_seam) cLady = blackCol;
+                else if (min_d < 0) cLady = blackCol;
+                else if (min_d < 0.012f)
+                {
+                    float t_edge = min_d / 0.012f;
+                    cLady = Color.Lerp(blackCol, redCol, t_edge);
+                }
+                else cLady = redCol;
+
+                float curv = 0.75f + 0.25f * Mathf.Sin(v * Mathf.PI * 0.5f);
+                float s = 0.94f + 0.06f * Mathf.Cos(d_spine * Mathf.PI * 2.0f);
+                cLady *= curv * s; cLady.a = 1f;
+                t.SetPixel(x, y, cLady);
+                continue;
+            }
 
             switch (d.pattern)
             {

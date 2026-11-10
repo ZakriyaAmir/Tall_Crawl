@@ -89,6 +89,16 @@ public class TCCuteSpider : MonoBehaviour
             headBodyCol = new Color(0.72f, 0.28f, 0.09f); // Rich warm squirrel chestnut
             legCol = new Color(0.65f, 0.25f, 0.08f);
         }
+        else if (def.name == "Ladybug")
+        {
+            headBodyCol = new Color(0.10f, 0.08f, 0.11f); // Sleek glossy black ladybug head & pronotum
+            legCol = new Color(0.12f, 0.10f, 0.13f);      // Black ladybug legs
+        }
+        else if (def.name == "Lava")
+        {
+            headBodyCol = new Color(0.12f, 0.09f, 0.11f); // Dark basalt volcanic rock cephalothorax
+            legCol = new Color(0.14f, 0.10f, 0.12f);      // Obsidian legs with glowing tips
+        }
 
         var plain = Flat(headBodyCol, null, def.emission * 0.5f, def.metallic, def.gloss);
         var legMat = Flat(legCol, null, def.emission * 0.35f, def.metallic, def.gloss);
@@ -252,112 +262,166 @@ public class TCCuteSpider : MonoBehaviour
         if (def.spikes > 0)
         {
             if (!cone) cone = MakeCone();
-            for (int k = 0; k < def.spikes; k++)
+
+            if (def.name == "Golden")
             {
-                // Distribute spikes along the dorsal spine of the sculpted opisthosoma
-                float v = def.spikes == 1 ? 0.45f : Mathf.Lerp(0.18f, 0.78f, k / (float)(def.spikes - 1));
-                float theta = v * Mathf.PI;
+                // Royal Golden Coronet / Crown of 7 radiant golden spikes arched across dorsal apex
+                // Spikes arranged in an ornamental coronet: majestic central spire flanked by graded royal tiara points
+                int crownCount = 7;
+                float apexV = 0.38f;
+                float theta = apexV * Mathf.PI;
                 float sTheta = Mathf.Max(0f, Mathf.Sin(theta));
                 float cTheta = Mathf.Cos(theta);
-
-                float zMesh = cTheta * 0.52f - 0.03f;
+                float zBase = cTheta * 0.52f - 0.03f;
                 float widthMod = 1f + 0.16f * cTheta - 0.05f * (cTheta * cTheta);
                 float ry = sTheta * widthMod * 0.40f;
                 float rx = sTheta * widthMod * 0.52f;
-                float yCenter = sTheta * sTheta * 0.04f - 0.02f * v;
-                float yTop = yCenter + ry;
+                float yCenter = sTheta * sTheta * 0.04f - 0.02f * apexV;
+                float yBase = yCenter + ry;
 
-                // Alternate slightly left/right if many spikes (double crest effect)
-                float sideJ = def.spikes > 5 ? ((k % 2) * 2 - 1) * 0.18f * rx : 0f;
-                float xMesh = sideJ;
+                float crownRadiusX = 0.28f * rx;
+                float crownRadiusZ = 0.16f;
 
-                // Exact dorsal surface normal in local abdomen mesh space
-                // dz/dv is negative (z decreases from front to rear)
-                float dz = -sTheta * Mathf.PI * 0.52f;
-                // dy/dv
-                float dWidth = (-0.16f * sTheta - 0.10f * cTheta * sTheta) * Mathf.PI;
-                float dry = (cTheta * Mathf.PI * widthMod + sTheta * dWidth) * 0.40f;
-                float dyCenter = (2f * sTheta * cTheta * Mathf.PI * 0.04f) - 0.02f;
-                float dy = dyCenter + dry;
-
-                // Outward surface normal pointing generally upwards (+Y) and perpendicular to spine
-                Vector3 nLocal = new Vector3(sideJ * 1.5f, -dz, dy).normalized;
-
-                // Position in local mesh space (abd object scales this by ab)
-                Vector3 localSpikePos = new Vector3(xMesh, yTop, zMesh);
-
-                // Parent to abd so spikes inherit abdomen orientation & scaling perfectly
-                var g = new GameObject("spike");
-                g.transform.SetParent(abd, false);
-                // Sink slightly into the mesh base so spikes don't hover/float in the air
-                g.transform.localPosition = localSpikePos - Vector3.up * 0.04f;
-                g.transform.localRotation = Quaternion.FromToRotation(Vector3.up, nLocal);
-
-                // Rhythmic alternating heights and pattern diversity across the spine
-                float lengthWave = def.spikes > 3 ? (k % 2 == 0 ? 1.0f : 0.82f) : 1.0f;
-                float len = def.spikeLength * (k == 0 || k == def.spikes - 1 ? 0.72f : 1.0f) * lengthWave;
-                float thickness = 0.26f * (k % 2 == 0 ? 1.05f : 0.92f);
-                g.transform.localScale = new Vector3(thickness, len, thickness);
-
-                // Diverse spike coloring based on skin pattern and accent/body contrast
-                Color spkColor;
-                float spkEmis = def.emission;
-                if (def.name == "Golden")
+                for (int k = 0; k < crownCount; k++)
                 {
-                    // Brilliant 24k polished gold spikes with radiant golden emission
-                    spkColor = (k % 2 == 0) ? new Color(1.0f, 0.94f, 0.50f) : new Color(1.0f, 0.84f, 0.10f);
-                    spkEmis = 0.75f;
-                }
-                else if (def.name == "Wasp")
-                {
-                    // Alternating sharp black and luminous yellow-amber wasp stinger thorns
-                    spkColor = (k % 2 == 0) ? new Color(0.10f, 0.08f, 0.12f) : new Color(1f, 0.85f, 0.15f);
-                    if (k % 2 != 0) spkEmis = 0.45f;
-                }
-                else if (def.name == "Squirrel")
-                {
-                    // Warm rustic gradient matching squirrel coat from chestnut to russet orange
-                    spkColor = Color.Lerp(new Color(0.42f, 0.16f, 0.08f), new Color(0.92f, 0.45f, 0.18f), (float)k / Mathf.Max(1, def.spikes - 1));
-                }
-                else switch (def.pattern)
-                {
-                    case SkinPattern.Stripes:
-                    case SkinPattern.Checker:
-                        // Alternating contrasting stripe colors
-                        spkColor = (k % 2 == 0) ? def.accent : Color.Lerp(def.body, def.accent, 0.4f);
-                        break;
-                    case SkinPattern.Dots:
-                        // Central crest / focal highlights
-                        spkColor = (k == def.spikes / 2) ? Color.Lerp(def.accent, Color.white, 0.35f) : def.accent;
-                        if (k == def.spikes / 2 && spkEmis > 0) spkEmis *= 1.4f;
-                        break;
-                    case SkinPattern.Gradient:
-                        // Beautiful gradient transition from front to rear
-                        spkColor = Color.Lerp(def.accent, def.body, (float)k / Mathf.Max(1, def.spikes - 1));
-                        break;
-                    case SkinPattern.Zigzag:
-                        // Dynamic energetic zigzag alternations
-                        spkColor = (k % 2 == 0) ? def.accent * 1.15f : Color.Lerp(def.accent, def.body, 0.3f);
-                        break;
-                    default: // Solid
-                        // Two-tone cadence matching skin theme
-                        bool alt = (k % 2 == 1);
-                        spkColor = alt ? Color.Lerp(def.accent, def.body, 0.5f) : def.accent;
-                        break;
-                }
+                    // Semi-circular tiara / ring arch around the dorsal crown
+                    float t = (float)k / (crownCount - 1); // 0 to 1
+                    float angleDeg = Mathf.Lerp(-95f, 95f, t);
+                    float rad = angleDeg * Mathf.Deg2Rad;
 
-                // If accent is very dark (e.g. Tiger stripes), brighten the alternating spikes with a warm golden highlight
-                if (spkColor.grayscale < 0.20f)
-                {
-                    spkColor = Color.Lerp(def.body, Color.white, 0.15f);
+                    float cx = Mathf.Sin(rad) * crownRadiusX;
+                    float cz = zBase + Mathf.Cos(rad) * crownRadiusZ - crownRadiusZ * 0.5f;
+                    float cy = yBase - (cx * cx) * 0.8f - ((cz - zBase) * (cz - zBase)) * 0.6f;
+
+                    var g = new GameObject("crown_spike");
+                    g.transform.SetParent(abd, false);
+                    g.transform.localPosition = new Vector3(cx, cy - 0.02f, cz);
+
+                    // Splay spikes slightly outward like an authentic royal crown/coronet
+                    Vector3 upDir = (Vector3.up * 1.6f + new Vector3(Mathf.Sin(rad) * 0.55f, 0, Mathf.Cos(rad) * 0.35f)).normalized;
+                    g.transform.localRotation = Quaternion.FromToRotation(Vector3.up, upDir);
+
+                    // Crown height profile: Center spire is tall & grand (k=3), side spires step down harmoniously
+                    int distFromCenter = Mathf.Abs(k - crownCount / 2); // 0 at center, 1, 2, 3 at sides
+                    float heightFactor = distFromCenter == 0 ? 1.45f : (distFromCenter == 1 ? 1.18f : (distFromCenter == 2 ? 0.95f : 0.78f));
+                    float len = def.spikeLength * heightFactor * 1.15f;
+                    float thickness = 0.22f * (distFromCenter == 0 ? 1.25f : 1.0f);
+                    g.transform.localScale = new Vector3(thickness, len, thickness);
+
+                    // Gleaming 24k gold with brilliant jewel tip highlight on central spire
+                    Color spkColor = (distFromCenter == 0) ? new Color(1.0f, 0.98f, 0.75f) : ((k % 2 == 0) ? new Color(1.0f, 0.90f, 0.35f) : new Color(0.98f, 0.82f, 0.12f));
+                    float spkEmis = (distFromCenter == 0) ? 0.95f : 0.65f;
+                    var crownMat = Flat(spkColor, null, spkEmis, 0.92f, 0.96f);
+
+                    g.AddComponent<MeshFilter>().sharedMesh = cone;
+                    var mr = g.AddComponent<MeshRenderer>();
+                    mr.sharedMaterial = crownMat;
+                    mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 }
+            }
+            else
+            {
+                for (int k = 0; k < def.spikes; k++)
+                {
+                    // Distribute spikes along the dorsal spine of the sculpted opisthosoma
+                    float v = def.spikes == 1 ? 0.45f : Mathf.Lerp(0.18f, 0.78f, k / (float)(def.spikes - 1));
+                    float theta = v * Mathf.PI;
+                    float sTheta = Mathf.Max(0f, Mathf.Sin(theta));
+                    float cTheta = Mathf.Cos(theta);
 
-                var customSpikeMat = Flat(spkColor, null, spkEmis, def.metallic, def.gloss);
+                    float zMesh = cTheta * 0.52f - 0.03f;
+                    float widthMod = 1f + 0.16f * cTheta - 0.05f * (cTheta * cTheta);
+                    float ry = sTheta * widthMod * 0.40f;
+                    float rx = sTheta * widthMod * 0.52f;
+                    float yCenter = sTheta * sTheta * 0.04f - 0.02f * v;
+                    float yTop = yCenter + ry;
 
-                g.AddComponent<MeshFilter>().sharedMesh = cone;
-                var mr = g.AddComponent<MeshRenderer>();
-                mr.sharedMaterial = customSpikeMat;
-                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    // Alternate slightly left/right if many spikes (double crest effect)
+                    float sideJ = def.spikes > 5 ? ((k % 2) * 2 - 1) * 0.18f * rx : 0f;
+                    float xMesh = sideJ;
+
+                    // Exact dorsal surface normal in local abdomen mesh space
+                    // dz/dv is negative (z decreases from front to rear)
+                    float dz = -sTheta * Mathf.PI * 0.52f;
+                    // dy/dv
+                    float dWidth = (-0.16f * sTheta - 0.10f * cTheta * sTheta) * Mathf.PI;
+                    float dry = (cTheta * Mathf.PI * widthMod + sTheta * dWidth) * 0.40f;
+                    float dyCenter = (2f * sTheta * cTheta * Mathf.PI * 0.04f) - 0.02f;
+                    float dy = dyCenter + dry;
+
+                    // Outward surface normal pointing generally upwards (+Y) and perpendicular to spine
+                    Vector3 nLocal = new Vector3(sideJ * 1.5f, -dz, dy).normalized;
+
+                    // Position in local mesh space (abd object scales this by ab)
+                    Vector3 localSpikePos = new Vector3(xMesh, yTop, zMesh);
+
+                    // Parent to abd so spikes inherit abdomen orientation & scaling perfectly
+                    var g = new GameObject("spike");
+                    g.transform.SetParent(abd, false);
+                    // Sink slightly into the mesh base so spikes don't hover/float in the air
+                    g.transform.localPosition = localSpikePos - Vector3.up * 0.04f;
+                    g.transform.localRotation = Quaternion.FromToRotation(Vector3.up, nLocal);
+
+                    // Rhythmic alternating heights and pattern diversity across the spine
+                    float lengthWave = def.spikes > 3 ? (k % 2 == 0 ? 1.0f : 0.82f) : 1.0f;
+                    float len = def.spikeLength * (k == 0 || k == def.spikes - 1 ? 0.72f : 1.0f) * lengthWave;
+                    float thickness = 0.26f * (k % 2 == 0 ? 1.05f : 0.92f);
+                    g.transform.localScale = new Vector3(thickness, len, thickness);
+
+                    // Diverse spike coloring based on skin pattern and accent/body contrast
+                    Color spkColor;
+                    float spkEmis = def.emission;
+                    if (def.name == "Wasp")
+                    {
+                        // Alternating sharp black and luminous yellow-amber wasp stinger thorns
+                        spkColor = (k % 2 == 0) ? new Color(0.10f, 0.08f, 0.12f) : new Color(1f, 0.85f, 0.15f);
+                        if (k % 2 != 0) spkEmis = 0.45f;
+                    }
+                    else if (def.name == "Squirrel")
+                    {
+                        // Warm rustic gradient matching squirrel coat from chestnut to russet orange
+                        spkColor = Color.Lerp(new Color(0.42f, 0.16f, 0.08f), new Color(0.92f, 0.45f, 0.18f), (float)k / Mathf.Max(1, def.spikes - 1));
+                    }
+                    else switch (def.pattern)
+                    {
+                        case SkinPattern.Stripes:
+                        case SkinPattern.Checker:
+                            // Alternating contrasting stripe colors
+                            spkColor = (k % 2 == 0) ? def.accent : Color.Lerp(def.body, def.accent, 0.4f);
+                            break;
+                        case SkinPattern.Dots:
+                            // Central crest / focal highlights
+                            spkColor = (k == def.spikes / 2) ? Color.Lerp(def.accent, Color.white, 0.35f) : def.accent;
+                            if (k == def.spikes / 2 && spkEmis > 0) spkEmis *= 1.4f;
+                            break;
+                        case SkinPattern.Gradient:
+                            // Beautiful gradient transition from front to rear
+                            spkColor = Color.Lerp(def.accent, def.body, (float)k / Mathf.Max(1, def.spikes - 1));
+                            break;
+                        case SkinPattern.Zigzag:
+                            // Dynamic energetic zigzag alternations
+                            spkColor = (k % 2 == 0) ? def.accent * 1.15f : Color.Lerp(def.accent, def.body, 0.3f);
+                            break;
+                        default: // Solid
+                            // Two-tone cadence matching skin theme
+                            bool alt = (k % 2 == 1);
+                            spkColor = alt ? Color.Lerp(def.accent, def.body, 0.5f) : def.accent;
+                            break;
+                    }
+
+                    // If accent is very dark (e.g. Tiger stripes), brighten the alternating spikes with a warm golden highlight
+                    if (spkColor.grayscale < 0.20f)
+                    {
+                        spkColor = Color.Lerp(def.body, Color.white, 0.15f);
+                    }
+
+                    var customSpikeMat = Flat(spkColor, null, spkEmis, def.metallic, def.gloss);
+
+                    g.AddComponent<MeshFilter>().sharedMesh = cone;
+                    var mr = g.AddComponent<MeshRenderer>();
+                    mr.sharedMaterial = customSpikeMat;
+                    mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
             }
         }
 

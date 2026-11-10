@@ -25,7 +25,7 @@ public class TCMenuUI : MonoBehaviour
         TCSkins.CheckAchievements();
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
         TCServices.Banner(true);
-        if (TCSave.DailyAvailable(out _)) OpenDaily();
+        if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(3.0f, OpenDaily));
     }
     /// Builds (or, when baked into the scene, binds to) every menu screen. Also run in edit mode by TCUIBake.
     public void BuildUI()

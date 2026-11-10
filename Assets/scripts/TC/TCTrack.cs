@@ -151,7 +151,7 @@ public class TCTrack : MonoBehaviour
                 Spawn(boostPool, "boost", bonusY, safeAngle);
                 lastBonusY = bonusY;
             }
-            else if (canSpawnBreatherBonus && runActiveTimer >= C.cooldownDelaySeconds && Random.value < C.cooldownChance * 2f)
+            else if (canSpawnBreatherBonus && metres >= C.cooldownMinMetres && Random.value < C.cooldownChance * 2f)
             {
                 Spawn(cooldownPool, "cooldown", bonusY, safeAngle);
                 lastBonusY = bonusY;
@@ -249,7 +249,7 @@ public class TCTrack : MonoBehaviour
             Spawn(boostPool, "boost", bonusYPos, newSafe);
             lastBonusY = bonusYPos;
         }
-        else if (canSpawnBonus && runActiveTimer >= C.cooldownDelaySeconds && Random.value < C.cooldownChance)
+        else if (canSpawnBonus && metres >= C.cooldownMinMetres && Random.value < C.cooldownChance)
         {
             Spawn(cooldownPool, "cooldown", bonusYPos, newSafe);
             lastBonusY = bonusYPos;
