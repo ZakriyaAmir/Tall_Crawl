@@ -21,8 +21,70 @@ public class playerInteract : MonoBehaviour
     public static System.Action<string, Vector3> OnEvent; // "coin","hit","heart","boost","smash","death","cooldown"
     public static int CooldownInventory = 0; // Stored slow-mo cooldown power ups
 
+    // Dual collider specification:
+    // 1. Hit collider: detects obstacle/enemy hits, reduced by 40% (scale 0.60)
+    // 2. Points collider: detects coin/powerup pickups, increased by 2x (scale 2.00)
+    public const float BASE_COLLIDER_RADIUS = 0.4f;
+    public const float BASE_COLLIDER_HEIGHT = 0.8f;
+    public static readonly Vector3 BASE_COLLIDER_CENTER = new Vector3(0f, 0.39414242f, -0.25999996f);
+    public const float HIT_COLLIDER_SCALE = 0.60f;     // 40% reduction -> 60% of original
+    public const float POINTS_COLLIDER_SCALE = 2.00f;  // 2x increase
+
+    public CapsuleCollider HitCollider { get; private set; }
+    public CapsuleCollider PointsCollider { get; private set; }
+
     AudioSource audioSource; player p; Animator animator; Renderer[] renderers;
     float invulnTimer, jumpTimer, rollTimer; bool blinking;
+
+    void Awake()
+    {
+        SetupColliders();
+    }
+
+    public void SetupColliders()
+    {
+        // 1. Configure Hit Collider on this GameObject (reduced by 40%)
+        HitCollider = GetComponent<CapsuleCollider>();
+        if (!HitCollider) HitCollider = gameObject.AddComponent<CapsuleCollider>();
+        HitCollider.isTrigger = true;
+        HitCollider.direction = 1;
+        HitCollider.center = BASE_COLLIDER_CENTER;
+        HitCollider.radius = BASE_COLLIDER_RADIUS * HIT_COLLIDER_SCALE;   // 0.24f
+        HitCollider.height = BASE_COLLIDER_HEIGHT * HIT_COLLIDER_SCALE;   // 0.48f
+
+        // 2. Configure 2x Points/Pickup Collider on child GameObject
+        Transform child = transform.Find("PickupCollector");
+        GameObject pickupObj;
+        if (!child)
+        {
+            pickupObj = new GameObject("PickupCollector");
+            pickupObj.transform.SetParent(transform, false);
+            pickupObj.transform.localPosition = Vector3.zero;
+            pickupObj.transform.localRotation = Quaternion.identity;
+            pickupObj.transform.localScale = Vector3.one;
+        }
+        else
+        {
+            pickupObj = child.gameObject;
+        }
+
+        var rb = pickupObj.GetComponent<Rigidbody>();
+        if (!rb) rb = pickupObj.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
+
+        PointsCollider = pickupObj.GetComponent<CapsuleCollider>();
+        if (!PointsCollider) PointsCollider = pickupObj.AddComponent<CapsuleCollider>();
+        PointsCollider.isTrigger = true;
+        PointsCollider.direction = 1;
+        PointsCollider.center = BASE_COLLIDER_CENTER;
+        PointsCollider.radius = BASE_COLLIDER_RADIUS * POINTS_COLLIDER_SCALE; // 0.80f
+        PointsCollider.height = BASE_COLLIDER_HEIGHT * POINTS_COLLIDER_SCALE; // 1.60f
+
+        var collector = pickupObj.GetComponent<TCPickupCollector>();
+        if (!collector) collector = pickupObj.AddComponent<TCPickupCollector>();
+        collector.Init(this);
+    }
 
     void Start()
     {
@@ -62,9 +124,66 @@ public class playerInteract : MonoBehaviour
 
     void Play(AudioClip c, float vol = 1f) { if (c && audioSource) audioSource.PlayOneShot(c, vol); }
 
+    public bool HandlePickup(Collider other)
+    {
+        if (p != null && p.GameOver) return false;
+        if (!other || !other.gameObject.activeSelf) return false;
+
+        if (other.CompareTag("points"))
+        {
+            other.gameObject.SetActive(false);
+            Play(TCSfx.Get("coin") ?? coinSound, 0.55f);
+            gameManager.Instance?.addCoin();
+            OnEvent?.Invoke("coin", other.transform.position);
+            return true;
+        }
+        else if (other.CompareTag("health"))
+        {
+            other.gameObject.SetActive(false);
+            Play(TCSfx.Get("heart") ?? healthSound, 0.8f);
+            if (life < MaxLife) life++;
+            OnEvent?.Invoke("heart", transform.position);
+            return true;
+        }
+        else if (other.CompareTag("boost"))
+        {
+            other.gameObject.SetActive(false);
+            Play(TCSfx.Get("chilli"), 0.8f);
+            StartBoost(3f + 0.75f * TCSave.Upgrade(1));
+            TCFx.Shake(0.12f);
+            TCTrack.OnChilliCollected();
+            return true;
+        }
+        else if (other.CompareTag("cooldown"))
+        {
+            other.gameObject.SetActive(false);
+            Play(TCSfx.Get("cooldown_collect") ?? TCSfx.Get("coin"), 0.85f);
+            CooldownInventory++;
+            OnEvent?.Invoke("cooldown", transform.position);
+            TCFx.Shake(0.08f);
+            return true;
+        }
+        else if (other.CompareTag("magnet"))
+        {
+            other.gameObject.SetActive(false);
+            Play(TCSfx.Get("cooldown_collect") ?? TCSfx.Get("coin"), 0.85f);
+            TCCoinMagnet.Instance?.Activate();
+            OnEvent?.Invoke("magnet", transform.position);
+            TCFx.Shake(0.08f);
+            return true;
+        }
+
+        return false;
+    }
+
     void OnTriggerEnter(Collider other)
     {
         if (p == null || p.GameOver) return;
+        if (!other) return;
+
+        // Collect coins/powerups if they overlap the main hit collider
+        if (HandlePickup(other)) return;
+
         var pooled = other.GetComponentInParent<TCPooled>();
         var enemy = other.GetComponentInParent<TCEnemy>();
 
@@ -199,40 +318,6 @@ public class playerInteract : MonoBehaviour
             if (pooled) pooled.Release();
             Damage();
         }
-        else if (other.CompareTag("points"))
-        {
-            if (!other.gameObject.activeSelf) return; // already collected this physics step (several colliders on the spider)
-            other.gameObject.SetActive(false);
-            Play(TCSfx.Get("coin") ?? coinSound, 0.55f);
-            gameManager.Instance?.addCoin();
-            OnEvent?.Invoke("coin", other.transform.position);
-        }
-        else if (other.CompareTag("health"))
-        {
-            if (!other.gameObject.activeSelf) return;
-            other.gameObject.SetActive(false);
-            Play(TCSfx.Get("heart") ?? healthSound, 0.8f);
-            if (life < MaxLife) life++;
-            OnEvent?.Invoke("heart", transform.position);
-        }
-        else if (other.CompareTag("boost"))
-        {
-            if (!other.gameObject.activeSelf) return;
-            other.gameObject.SetActive(false); // short cute "nom-nom-yip" (no slow-motion whoosh)
-            Play(TCSfx.Get("chilli"), 0.8f);
-            StartBoost(3f + 0.75f * TCSave.Upgrade(1));
-            TCFx.Shake(0.12f);
-            TCTrack.OnChilliCollected();
-        }
-        else if (other.CompareTag("cooldown"))
-        {
-            if (!other.gameObject.activeSelf) return;
-            other.gameObject.SetActive(false);
-            Play(TCSfx.Get("cooldown_collect") ?? TCSfx.Get("coin"), 0.85f);
-            CooldownInventory++;
-            OnEvent?.Invoke("cooldown", transform.position);
-            TCFx.Shake(0.08f);
-        }
     }
 
     void Damage()
@@ -291,5 +376,45 @@ public class playerInteract : MonoBehaviour
         Play(TCSfx.Get("menu_flip") ?? TCSfx.Get("jump") ?? jumpSound, 0.85f);
         var cute = GetComponentInChildren<TCCuteSpider>();
         if (cute) cute.TriggerBackflip(duration * (0.75f / 0.85f));
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        // Draw hit collider (Orange/Red) - 40% smaller (r=0.24, h=0.48)
+        Gizmos.color = new Color(1f, 0.25f, 0.1f, 0.85f);
+        Vector3 c = transform.TransformPoint(BASE_COLLIDER_CENTER);
+        Gizmos.DrawWireSphere(c, BASE_COLLIDER_RADIUS * HIT_COLLIDER_SCALE);
+
+        // Draw points/pickup collector (Vibrant Gold/Green) - 2x larger (r=0.80, h=1.60)
+        Gizmos.color = new Color(0.2f, 1f, 0.4f, 0.75f);
+        Gizmos.DrawWireSphere(c, BASE_COLLIDER_RADIUS * POINTS_COLLIDER_SCALE);
+    }
+}
+
+/// <summary>
+/// Dedicated trigger collector for coins and powerups with 2x pickup range.
+/// Hazard tags (branch, bees, enemies) are ignored so damage is never taken through this collider.
+/// </summary>
+public class TCPickupCollector : MonoBehaviour
+{
+    [SerializeField] playerInteract pi;
+
+    public void Init(playerInteract owner)
+    {
+        pi = owner;
+    }
+
+    void Awake()
+    {
+        if (!pi) pi = GetComponentInParent<playerInteract>();
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (!pi) pi = GetComponentInParent<playerInteract>();
+        if (pi != null)
+        {
+            pi.HandlePickup(other);
+        }
     }
 }

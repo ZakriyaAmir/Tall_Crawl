@@ -33,6 +33,8 @@ public class TCConfig : ScriptableObject
     [Range(0, 1)] public float boostChance = 0.12f;
     [Range(0, 1)] [Tooltip("Probability of spawning cooldown slow-mo pickup in safe gap")] public float cooldownChance = 0.042f; // Reduced by 70% (from 0.14f)
     [Tooltip("Minimum metres climbed before slow-mo cooldown power ups can spawn")] public float cooldownMinMetres = 200f;
+    [Range(0, 1)] [Tooltip("Probability of spawning coin magnet pickup in safe gap")] public float magnetChance = 0.042f;
+    [Tooltip("Minimum metres climbed before coin magnet power ups can spawn")] public float magnetMinMetres = 200f;
 
     [Header("Player")]
     public float defaultSensitivity = 1f;

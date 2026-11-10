@@ -10,7 +10,7 @@ public class TCGameUI : MonoBehaviour
     public static TCGameUI Instance;
     player pl; playerInteract spider; gameManager gm;
     RectTransform safe, heartsRow, coinIconTarget; TextMeshProUGUI scoreText, coinText, hintText, boostText;
-    RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText, slowmoTimerText; GameObject chilliRow, slowmoRow; RectTransform chilliRect, slowmoRect;
+    RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText, slowmoTimerText, magnetTimerText; GameObject chilliRow, slowmoRow, magnetRow; RectTransform chilliRect, slowmoRect, magnetRect;
     Button cooldownBtn; TextMeshProUGUI cooldownBadgeText; Image cooldownCooldownOverlay;
     int lastCooldownCount = -1;
     Vector2 panelNormalSize;
@@ -30,6 +30,7 @@ public class TCGameUI : MonoBehaviour
     int lastSpeedTenths = -1;
     int lastChilliTenths = -1;
     int lastSlowmoTenths = -1;
+    int lastMagnetTenths = -1;
     Coroutine coinPunchCo;
     enum HandAnimMode { Horizontal, SwipeUp, PointCooldown, Hidden }
     HandAnimMode handMode = HandAnimMode.Horizontal;
@@ -44,6 +45,11 @@ public class TCGameUI : MonoBehaviour
         {
             var tdObj = new GameObject("TCTimeDilation");
             tdObj.AddComponent<TCTimeDilation>();
+        }
+        if (!FindObjectOfType<TCCoinMagnet>())
+        {
+            var cmObj = new GameObject("TCCoinMagnet");
+            cmObj.AddComponent<TCCoinMagnet>();
         }
         BuildUI();
         hintText.text = TCSave.TutorialDone ? "TOUCH TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk";
@@ -178,6 +184,40 @@ public class TCGameUI : MonoBehaviour
                 }
                 slowmoRow.SetActive(false);
             }
+
+            // Create or bind MagnetRow segment
+            var magRow = speedPanel.Find("MagnetRow");
+            if (magRow == null && cRow != null)
+            {
+                var clone = Instantiate(cRow.gameObject, speedPanel);
+                clone.name = "MagnetRow";
+                magRow = clone.transform;
+            }
+            if (magRow != null)
+            {
+                magnetRow = magRow.gameObject;
+                magnetRect = magRow as RectTransform;
+                if (magnetRect != null)
+                {
+                    magnetRect.anchorMin = new Vector2(0, 1);
+                    magnetRect.anchorMax = new Vector2(1, 1);
+                    magnetRect.pivot = new Vector2(0.5f, 1);
+                    magnetRect.sizeDelta = new Vector2(0, 78);
+                }
+                magnetTimerText = magRow.Find("ChilliTime")?.GetComponent<TextMeshProUGUI>() ?? magRow.Find("MagnetTime")?.GetComponent<TextMeshProUGUI>();
+                if (magnetTimerText != null)
+                {
+                    magnetTimerText.name = "MagnetTime";
+                    magnetTimerText.color = TCUI.Hex("#FFB703");
+                }
+                var magIcon = magRow.Find("ChilliIcon")?.GetComponent<Image>() ?? magRow.Find("MagnetIcon")?.GetComponent<Image>();
+                if (magIcon != null)
+                {
+                    magIcon.name = "MagnetIcon";
+                    magIcon.sprite = TCUI.Icon("magnet");
+                }
+                magnetRow.SetActive(false);
+            }
         }
 
         boostText = TCUI.Label("Boost", safe, "BOOST!", 110, TCUI.Peach); TCUI.Place(boostText.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(900, 160));
@@ -307,6 +347,20 @@ public class TCGameUI : MonoBehaviour
                 }
             }
 
+            bool magnetActive = TCCoinMagnet.Instance != null && TCCoinMagnet.Instance.IsActive;
+            if (magnetRow != null && magnetRow.activeSelf != magnetActive)
+                magnetRow.SetActive(magnetActive);
+
+            if (magnetActive && magnetTimerText != null && TCCoinMagnet.Instance != null)
+            {
+                int magTenths = Mathf.CeilToInt(TCCoinMagnet.Instance.ActiveTimeRemaining * 10f);
+                if (magTenths != lastMagnetTenths)
+                {
+                    lastMagnetTenths = magTenths;
+                    magnetTimerText.text = (magTenths / 10f).ToString("0.0") + "s";
+                }
+            }
+
             // Sequential layout of active segments below SpeedRow
             float nextY = -88f;
             if (chilliActive && chilliRect != null)
@@ -319,9 +373,14 @@ public class TCGameUI : MonoBehaviour
                 slowmoRect.anchoredPosition = new Vector2(0, nextY);
                 nextY -= 78f;
             }
+            if (magnetActive && magnetRect != null)
+            {
+                magnetRect.anchoredPosition = new Vector2(0, nextY);
+                nextY -= 78f;
+            }
 
             // Dynamic panel expansion: 88f base + 78f for each active segment
-            float targetHeight = 88f + (chilliActive ? 78f : 0f) + (slowActive ? 78f : 0f);
+            float targetHeight = 88f + (chilliActive ? 78f : 0f) + (slowActive ? 78f : 0f) + (magnetActive ? 78f : 0f);
             if (Mathf.Abs(currentPanelHeight - targetHeight) > 0.05f)
             {
                 currentPanelHeight = Mathf.MoveTowards(currentPanelHeight, targetHeight, Time.unscaledDeltaTime * 420f);
@@ -513,7 +572,13 @@ public class TCGameUI : MonoBehaviour
         flyingCoinPool.Enqueue(coinImg);
     }
 
-    void Pop(string text, Vector3 world, Color c)
+    public void TriggerHighScoreCelebration()
+    {
+        if (safe != null) StartCoroutine(ConfettiCelebration(safe));
+        if (scoreText != null) StartCoroutine(TCUI.Punch(scoreText.transform, 0.45f, 0.5f));
+    }
+
+    public void Pop(string text, Vector3 world, Color c)
     {
         if (!cam) cam = Camera.main; if (!cam) return;
         EnsureFxCanvas();

@@ -7,11 +7,11 @@ using UnityEngine;
 public class TCTrack : MonoBehaviour
 {
     public GameObject trunkPrefab, branchPrefab, beesPrefab, coinPrefab, heartPrefab, boostPrefab;
-    public GameObject pineconePrefab, waspPrefab, squirrelPrefab, cooldownPrefab;
+    public GameObject pineconePrefab, waspPrefab, squirrelPrefab, cooldownPrefab, magnetPrefab;
     public Transform stemParent, hazardParent, bonusParent;
     public Transform player;
 
-    TCPool trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool;
+    TCPool trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool, magnetPool;
     TCPool pineconePool, waspPool, squirrelPool;
     readonly List<TCPooled> live = new List<TCPooled>(256);
     readonly List<float> angles = new List<float>(8);
@@ -22,7 +22,7 @@ public class TCTrack : MonoBehaviour
     int rowIndex; bool lastWasBee; player pl;
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
-    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool, pineconePool, waspPool, squirrelPool };
+    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool, magnetPool, pineconePool, waspPool, squirrelPool };
     public static TCTrack Instance;
     TCConfig C;
 
@@ -103,6 +103,10 @@ public class TCTrack : MonoBehaviour
         if (cProto != null) cProto.SetActive(false);
         cooldownPool = new TCPool(cProto, bonusParent, 3);
 
+        var mProto = magnetPrefab ? magnetPrefab : TCCoinMagnet.CreateMagnetPickupPrefab(bonusParent);
+        if (mProto != null) mProto.SetActive(false);
+        magnetPool = new TCPool(mProto, bonusParent, 3);
+
         var pProto = pineconePrefab ? pineconePrefab : TCEnemy.CreatePineconePrefab(hazardParent);
         pineconePool = new TCPool(pProto, hazardParent, 5);
 
@@ -122,6 +126,12 @@ public class TCTrack : MonoBehaviour
         lastBonusY = -999f;
         runActiveTimer = 0f;
         nextHeartEligibleTime = Time.time + 10f; // heart check every 10 seconds
+
+        // Spawn High Score Milestone Tag & Ribbon on trunk if previous high score exists
+        if (TCSave.Best >= 10 && player != null)
+        {
+            TCHighScoreMarker.Spawn(stemParent, player, TCSave.Best, C.metresPerUnit);
+        }
 
         // Safe start: welcome string of coins straight up
         SpawnCoinTrail(py + 1.2f, py + 1.2f + 6 * UniformCoinSpacing, safeAngle, safeAngle, 7);
@@ -196,6 +206,7 @@ public class TCTrack : MonoBehaviour
 
             float playerTraveledMetres = pl ? pl.currentScore : 0f;
             bool canSpawnCooldown = playerTraveledMetres >= C.cooldownMinMetres && metres >= C.cooldownMinMetres;
+            bool canSpawnMagnet = playerTraveledMetres >= C.magnetMinMetres && metres >= C.magnetMinMetres;
 
             if (canSpawnBreatherBonus && heartEligible)
             {
@@ -211,6 +222,11 @@ public class TCTrack : MonoBehaviour
             else if (canSpawnBreatherBonus && canSpawnCooldown && Random.value < C.cooldownChance * 2f)
             {
                 Spawn(cooldownPool, "cooldown", bonusY, safeAngle);
+                lastBonusY = bonusY;
+            }
+            else if (canSpawnBreatherBonus && canSpawnMagnet && Random.value < C.magnetChance * 2f)
+            {
+                Spawn(magnetPool, "magnet", bonusY, safeAngle);
                 lastBonusY = bonusY;
             }
             else
@@ -297,6 +313,7 @@ public class TCTrack : MonoBehaviour
 
         float playerDistance = pl ? pl.currentScore : 0f;
         bool canSpawnCooldownGap = playerDistance >= C.cooldownMinMetres && metres >= C.cooldownMinMetres;
+        bool canSpawnMagnetGap = playerDistance >= C.magnetMinMetres && metres >= C.magnetMinMetres;
 
         if (canSpawnBonus && heartEligible)
         {
@@ -312,6 +329,11 @@ public class TCTrack : MonoBehaviour
         else if (canSpawnBonus && canSpawnCooldownGap && Random.value < C.cooldownChance)
         {
             Spawn(cooldownPool, "cooldown", bonusYPos, newSafe);
+            lastBonusY = bonusYPos;
+        }
+        else if (canSpawnBonus && canSpawnMagnetGap && Random.value < C.magnetChance)
+        {
+            Spawn(magnetPool, "magnet", bonusYPos, newSafe);
             lastBonusY = bonusYPos;
         }
         else if (Random.value < C.coinTrailChance)
@@ -378,6 +400,77 @@ public class TCTrack : MonoBehaviour
         }
     }
 
+    public void AttractCoins(Vector3 spiderPos, float maxMetresDiff, float maxMove)
+    {
+        float spiderY = spiderPos.y;
+        float spiderAngle = Mathf.Atan2(spiderPos.x, spiderPos.z) * Mathf.Rad2Deg;
+        float spiderRadius = Mathf.Sqrt(spiderPos.x * spiderPos.x + spiderPos.z * spiderPos.z);
+        const float trunkRadius = 0.603f;
+        float mpu = (C != null && C.metresPerUnit > 0f) ? C.metresPerUnit : 20f;
+
+        for (int i = live.Count - 1; i >= 0; i--)
+        {
+            var p = live[i];
+            if (p == null || !p.gameObject.activeSelf || p.kind != "coin") continue;
+
+            Transform coinChild = (p.transform.childCount > 0) ? p.transform.GetChild(0) : p.transform;
+            if (coinChild == null || !coinChild.gameObject.activeSelf)
+            {
+                p.Release();
+                live.RemoveAt(i);
+                continue;
+            }
+
+            float coinY = p.transform.position.y;
+            float dy = spiderY - coinY;
+            // Height distance converted to true game metres (1 world unit = 20m)
+            float heightDiffMetres = Mathf.Abs(dy) * mpu;
+
+            // Only attract coins when height distance is within 20m
+            if (heightDiffMetres > maxMetresDiff) continue;
+
+            float coinAngle = p.transform.eulerAngles.y;
+            float dAngle = Mathf.DeltaAngle(coinAngle, spiderAngle);
+            float arc = trunkRadius * dAngle * Mathf.Deg2Rad;
+            float dist = Mathf.Sqrt(dy * dy + arc * arc);
+
+            // Check if coin has reached the spider -> collect it immediately!
+            if (dist <= 0.50f)
+            {
+                coinChild.gameObject.SetActive(false);
+                coinChild.localPosition = new Vector3(0f, 0f, 0.603f);
+                coinChild.localRotation = Quaternion.Euler(0f, 0f, 90f);
+
+                p.gameObject.SetActive(false);
+                p.Release();
+                live.RemoveAt(i);
+
+                TCSfx.Play("coin", 0.55f);
+                gameManager.Instance?.addCoin();
+                playerInteract.OnEvent?.Invoke("coin", spiderPos);
+                continue;
+            }
+
+            // Fly coin smoothly in 3D directly towards the spider (within 20m)
+            float flySpeed = Mathf.Max(14.0f, maxMove / Mathf.Max(0.0001f, Time.deltaTime));
+            float step = flySpeed * Time.deltaTime;
+            float moveRatio = Mathf.Min(1f, step / Mathf.Max(0.001f, dist));
+
+            float newY = coinY + dy * moveRatio;
+            float angleStep = (step / trunkRadius) * Mathf.Rad2Deg;
+            float newAngle = (Mathf.Abs(dAngle) <= angleStep) ? spiderAngle : (coinAngle + Mathf.Sign(dAngle) * angleStep);
+
+            // Lift coin slightly off the bark as it flies through 3D space toward spider
+            float targetR = Mathf.Max(trunkRadius, spiderRadius);
+            float currentR = Mathf.Lerp(trunkRadius + 0.08f, targetR, 1f - Mathf.Clamp01(dist / 3.0f));
+
+            p.transform.position = new Vector3(0f, newY, 0f);
+            p.transform.rotation = Quaternion.Euler(0f, newAngle, 0f);
+            p.y = newY;
+            coinChild.localPosition = new Vector3(0f, 0f, currentR);
+        }
+    }
+
     TCPooled Spawn(TCPool pool, string kind, float y, float angle)
     {
         var g = pool.Get(new Vector3(0, y, 0), Quaternion.Euler(0, angle, 0));
@@ -393,7 +486,16 @@ public class TCTrack : MonoBehaviour
         }
 
         // re-enable children that were hidden on pickup
-        for (int i = 0; i < g.transform.childCount; i++) g.transform.GetChild(i).gameObject.SetActive(true);
+        for (int i = 0; i < g.transform.childCount; i++)
+        {
+            var ch = g.transform.GetChild(i);
+            ch.gameObject.SetActive(true);
+            if (kind == "coin")
+            {
+                ch.localPosition = new Vector3(0f, 0f, 0.603f);
+                ch.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            }
+        }
         live.Add(p);
         return p;
     }

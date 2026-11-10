@@ -36,6 +36,8 @@ MonoBehaviour:
   boostChance: 0.12
   cooldownChance: 0.042
   cooldownMinMetres: 200
+  magnetChance: 0.042
+  magnetMinMetres: 200
   defaultSensitivity: 1
   dragDegreesPerScreenWidth: 300
   deadZonePixels: 6

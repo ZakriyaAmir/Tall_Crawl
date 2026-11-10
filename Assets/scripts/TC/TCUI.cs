@@ -164,6 +164,21 @@ public static class TCUI
                 float hands = Mathf.Min(hub, Mathf.Min(hand1, hand2));
                 return Over(cFace, Fill(hands, Hex("#2C689C")));
             }
+            case "magnet":
+            {
+                // Horseshoe magnet with Red (North) and Blue (South) poles and shining silver tips
+                float dU = (p.y < -0.05f)
+                    ? (Mathf.Abs(Vector2.Distance(p, new Vector2(0f, -0.05f)) - 0.40f) - 0.15f)
+                    : (SegDist(new Vector2(Mathf.Abs(p.x), p.y), new Vector2(0.40f, -0.05f), new Vector2(0.40f, 0.55f)) - 0.15f);
+
+                Color bodyCol = (p.x < 0) ? Hex("#FF2A55") : Hex("#0077FF"); // Red left, Blue right
+                if (p.y < -0.22f) bodyCol = Hex("#E2E8F0"); // Chrome base arch
+                if (p.y > 0.28f) bodyCol = Hex("#FFFFFF");  // Shining pole tips
+                var cMag = Fill(dU, bodyCol);
+
+                float dLine = Mathf.Max(dU, Mathf.Abs(p.y - 0.28f) - 0.025f);
+                return Over(Fill(dLine, Hex("#1E2430")), cMag);
+            }
             case "star":
             {
                 float a = Mathf.Atan2(p.y, p.x) + Mathf.PI / 2; float r = p.magnitude;
