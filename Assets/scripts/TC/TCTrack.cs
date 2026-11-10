@@ -426,7 +426,7 @@ public class TCTrack : MonoBehaviour
             // Height distance converted to true game metres (1 world unit = 20m)
             float heightDiffMetres = Mathf.Abs(dy) * mpu;
 
-            // Only attract coins when height distance is within 20m
+            // Only attract coins when height distance is within maxMetresDiff (40m)
             if (heightDiffMetres > maxMetresDiff) continue;
 
             float coinAngle = p.transform.eulerAngles.y;
@@ -435,7 +435,7 @@ public class TCTrack : MonoBehaviour
             float dist = Mathf.Sqrt(dy * dy + arc * arc);
 
             // Check if coin has reached the spider -> collect it immediately!
-            if (dist <= 0.50f)
+            if (dist <= 0.45f)
             {
                 coinChild.gameObject.SetActive(false);
                 coinChild.localPosition = new Vector3(0f, 0f, 0.603f);
@@ -451,18 +451,23 @@ public class TCTrack : MonoBehaviour
                 continue;
             }
 
-            // Fly coin smoothly in 3D directly towards the spider (within 20m)
-            float flySpeed = Mathf.Max(14.0f, maxMove / Mathf.Max(0.0001f, Time.deltaTime));
-            float step = flySpeed * Time.deltaTime;
-            float moveRatio = Mathf.Min(1f, step / Mathf.Max(0.001f, dist));
+            // Fly coin smoothly with curved acceleration: gentle drift from far, swooping curve closer in
+            float tNear = Mathf.Clamp01(1f - (heightDiffMetres / maxMetresDiff)); // 0 when at 40m, 1 when at spider height
+            float smoothSpeed = Mathf.Lerp(8.0f, 26.0f, tNear * tNear);
+            float step = smoothSpeed * Time.deltaTime;
 
-            float newY = coinY + dy * moveRatio;
-            float angleStep = (step / trunkRadius) * Mathf.Rad2Deg;
-            float newAngle = (Mathf.Abs(dAngle) <= angleStep) ? spiderAngle : (coinAngle + Mathf.Sign(dAngle) * angleStep);
+            // Smooth interpolation along height (Y)
+            float moveRatio = Mathf.Clamp01(step / Mathf.Max(0.001f, dist));
+            float newY = Mathf.MoveTowards(coinY, spiderY, step * Mathf.Clamp01(Mathf.Abs(dy) / Mathf.Max(0.001f, dist)));
 
-            // Lift coin slightly off the bark as it flies through 3D space toward spider
+            // Smooth angular tracking around cylinder trunk
+            float angleSpeed = Mathf.Lerp(90f, 360f, tNear);
+            float newAngle = Mathf.MoveTowardsAngle(coinAngle, spiderAngle, angleSpeed * Time.deltaTime);
+
+            // Lift coin gently off bark along an arc as it glides in
             float targetR = Mathf.Max(trunkRadius, spiderRadius);
-            float currentR = Mathf.Lerp(trunkRadius + 0.08f, targetR, 1f - Mathf.Clamp01(dist / 3.0f));
+            float arcLift = Mathf.Sin(tNear * Mathf.PI) * 0.12f;
+            float currentR = Mathf.Lerp(trunkRadius, targetR, tNear) + arcLift;
 
             p.transform.position = new Vector3(0f, newY, 0f);
             p.transform.rotation = Quaternion.Euler(0f, newAngle, 0f);

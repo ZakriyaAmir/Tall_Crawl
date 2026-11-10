@@ -25,10 +25,10 @@ public class TCCoinMagnet : MonoBehaviour
     public float ActiveTimeRemaining => Mathf.Max(0f, activeTimeRemaining);
 
     /// <summary>
-    /// Attraction height limit in game metres (only attracts coins within 20m height distance).
+    /// Attraction height limit in game metres (attracts coins within 40m height distance).
     /// </summary>
-    public float AttractionRadius => 20.0f;
-    public float AttractionSpeed => 28.0f;
+    public float AttractionRadius => 40.0f;
+    public float AttractionSpeed => 32.0f;
 
     // Subtle Spider Shockwave parameters:
     // Stays strictly around the spider (peak radius 0.48m, 60% transparent = 40% peak opacity, warm yellowish tint)
@@ -133,11 +133,11 @@ public class TCCoinMagnet : MonoBehaviour
                             float radius = Mathf.Lerp(0.16f, 0.48f, ease);
                             wave.root.localScale = new Vector3(radius, 1f, radius);
 
-                            // 60% transparent curve (peak opacity = 0.40, fading smoothly to 0 at inner/outer edges)
+                            // Further reduced transparency by 50% (peak opacity = 0.20, fading smoothly to 0 at edges)
                             float alpha = (u < 0.20f)
                                 ? (u / 0.20f)
                                 : Mathf.Pow(1f - (u - 0.20f) / 0.80f, 1.4f);
-                            alpha *= 0.40f; // 60% transparent = 40% opacity
+                            alpha *= 0.20f; // 50% less opacity than before (0.40 -> 0.20)
 
                             // Warm luminous yellowish magnetic ripple (golden yellow crest shifting into soft warm amber)
                             Color waveCol = Color.Lerp(
@@ -150,10 +150,10 @@ public class TCCoinMagnet : MonoBehaviour
                         }
                     }
 
-                    // 2. Soft Carapace Shimmer with yellowish tint (gentle ambient pulse, alpha ~0.08)
+                    // 2. Soft Carapace Shimmer with yellowish tint (gentle ambient pulse, alpha ~0.04)
                     if (carapaceShimmer != null && carapaceShimmerMat != null)
                     {
-                        float shimAlpha = 0.06f + 0.03f * Mathf.Sin(Time.time * 4f);
+                        float shimAlpha = 0.03f + 0.015f * Mathf.Sin(Time.time * 4f);
                         SetMatColor(carapaceShimmerMat, new Color(1.0f, 0.92f, 0.40f, shimAlpha));
                     }
 
