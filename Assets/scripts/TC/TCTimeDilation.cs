@@ -11,9 +11,16 @@ public class TCTimeDilation : MonoBehaviour
     public static TCTimeDilation Instance { get; private set; }
 
     public const float SlowScale = 0.5f;
-    public const float SlowDuration = 3.0f;
+    public const float BaseSlowDuration = 3.0f;
+    public const float SlowDuration = 3.0f; // legacy constant
     public const float EaseInDuration = 0.25f;
     public const float EaseOutDuration = 0.45f;
+
+    /// <summary>
+    /// Effective duration of slow-motion time dilation, scaling with Store Upgrade ID 5.
+    /// Base: 3.0s, +0.75s per upgrade level (Level 5 = 6.75s).
+    /// </summary>
+    public static float Duration => BaseSlowDuration + 0.75f * TCSave.Upgrade(5);
 
     public bool IsActive => activeTimeRemaining > 0f;
     public float ActiveTimeRemaining => Mathf.Max(0f, activeTimeRemaining);
@@ -57,7 +64,7 @@ public class TCTimeDilation : MonoBehaviour
 
     IEnumerator DilationSequence()
     {
-        activeTimeRemaining = SlowDuration;
+        activeTimeRemaining = Duration;
 
         // Ease in from current timeScale to 0.5x
         float startScale = Time.timeScale;
@@ -171,6 +178,7 @@ public class TCTimeDilation : MonoBehaviour
         CreateVisualPart(PrimitiveType.Cube, model.transform, new Vector3(-0.06f, 0.06f, 0), new Vector3(0.045f, 0.16f, 0.03f), coreMat, Quaternion.Euler(0, 0, 35f));
         CreateVisualPart(PrimitiveType.Cube, model.transform, new Vector3(0.07f, 0.04f, 0), new Vector3(0.045f, 0.14f, 0.03f), coreMat, Quaternion.Euler(0, 0, -50f));
 
+        root.SetActive(false);
         return root;
     }
 

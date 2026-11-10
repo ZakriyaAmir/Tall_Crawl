@@ -10,7 +10,7 @@ public class TCGameUI : MonoBehaviour
     public static TCGameUI Instance;
     player pl; playerInteract spider; gameManager gm;
     RectTransform safe, heartsRow, coinIconTarget; TextMeshProUGUI scoreText, coinText, hintText, boostText;
-    RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText; GameObject chilliRow;
+    RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText, slowmoTimerText; GameObject chilliRow, slowmoRow; RectTransform chilliRect, slowmoRect;
     Button cooldownBtn; TextMeshProUGUI cooldownBadgeText; Image cooldownCooldownOverlay;
     int lastCooldownCount = -1;
     Vector2 panelNormalSize;
@@ -29,6 +29,7 @@ public class TCGameUI : MonoBehaviour
     Canvas fxCanvas;
     int lastSpeedTenths = -1;
     int lastChilliTenths = -1;
+    int lastSlowmoTenths = -1;
     Coroutine coinPunchCo;
     enum HandAnimMode { Horizontal, SwipeUp, PointCooldown, Hidden }
     HandAnimMode handMode = HandAnimMode.Horizontal;
@@ -108,8 +109,15 @@ public class TCGameUI : MonoBehaviour
         speedPanel = TCUI.Rect("SpeedChilliPanel", safe);
         if (speedPanel != null)
         {
-            panelNormalSize = speedPanel.sizeDelta;
-            currentPanelHeight = panelNormalSize.y;
+            // Fix pivot to top-center so expanding/collapsing grows downwards smoothly
+            float topY = speedPanel.anchoredPosition.y + (1f - speedPanel.pivot.y) * speedPanel.sizeDelta.y;
+            speedPanel.pivot = new Vector2(0.5f, 1f);
+            speedPanel.anchoredPosition = new Vector2(speedPanel.anchoredPosition.x, topY);
+
+            panelNormalSize = new Vector2(speedPanel.sizeDelta.x, 88f);
+            currentPanelHeight = 88f;
+            speedPanel.sizeDelta = new Vector2(panelNormalSize.x, currentPanelHeight);
+
             var sRow = speedPanel.Find("SpeedRow");
             if (sRow != null)
             {
@@ -122,11 +130,53 @@ public class TCGameUI : MonoBehaviour
             if (cRow != null)
             {
                 chilliRow = cRow.gameObject;
+                chilliRect = cRow as RectTransform;
+                if (chilliRect != null)
+                {
+                    chilliRect.anchorMin = new Vector2(0, 1);
+                    chilliRect.anchorMax = new Vector2(1, 1);
+                    chilliRect.pivot = new Vector2(0.5f, 1);
+                    chilliRect.sizeDelta = new Vector2(0, 78);
+                }
                 chilliTimerText = cRow.Find("ChilliTime")?.GetComponent<TextMeshProUGUI>();
                 var chilliImg = cRow.Find("ChilliIcon")?.GetComponent<Image>();
                 if (chilliImg != null && chilliImg.sprite == null)
                     chilliImg.sprite = TCUI.Icon("chilli");
                 chilliRow.SetActive(false);
+            }
+
+            // Create or bind SlowmoRow segment
+            var smRow = speedPanel.Find("SlowmoRow");
+            if (smRow == null && cRow != null)
+            {
+                var clone = Instantiate(cRow.gameObject, speedPanel);
+                clone.name = "SlowmoRow";
+                smRow = clone.transform;
+            }
+            if (smRow != null)
+            {
+                slowmoRow = smRow.gameObject;
+                slowmoRect = smRow as RectTransform;
+                if (slowmoRect != null)
+                {
+                    slowmoRect.anchorMin = new Vector2(0, 1);
+                    slowmoRect.anchorMax = new Vector2(1, 1);
+                    slowmoRect.pivot = new Vector2(0.5f, 1);
+                    slowmoRect.sizeDelta = new Vector2(0, 78);
+                }
+                slowmoTimerText = smRow.Find("ChilliTime")?.GetComponent<TextMeshProUGUI>() ?? smRow.Find("SlowmoTime")?.GetComponent<TextMeshProUGUI>();
+                if (slowmoTimerText != null)
+                {
+                    slowmoTimerText.name = "SlowmoTime";
+                    slowmoTimerText.color = TCUI.Hex("#3A9BDC");
+                }
+                var smIcon = smRow.Find("ChilliIcon")?.GetComponent<Image>() ?? smRow.Find("SlowmoIcon")?.GetComponent<Image>();
+                if (smIcon != null)
+                {
+                    smIcon.name = "SlowmoIcon";
+                    smIcon.sprite = TCUI.Icon("cooldown");
+                }
+                slowmoRow.SetActive(false);
             }
         }
 
@@ -211,12 +261,14 @@ public class TCGameUI : MonoBehaviour
         }
         if (pl.boost) boostText.transform.localScale = Vector3.one * (1 + 0.06f * Mathf.Sin(Time.time * 14));
 
-        // Speed Multiplier & Chilli Mode Panel (dirtied only when values change)
+        // Speed Multiplier, Chilli Mode & Slow-Mo Panel (dirtied only when values change)
         if (speedPanel != null)
         {
+            bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
+            bool chilliActive = spider != null && spider.boostDuration > 0;
+
             if (speedText != null)
             {
-                bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
                 float baseMult = TCConfig.I.SpeedMultiplierAtDistance(pl.currentScore);
                 float speedMult = slowActive ? (baseMult * Time.timeScale) : (pl.boost ? baseMult * TCConfig.I.boostMultiplier : baseMult);
                 int speedTenths = Mathf.RoundToInt(speedMult * 10f);
@@ -229,7 +281,6 @@ public class TCGameUI : MonoBehaviour
                 if (speedText.color != targetCol) speedText.color = targetCol;
             }
 
-            bool chilliActive = spider != null && spider.boostDuration > 0;
             if (chilliRow != null && chilliRow.activeSelf != chilliActive)
                 chilliRow.SetActive(chilliActive);
 
@@ -243,11 +294,37 @@ public class TCGameUI : MonoBehaviour
                 }
             }
 
-            // Only adjust panel sizeDelta when transitioning between chilli mode and normal
-            float targetHeight = chilliActive ? panelNormalSize.y : 88f;
+            if (slowmoRow != null && slowmoRow.activeSelf != slowActive)
+                slowmoRow.SetActive(slowActive);
+
+            if (slowActive && slowmoTimerText != null && TCTimeDilation.Instance != null)
+            {
+                int slowmoTenths = Mathf.CeilToInt(TCTimeDilation.Instance.ActiveTimeRemaining * 10f);
+                if (slowmoTenths != lastSlowmoTenths)
+                {
+                    lastSlowmoTenths = slowmoTenths;
+                    slowmoTimerText.text = (slowmoTenths / 10f).ToString("0.0") + "s";
+                }
+            }
+
+            // Sequential layout of active segments below SpeedRow
+            float nextY = -88f;
+            if (chilliActive && chilliRect != null)
+            {
+                chilliRect.anchoredPosition = new Vector2(0, nextY);
+                nextY -= 78f;
+            }
+            if (slowActive && slowmoRect != null)
+            {
+                slowmoRect.anchoredPosition = new Vector2(0, nextY);
+                nextY -= 78f;
+            }
+
+            // Dynamic panel expansion: 88f base + 78f for each active segment
+            float targetHeight = 88f + (chilliActive ? 78f : 0f) + (slowActive ? 78f : 0f);
             if (Mathf.Abs(currentPanelHeight - targetHeight) > 0.05f)
             {
-                currentPanelHeight = Mathf.MoveTowards(currentPanelHeight, targetHeight, Time.deltaTime * 380f);
+                currentPanelHeight = Mathf.MoveTowards(currentPanelHeight, targetHeight, Time.unscaledDeltaTime * 420f);
                 speedPanel.sizeDelta = new Vector2(panelNormalSize.x, currentPanelHeight);
             }
             else if (speedPanel.sizeDelta.y != targetHeight)
@@ -881,70 +958,6 @@ public class TCGameUI : MonoBehaviour
         }
 
         yield return new WaitForSeconds(1.8f);
-
-        // -------------------------------------------------------------
-        // STEP 6: SLOW MOTION POWER UP
-        // -------------------------------------------------------------
-        // Restrict steering left/right until slow-mo power up is collected
-        pl.SetSteerAllowed(false);
-        pl.SetJumpAllowed(false);
-
-        // Spawn a cooldown slow-mo pickup directly in the spider's forward path
-        float cdAngle = pl.CurrentYaw;
-        float cdY = SpiderY + 4.2f;
-        var cdPickup = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialCooldown(cdY, cdAngle) : null;
-        hintText.text = "COLLECT SLOW-MO ITEM!";
-        handMode = HandAnimMode.Hidden;
-
-        // Approach cooldown pickup
-        while (cdPickup != null && cdPickup.gameObject.activeSelf && (cdY - SpiderY) > 0.1f)
-        {
-            yield return null;
-        }
-
-        // Wait until collected
-        while (playerInteract.CooldownInventory <= 0)
-        {
-            yield return null;
-        }
-
-        // Wait for 2 seconds after collecting before showing the activation tutorial
-        hintText.text = "";
-        yield return new WaitForSeconds(2.0f);
-
-        // Spawn a hurdle ahead to dodge using slow motion
-        float hurdleAngle = pl.CurrentYaw;
-        float hurdleY = SpiderY + 5.0f;
-        var hurdle = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBranch(hurdleY, hurdleAngle) : null;
-
-        // Approach hurdle until 2.2m away
-        while (hurdle != null && (hurdleY - SpiderY) > 2.2f)
-        {
-            yield return null;
-        }
-
-        // Freeze time slightly and show animated hand icon pointing to the slow-mo button
-        hintText.text = "TAP SLOW-MO BUTTON\nto dodge tricky hurdles!";
-        handMode = HandAnimMode.PointCooldown;
-        yield return StartCoroutine(SmoothTimeScale(0.15f, 0.2f));
-
-        // Wait until player taps the cooldown button
-        while (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive)
-        {
-            yield return null;
-        }
-
-        // Hide hand pointer and re-enable full steering & jump control to dodge the hurdle!
-        handMode = HandAnimMode.Hidden;
-        hintText.text = "DODGE THE HURDLE!";
-        pl.SetSteerAllowed(true);
-        pl.SetJumpAllowed(true);
-
-        // Wait until the hurdle is passed
-        while (hurdle != null && (hurdleY - SpiderY) > -0.5f)
-        {
-            yield return null;
-        }
 
         // Complete the tutorial!
         TCSave.TutorialDone = true;

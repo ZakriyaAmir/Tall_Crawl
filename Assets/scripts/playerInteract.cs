@@ -222,6 +222,7 @@ public class playerInteract : MonoBehaviour
             Play(TCSfx.Get("chilli"), 0.8f);
             StartBoost(3f + 0.75f * TCSave.Upgrade(1));
             TCFx.Shake(0.12f);
+            TCTrack.OnChilliCollected();
         }
         else if (other.CompareTag("cooldown"))
         {

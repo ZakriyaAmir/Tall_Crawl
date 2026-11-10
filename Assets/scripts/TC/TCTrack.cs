@@ -34,6 +34,59 @@ public class TCTrack : MonoBehaviour
     void Awake()
     {
         Instance = this;
+        ResetChilliRegulation();
+    }
+
+    // Chilli Regulation: if player collects >= 3 chillies under 10 seconds, suppress new chilli spawns for 10 seconds
+    static readonly List<float> chilliPickupTimestamps = new List<float>();
+    static float chilliSpawnBlockedUntil = 0f;
+
+    public static bool CanSpawnChilli => Time.time >= chilliSpawnBlockedUntil;
+
+    public static void ResetChilliRegulation()
+    {
+        chilliPickupTimestamps.Clear();
+        chilliSpawnBlockedUntil = 0f;
+    }
+
+    public static void OnChilliCollected()
+    {
+        float now = Time.time;
+
+        // Purge timestamps older than 10 seconds
+        for (int i = chilliPickupTimestamps.Count - 1; i >= 0; i--)
+        {
+            if (now - chilliPickupTimestamps[i] > 10f)
+                chilliPickupTimestamps.RemoveAt(i);
+        }
+
+        // Record this collection
+        chilliPickupTimestamps.Add(now);
+
+        // Check if 3 or more chillies have been collected in the sliding 10-second window
+        if (chilliPickupTimestamps.Count >= 3)
+        {
+            chilliSpawnBlockedUntil = Mathf.Max(chilliSpawnBlockedUntil, now + 10f);
+            chilliPickupTimestamps.Clear();
+
+            if (Instance != null)
+            {
+                Instance.ClearActiveChilliesAhead();
+            }
+        }
+    }
+
+    public void ClearActiveChilliesAhead()
+    {
+        for (int i = live.Count - 1; i >= 0; i--)
+        {
+            var item = live[i];
+            if (item != null && item.kind == "boost" && item.gameObject.activeSelf)
+            {
+                item.Release();
+                live.RemoveAt(i);
+            }
+        }
     }
 
     void Start()
@@ -47,6 +100,7 @@ public class TCTrack : MonoBehaviour
         heartPool = new TCPool(heartPrefab, bonusParent, 2);
         boostPool = new TCPool(boostPrefab, bonusParent, 2);
         var cProto = cooldownPrefab ? cooldownPrefab : TCTimeDilation.CreateCooldownPickupPrefab(bonusParent);
+        if (cProto != null) cProto.SetActive(false);
         cooldownPool = new TCPool(cProto, bonusParent, 3);
 
         var pProto = pineconePrefab ? pineconePrefab : TCEnemy.CreatePineconePrefab(hazardParent);
@@ -140,18 +194,21 @@ public class TCTrack : MonoBehaviour
 
             bool canSpawnBreatherBonus = bonusY > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusY - lastCoinY) > BonusCoinMargin;
 
+            float playerTraveledMetres = pl ? pl.currentScore : 0f;
+            bool canSpawnCooldown = playerTraveledMetres >= C.cooldownMinMetres && metres >= C.cooldownMinMetres;
+
             if (canSpawnBreatherBonus && heartEligible)
             {
                 Spawn(heartPool, "heart", bonusY, safeAngle);
                 lastBonusY = bonusY;
                 heartEligible = false; // consumed
             }
-            else if (canSpawnBreatherBonus && Random.value < C.boostChance * 2f)
+            else if (canSpawnBreatherBonus && CanSpawnChilli && Random.value < C.boostChance * 2f)
             {
                 Spawn(boostPool, "boost", bonusY, safeAngle);
                 lastBonusY = bonusY;
             }
-            else if (canSpawnBreatherBonus && metres >= C.cooldownMinMetres && Random.value < C.cooldownChance * 2f)
+            else if (canSpawnBreatherBonus && canSpawnCooldown && Random.value < C.cooldownChance * 2f)
             {
                 Spawn(cooldownPool, "cooldown", bonusY, safeAngle);
                 lastBonusY = bonusY;
@@ -238,18 +295,21 @@ public class TCTrack : MonoBehaviour
         float bonusYPos = y + gap * 0.5f;
         bool canSpawnBonus = bonusYPos > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusYPos - lastCoinY) > BonusCoinMargin;
 
+        float playerDistance = pl ? pl.currentScore : 0f;
+        bool canSpawnCooldownGap = playerDistance >= C.cooldownMinMetres && metres >= C.cooldownMinMetres;
+
         if (canSpawnBonus && heartEligible)
         {
             Spawn(heartPool, "heart", bonusYPos, newSafe);
             lastBonusY = bonusYPos;
             heartEligible = false; // consumed
         }
-        else if (canSpawnBonus && Random.value < C.boostChance)
+        else if (canSpawnBonus && CanSpawnChilli && Random.value < C.boostChance)
         {
             Spawn(boostPool, "boost", bonusYPos, newSafe);
             lastBonusY = bonusYPos;
         }
-        else if (canSpawnBonus && metres >= C.cooldownMinMetres && Random.value < C.cooldownChance)
+        else if (canSpawnBonus && canSpawnCooldownGap && Random.value < C.cooldownChance)
         {
             Spawn(cooldownPool, "cooldown", bonusYPos, newSafe);
             lastBonusY = bonusYPos;

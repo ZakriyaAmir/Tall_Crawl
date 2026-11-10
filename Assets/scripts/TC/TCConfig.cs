@@ -6,10 +6,10 @@ public class TCConfig : ScriptableObject
 {
     [Header("Climb speed (units/sec)")]
     public float startSpeed = 1.6f;
-    [Tooltip("Base climb speed at 1500m (reduced by 35% from 4.2 to 2.73, capped at 3.2x startSpeed)")]
-    public float maxSpeed = 2.73f;
-    [Tooltip("Metres climbed until max speed is reached (uniform after 1500m)")]
-    public float metresToMaxSpeed = 1500f;
+    [Tooltip("Base climb speed at 15000m (capped at 2.5x startSpeed)")]
+    public float maxSpeed = 4.0f;
+    [Tooltip("Metres climbed until max speed is reached (uniform after 15000m)")]
+    public float metresToMaxSpeed = 15000f;
     public float boostMultiplier = 2.2f;
     public float metresPerUnit = 20f;
 
@@ -70,8 +70,8 @@ public class TCConfig : ScriptableObject
         }
     }
 
-    /// Effective max climb speed, strictly capped to 3.2x of startSpeed
-    public float EffectiveMaxSpeed => Mathf.Min(maxSpeed, startSpeed * 3.2f);
+    /// Effective max climb speed, strictly capped to 2.5x of startSpeed
+    public float EffectiveMaxSpeed => Mathf.Min(maxSpeed, startSpeed * 2.5f);
 
     public float Difficulty(float metres) => Mathf.Clamp01(metres / Mathf.Max(1f, metresToMaxSpeed));
 

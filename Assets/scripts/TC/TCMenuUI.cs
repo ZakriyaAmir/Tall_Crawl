@@ -515,26 +515,26 @@ public class TCMenuUI : MonoBehaviour
     }
 
     // ---------- Shop ----------
-    static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Climb Bonus", "Head Start" };
-    static readonly int[] upgMax = { 0, 5, 2, 3, 3 };
+    static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Climb Bonus", "Head Start", "Slow-Mo Time" };
+    static readonly int[] upgMax = { 0, 5, 2, 3, 3, 5 };
     public CanvasGroup GetPanel(string n) => n == "Skins" ? skinsPanel : n == "Shop" ? shopPanel : n == "Settings" ? settingsPanel : n == "Daily" ? dailyPanel : consentPanel;
     void BuildShop()
     {
         shopPanel = TCUI.Panel("Shop", safe, out var card, new Vector2(980, 1680), "SHOP");
-        var h1 = TCUI.Label("H", card, "UPGRADES", 46, TCUI.Peach); TCUI.Place(h1.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -130), new Vector2(800, 60));
-        for (int id = 1; id <= 4; id++)
+        var h1 = TCUI.Label("H", card, "UPGRADES", 44, TCUI.Peach); TCUI.Place(h1.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -120), new Vector2(800, 50));
+        for (int id = 1; id <= 5; id++)
         {
-            int u = id; float y = -220 - (id - 1) * 140;
-            var row = TCUI.Img("Upg" + id, card, Color.white); TCUI.Place(row.rectTransform, new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(880, 120));
-            var name = TCUI.Label("N", row.transform, upgNames[id], 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Stretch(name.rectTransform, 30, 400, 0, 40);
-            var pips = TCUI.Label("P", row.transform, "", 34, TCUI.Mint, TextAlignmentOptions.Left); TCUI.Stretch(pips.rectTransform, 30, 400, 60, 0);
+            int u = id; float y = -195 - (id - 1) * 122;
+            var row = TCUI.Img("Upg" + id, card, Color.white); TCUI.Place(row.rectTransform, new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(880, 110));
+            var name = TCUI.Label("N", row.transform, upgNames[id], 42, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Stretch(name.rectTransform, 30, 390, 0, 36);
+            var pips = TCUI.Label("P", row.transform, "", 32, TCUI.Mint, TextAlignmentOptions.Left); TCUI.Stretch(pips.rectTransform, 30, 390, 54, 0);
             var buy = TCUI.Btn("Buy", row.transform, "0", TCUI.Sky, () =>
             {
                 int lvl = TCSave.Upgrade(u); if (lvl >= upgMax[u]) return; int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
                 if (TCSave.Gems < cost) { Toast("Not enough gems"); return; }
                 TCSave.Gems -= cost; TCSave.SetUpgrade(u, lvl + 1); TCAudio.Play(TCAssets.I.purchase); Toast(upgNames[u] + " upgraded!"); TCServices.Log("upgrade", "id", u);
-            }, 40, TCUI.Icon("gem"));
-            TCUI.Place((RectTransform)buy.transform, new Vector2(1, 0.5f), new Vector2(-170, 0), new Vector2(300, 96));
+            }, 38, TCUI.Icon("gem"));
+            TCUI.Place((RectTransform)buy.transform, new Vector2(1, 0.5f), new Vector2(-160, 0), new Vector2(280, 88));
             var bt = buy.GetComponentInChildren<TextMeshProUGUI>();
             var iconImg = buy.transform.Find("Icon")?.GetComponent<Image>();
             if (iconImg != null) iconImg.sprite = TCUI.Icon("gem");
@@ -546,7 +546,7 @@ public class TCMenuUI : MonoBehaviour
             });
         }
         // Standalone gem packs: exactly 10 gems per USD.
-        var hg = TCUI.Label("HG", card, "GEMS  (10 GEMS = $1)", 46, TCUI.Peach); TCUI.Place(hg.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -770), new Vector2(860, 60));
+        var hg = TCUI.Label("HG", card, "GEMS  (10 GEMS = $1)", 44, TCUI.Peach); TCUI.Place(hg.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -815), new Vector2(860, 50));
         for (int g = 0; g < UnityIAP.GemProductIDs.Length; g++)
         {
             int pack = g, gems = UnityIAP.GemPackAmounts[g];
@@ -554,21 +554,21 @@ public class TCMenuUI : MonoBehaviour
             var gb = TCUI.Btn("Gems" + g, card, gems + "\n" + price, TCUI.Sky, () => TCServices.BuyGems(pack, () =>
             {
                 TCSave.Gems += gems; TCAudio.Play(TCAssets.I.purchase); Toast("+" + gems + " gems!"); TCServices.Log("iap_gems", "gems", gems);
-            }), 40, TCUI.Icon("gem"));
-            TCUI.Place((RectTransform)gb.transform, new Vector2(0.5f, 1), new Vector2(-342 + g * 228, -880), new Vector2(212, 140));
+            }), 38, TCUI.Icon("gem"));
+            TCUI.Place((RectTransform)gb.transform, new Vector2(0.5f, 1), new Vector2(-342 + g * 228, -915), new Vector2(212, 130));
             var gt = gb.GetComponentInChildren<TextMeshProUGUI>();
             refreshers.Add(() => { var lp = UnityIAP.Instance ? UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[pack]) : null; if (gt && !string.IsNullOrEmpty(lp)) gt.text = gems + "\n" + lp; });
         }
-        var h2 = TCUI.Label("H2", card, "COIN PACKS & MORE", 46, TCUI.Peach); TCUI.Place(h2.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -1000), new Vector2(800, 60));
-        Pack(card, new Vector2(-225, -1110), "1,000 coins", "BUY", 0, () => TCSave.Coins += 1000);
-        Pack(card, new Vector2(225, -1110), "No Ads + 20 gems", "BUY", 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
-        Pack(card, new Vector2(-225, -1260), "Premium: 5,000\ncoins + 50 gems", "BUY", 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
+        var h2 = TCUI.Label("H2", card, "COIN PACKS & MORE", 44, TCUI.Peach); TCUI.Place(h2.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -1025), new Vector2(800, 50));
+        Pack(card, new Vector2(-225, -1130), "1,000 coins", "BUY", 0, () => TCSave.Coins += 1000);
+        Pack(card, new Vector2(225, -1130), "No Ads + 20 gems", "BUY", 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
+        Pack(card, new Vector2(-225, -1270), "Premium: 5,000\ncoins + 50 gems", "BUY", 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
         int adCoins = TCConfig.I.adCoinReward;
-        var free = TCUI.Btn("FreeCoins", card, "FREE " + adCoins + " (AD)", TCUI.Mint, () => TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); }, "shop_coins"), 40, TCUI.Icon("play"));
-        TCUI.Place((RectTransform)free.transform, new Vector2(0.5f, 1), new Vector2(225, -1260), new Vector2(420, 130));
+        var free = TCUI.Btn("FreeCoins", card, "FREE " + adCoins + " (AD)", TCUI.Mint, () => TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); }, "shop_coins"), 38, TCUI.Icon("play"));
+        TCUI.Place((RectTransform)free.transform, new Vector2(0.5f, 1), new Vector2(225, -1270), new Vector2(420, 120));
         var restore = TCUI.Btn("Restore", card, "RESTORE", TCUI.Lilac, () => { try { UnityIAP.Instance?.RestorePurchases(); } catch { } Toast("Restoring purchases..."); }, 38);
-        TCUI.Place((RectTransform)restore.transform, new Vector2(0.5f, 0), new Vector2(-200, 110), new Vector2(340, 110));
-        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "BACK", TCUI.Grey, () => TCUI.Hide(this, shopPanel), 46).transform, new Vector2(0.5f, 0), new Vector2(200, 110), new Vector2(340, 110));
+        TCUI.Place((RectTransform)restore.transform, new Vector2(0.5f, 0), new Vector2(-200, 100), new Vector2(340, 100));
+        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "BACK", TCUI.Grey, () => TCUI.Hide(this, shopPanel), 46).transform, new Vector2(0.5f, 0), new Vector2(200, 100), new Vector2(340, 100));
     }
     void Pack(RectTransform card, Vector2 pos, string title, string btn, int productIndex, System.Action grant)
     {
