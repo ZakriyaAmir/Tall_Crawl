@@ -30,10 +30,10 @@ public class TCCoinMagnet : MonoBehaviour
     public float AttractionRadius => 40.0f;
     public float AttractionSpeed => 32.0f;
 
-    // Subtle Spider Shockwave parameters:
-    // Stays strictly around the spider (peak radius 0.45m, ultra-subtle transparent golden ripple, thin pencil ring)
-    const int SubtleWaveCount = 2;
-    const float WaveLoopPeriod = 1.70f;
+    // Spider Shockwave parameters:
+    // Concentric expanding golden magnetic shockwave rings around the spider
+    const int SubtleWaveCount = 3;
+    const float WaveLoopPeriod = 1.40f;
 
     struct ShockwaveWave
     {
@@ -125,19 +125,19 @@ public class TCCoinMagnet : MonoBehaviour
                             float phaseOffset = (float)i / SubtleWaveCount;
                             float u = Mathf.Repeat((emissionTimer / WaveLoopPeriod) + phaseOffset, 1.0f);
 
-                            // Smooth ease-out expansion from spider carapace out to just past the legs (0.16m to 0.44m)
+                            // Smooth ease-out expansion from spider body out past the legs (0.18m to 0.58m)
                             float ease = 1f - Mathf.Pow(1f - u, 2.0f);
-                            float radius = Mathf.Lerp(0.16f, 0.44f, ease);
+                            float radius = Mathf.Lerp(0.18f, 0.58f, ease);
                             wave.root.localScale = new Vector3(radius, 1f, radius);
 
-                            // Extremely gentle bell-shaped fade: max ~0.08 alpha so it never overwhelms or distracts
+                            // Crisp bell curve with punchy opacity clearly visible on bright phone screens
                             float alpha = Mathf.Sin(u * Mathf.PI);
-                            alpha = Mathf.Pow(alpha, 1.5f) * 0.08f;
+                            alpha = Mathf.Pow(alpha, 1.2f) * 0.75f;
 
-                            // Soft warm pastel gold tint that never blows out additively
+                            // Vibrant electric gold / radiant yellow magnetic pulse
                             Color waveCol = Color.Lerp(
-                                new Color(0.92f, 0.82f, 0.32f, alpha),
-                                new Color(0.85f, 0.70f, 0.20f, alpha * 0.5f),
+                                new Color(1.0f, 0.90f, 0.30f, alpha),
+                                new Color(0.95f, 0.72f, 0.15f, alpha * 0.65f),
                                 u
                             );
 
@@ -205,23 +205,24 @@ public class TCCoinMagnet : MonoBehaviour
     }
 
     /// <summary>
-    /// Creates a smooth, planar, ultra-thin annulus ripple mesh with soft radial alpha falloff and warm yellow vertex tint.
-    /// Thin ring: Inner rim (0.90) = alpha 0, Crest (0.95) = alpha 0.4, Outer rim (1.00) = alpha 0.
-    /// Completely hollow middle so there is zero white or solid background in the center.
+    /// Creates a smooth, planar annulus ripple mesh with soft radial alpha falloff and warm yellow vertex tint.
+    /// Double-ring crest: Inner rim (0.80) = alpha 0, Crest (0.90 to 0.95) = alpha 0.9, Outer rim (1.00) = alpha 0.
+    /// Completely hollow middle so there is zero obstruction in the center.
     /// </summary>
     static Mesh GetOrCreateSubtleShockwaveMesh()
     {
         if (cachedSubtleWaveMesh != null) return cachedSubtleWaveMesh;
 
-        int segments = 40;
+        int segments = 48;
         var mesh = new Mesh { name = "Subtle_Shockwave_Mesh" };
 
-        // Very thin, pencil-like delicate ring (thickness only 10% of radius)
-        float[] radii = { 0.90f, 0.95f, 1.00f };
+        // Defined ring thickness (20% of radius) for sharp, clear visibility on mobile screens
+        float[] radii = { 0.80f, 0.90f, 0.95f, 1.00f };
         Color[] baseColors = {
-            new Color(0.95f, 0.85f, 0.35f, 0.0f),  // inner edge (transparent)
-            new Color(0.95f, 0.85f, 0.35f, 0.40f), // soft delicate crest
-            new Color(0.90f, 0.75f, 0.25f, 0.0f)   // outer edge (transparent)
+            new Color(1.0f, 0.92f, 0.35f, 0.0f),  // inner edge (transparent)
+            new Color(1.0f, 0.92f, 0.35f, 0.90f), // sharp inner crest
+            new Color(1.0f, 0.88f, 0.25f, 0.90f), // sharp outer crest
+            new Color(0.95f, 0.75f, 0.15f, 0.0f)  // outer edge (transparent)
         };
 
         int ringCount = radii.Length;

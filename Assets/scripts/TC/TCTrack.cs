@@ -144,8 +144,6 @@ public class TCTrack : MonoBehaviour
             TCHighScoreMarker.Spawn(stemParent, player, TCSave.Best, C.metresPerUnit);
         }
 
-        // Safe start: welcome string of coins straight up
-        SpawnCoinTrail(py + 1.2f, py + 1.2f + 6 * UniformCoinSpacing, safeAngle, safeAngle, 7);
         Tick();
     }
 
@@ -690,8 +688,6 @@ public class TCTrack : MonoBehaviour
 
                     var anim = ch.GetComponent<Animator>();
                     if (anim) anim.enabled = false;
-                    var rot = ch.GetComponent<continuousRotation>();
-                    if (rot) rot.enabled = false;
                 }
                 else if (ch.name.IndexOf("CircularGlow", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
                          ch.name.IndexOf("Circle", System.StringComparison.OrdinalIgnoreCase) >= 0)

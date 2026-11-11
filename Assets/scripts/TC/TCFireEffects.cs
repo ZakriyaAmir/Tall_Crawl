@@ -48,6 +48,7 @@ public class TCFireEffects : MonoBehaviour
         var partMat = new Material(partShader);
         if (fireTex) partMat.mainTexture = fireTex;
         partMat.color = new Color(1f, 0.7f, 0.25f, 1f);
+        if (partMat.HasProperty("_TintColor")) partMat.SetColor("_TintColor", new Color(1f, 0.75f, 0.3f, 1f));
 
         // 2. High-Quality Convex Fire Shield ahead of spider
         shieldRoot = new GameObject("ConvexFireShield").transform;
@@ -137,18 +138,24 @@ public class TCFireEffects : MonoBehaviour
         rimFireParticles = rimPsObj.AddComponent<ParticleSystem>();
         var rmr = rimPsObj.GetComponent<ParticleSystemRenderer>();
         rmr.sharedMaterial = partMat;
+        rmr.renderMode = ParticleSystemRenderMode.Billboard;
+        rmr.alignment = ParticleSystemRenderSpace.View;
+        rmr.minParticleSize = 0.02f;
+        rmr.maxParticleSize = 1.0f;
 
         var rmain = rimFireParticles.main;
         rmain.loop = true;
         rmain.playOnAwake = false;
+        rmain.scalingMode = ParticleSystemScalingMode.Hierarchy;
         rmain.startLifetime = 0.35f;
         rmain.startSpeed = new ParticleSystem.MinMaxCurve(0.4f, 1.4f);
-        rmain.startSize = new ParticleSystem.MinMaxCurve(0.22f, 0.42f);
+        rmain.startSize = new ParticleSystem.MinMaxCurve(0.25f, 0.48f);
         rmain.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.9f, 0.4f, 0.95f), new Color(1f, 0.35f, 0.05f, 0.95f));
-        rmain.simulationSpace = ParticleSystemSimulationSpace.World;
+        rmain.simulationSpace = ParticleSystemSimulationSpace.Local;
+        rmain.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
 
         var remission = rimFireParticles.emission;
-        remission.rateOverTime = 55f;
+        remission.rateOverTime = 60f;
 
         var rshape = rimFireParticles.shape;
         rshape.shapeType = ParticleSystemShapeType.Circle;
@@ -181,18 +188,24 @@ public class TCFireEffects : MonoBehaviour
         sparkParticles = sparkObj.AddComponent<ParticleSystem>();
         var smr = sparkObj.GetComponent<ParticleSystemRenderer>();
         smr.sharedMaterial = partMat;
+        smr.renderMode = ParticleSystemRenderMode.Billboard;
+        smr.alignment = ParticleSystemRenderSpace.View;
+        smr.minParticleSize = 0.01f;
+        smr.maxParticleSize = 0.8f;
 
         var smain = sparkParticles.main;
         smain.loop = true;
         smain.playOnAwake = false;
+        smain.scalingMode = ParticleSystemScalingMode.Hierarchy;
         smain.startLifetime = 0.28f;
         smain.startSpeed = new ParticleSystem.MinMaxCurve(1.6f, 3.8f);
-        smain.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.14f);
+        smain.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.18f);
         smain.startColor = new Color(1f, 0.98f, 0.8f, 1f);
-        smain.simulationSpace = ParticleSystemSimulationSpace.World;
+        smain.simulationSpace = ParticleSystemSimulationSpace.Local;
+        smain.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
 
         var semission = sparkParticles.emission;
-        semission.rateOverTime = 32f;
+        semission.rateOverTime = 36f;
 
         var sshape = sparkParticles.shape;
         sshape.shapeType = ParticleSystemShapeType.Cone;

@@ -655,8 +655,6 @@ public static class TCPowerUpPrefabBaker
                 heart.localRotation = Quaternion.Euler(0f, 119.2f, 0f);
                 heart.localScale = new Vector3(3f, 3f, 3f);
 
-                var rot = heart.GetComponent<continuousRotation>();
-                if (rot) Object.DestroyImmediate(rot);
                 var anim = heart.GetComponent<Animator>();
                 if (anim) Object.DestroyImmediate(anim);
             }

@@ -745,14 +745,14 @@ public class TCGameUI : MonoBehaviour
         var branch = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBranch(branchY, branchAngle) : null;
 
         // Approach branch at normal speed until 2.0m away
-        while (branch != null && (branchY - SpiderY) > 2.0f)
+        while (branch != null && branch.gameObject.activeInHierarchy && (branchY - SpiderY) > 2.0f)
         {
             yield return null;
         }
 
-        // Approach in slow motion until frozen 2x farther from the obstacle (0.90m)
+        // Approach in slow motion until frozen right in front of the branch (0.90m)
         yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
-        while (branch != null && (branchY - SpiderY) > 0.90f)
+        while (branch != null && branch.gameObject.activeInHierarchy && (branchY - SpiderY) > 0.90f)
         {
             yield return null;
         }
@@ -778,84 +778,31 @@ public class TCGameUI : MonoBehaviour
         Time.timeScale = 1.0f;
         currentTargetTimeScale = 1.0f;
 
-        // Wait until spider climbs past the branch
+        // Keep steering responsive while spider climbs past the branch
         while (SpiderY < branchY + 0.6f)
         {
             yield return null;
         }
 
-        // Lock steering again
-        pl.SetSteerAllowed(false);
+        // Steering lock disabled during transition to keep controls feeling natural
         yield return new WaitForSeconds(0.6f);
 
         // -------------------------------------------------------------
-        // STEP 3: DODGE THE WASP
-        // -------------------------------------------------------------
-        // Spawn a wasp directly in the spider's path ahead
-        float waspAngle = pl.CurrentYaw;
-        float waspY = SpiderY + 4.5f;
-        var wasp = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialWasp(waspY, waspAngle) : null;
-
-        // Climb forward until approaching the wasp (2.0m away)
-        while (wasp != null && (waspY - SpiderY) > 2.0f)
-        {
-            yield return null;
-        }
-
-        // Approach in slow motion until frozen 2x farther from the obstacle (0.90m)
-        yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
-        while (wasp != null && (waspY - SpiderY) > 0.90f)
-        {
-            yield return null;
-        }
-
-        // Freeze the spider completely right in front of the wasp!
-        Time.timeScale = 0f;
-        currentTargetTimeScale = 0f;
-
-        pl.SetSteerAllowed(true);
-        pl.SetJumpAllowed(false);
-        handMode = HandAnimMode.Horizontal;
-        hintText.text = "DRAG TO DODGE\nthe wasp!";
-
-        // Wait until player turns away from the wasp's angle by at least 22 degrees
-        while (Mathf.Abs(Mathf.DeltaAngle(waspAngle, pl.CurrentYaw)) < 22f)
-        {
-            yield return null;
-        }
-
-        // Dodge performed! Clear prompt immediately and resume real time!
-        hintText.text = "";
-        handMode = HandAnimMode.Hidden;
-        Time.timeScale = 1.0f;
-        currentTargetTimeScale = 1.0f;
-
-        // Wait until spider climbs past the wasp
-        while (SpiderY < waspY + 0.6f)
-        {
-            yield return null;
-        }
-
-        // Lock steering again
-        pl.SetSteerAllowed(false);
-        yield return new WaitForSeconds(0.6f);
-
-        // -------------------------------------------------------------
-        // STEP 4: JUMP OVER BEES
+        // STEP 3: JUMP OVER BEES
         // -------------------------------------------------------------
         // Spawn bees into the scene ahead
         float beeY = SpiderY + 4.5f;
         var bees = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBees(beeY) : null;
 
         // Climb forward until approaching bees (2.0m away)
-        while (bees != null && (beeY - SpiderY) > 2.0f)
+        while (bees != null && bees.gameObject.activeInHierarchy && (beeY - SpiderY) > 2.0f)
         {
             yield return null;
         }
 
-        // Approach in slow motion until frozen 2x farther from the obstacle (0.90m)
+        // Approach in slow motion until frozen in front of the bees (0.90m)
         yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
-        while (bees != null && (beeY - SpiderY) > 0.90f)
+        while (bees != null && bees.gameObject.activeInHierarchy && (beeY - SpiderY) > 0.90f)
         {
             yield return null;
         }
@@ -981,12 +928,10 @@ public class TCGameUI : MonoBehaviour
             yield return null;
         }
 
-        pl.SetSteerAllowed(false);
-        pl.SetJumpAllowed(false);
         yield return new WaitForSeconds(0.6f);
 
         // -------------------------------------------------------------
-        // STEP 5: REACH THE CHILLI & COMPLETE TUTORIAL
+        // STEP 4: REACH THE CHILLI & COMPLETE TUTORIAL
         // -------------------------------------------------------------
         // Spawn a chilli ahead in the spider's path
         float chilliAngle = pl.CurrentYaw;
@@ -996,7 +941,7 @@ public class TCGameUI : MonoBehaviour
         handMode = HandAnimMode.Hidden;
 
         // Climb forward until approaching the chilli (1.8m away)
-        while (chilli != null && chilli.gameObject.activeSelf && (chilliY - SpiderY) > 1.8f)
+        while (chilli != null && chilli.gameObject.activeInHierarchy && (chilliY - SpiderY) > 1.8f)
         {
             yield return null;
         }
@@ -1005,7 +950,7 @@ public class TCGameUI : MonoBehaviour
         yield return StartCoroutine(SmoothTimeScale(0.2f, 0.2f));
 
         // Keep moving in slow motion until very close to the chilli (0.25m away)
-        while (chilli != null && chilli.gameObject.activeSelf && (chilliY - SpiderY) > 0.25f)
+        while (chilli != null && chilli.gameObject.activeInHierarchy && (chilliY - SpiderY) > 0.25f)
         {
             yield return null;
         }
@@ -1017,7 +962,7 @@ public class TCGameUI : MonoBehaviour
         pl.SetJumpAllowed(true);
 
         // Wait until spider grabs the chilli
-        while (chilli != null && chilli.gameObject.activeSelf && (chilliY - SpiderY) > -0.2f)
+        while (chilli != null && chilli.gameObject.activeInHierarchy && (chilliY - SpiderY) > -0.2f)
         {
             yield return null;
         }
@@ -1047,9 +992,9 @@ public class TCGameUI : MonoBehaviour
         TCUI.Place((RectTransform)TCUI.Btn("Resume", card, "RESUME", TCUI.Mint, HidePause, 60, TCUI.Icon("play")).transform, new Vector2(0.5f, 0.5f), new Vector2(0, y), new Vector2(600, 140));
         TCUI.Place((RectTransform)TCUI.Btn("Restart", card, "RESTART", TCUI.Butter, () => { gm.EndRun(false); gm.Restart(); }).transform, new Vector2(0.5f, 0.5f), new Vector2(0, y - 180), new Vector2(600, 130));
         TCUI.Place((RectTransform)TCUI.Btn("Home", card, "HOME", TCUI.Sky, () => { gm.EndRun(false); gm.Home(); }).transform, new Vector2(0.5f, 0.5f), new Vector2(0, y - 340), new Vector2(600, 130));
-        Toggle(card, "Sound", -270, () => TCSave.Sound, v => TCSave.Sound = v);
+        Toggle(card, "Sound", -240, () => TCSave.Sound, v => TCSave.Sound = v);
         Toggle(card, "Music", -360, () => TCSave.Music, v => { TCSave.Music = v; gm.SetMusic(v); });
-        Toggle(card, "Vibration", -450, () => TCSave.Vibration, v => TCSave.Vibration = v);
+        Toggle(card, "Vibration", -480, () => TCSave.Vibration, v => TCSave.Vibration = v);
     }
     public static void Toggle(RectTransform card, string label, float y, System.Func<bool> get, System.Action<bool> set, float width = 600)
     {

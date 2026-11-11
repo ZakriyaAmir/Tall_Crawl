@@ -46,6 +46,8 @@ public class gameManager : MonoBehaviour
             if (sunLight)
             {
                 sunLight.enabled = true;
+                // Exclude layer 9 (stem/tree trunk) so directional sunlight doesn't light up one side of the trunk while the other side is shaded
+                sunLight.cullingMask &= ~(1 << 9);
                 if (stage == 2) // Midnight sky
                 {
                     sunLight.color = new Color(0.72f, 0.82f, 1f);
