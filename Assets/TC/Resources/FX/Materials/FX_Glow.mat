@@ -31,6 +31,7 @@ Material:
     m_Floats:
     - _Additive: 0.8
     - _Boost: 1
+    - _DepthPull: 0
     m_Colors:
     - _TintColor: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

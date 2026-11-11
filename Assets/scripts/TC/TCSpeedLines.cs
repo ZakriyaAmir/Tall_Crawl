@@ -16,6 +16,8 @@ public class TCSpeedLines : MonoBehaviour
         var root = new GameObject("TC_SpeedLines").transform;
         root.SetParent(cam.transform, false);
         root.localPosition = new Vector3(0, 0, 2.6f);
+        var ls = cam.transform.lossyScale; root.localScale = new Vector3(1f / Mathf.Max(0.01f, ls.x), 1f / Mathf.Max(0.01f, ls.y), 1f / Mathf.Max(0.01f, ls.z)); // camera rig is scaled
+        root.localPosition = new Vector3(0, 0, 2.6f / Mathf.Max(0.01f, ls.z));
         float halfH = 2.6f * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad), halfW = halfH * Mathf.Max(0.45f, cam.aspect);
 
         lines = TCFxLib.PS(root, "Streaks", "Spark", Vector3.zero, 120);
@@ -45,6 +47,7 @@ public class TCSpeedLines : MonoBehaviour
 
     void Update()
     {
+        if (lines && !lines.isPlaying) { lines.Play(true); embers.Play(true); }
         if (!lines || !pl) return;
         var C = TCConfig.I;
         bool running = !pl.paused && !pl.GameOver && Time.timeScale > 0.05f;

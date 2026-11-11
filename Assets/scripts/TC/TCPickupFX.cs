@@ -23,7 +23,7 @@ public class TCPickupFX : MonoBehaviour
     public float swingSpeed = 2.2f;
     public float pulse = 0.07f;
     public float raysSpin = 40f;
-    [Tooltip("Push the halo away from the camera so it sits behind the model.")] public float haloBehind = 0.16f;
+    [Tooltip("Offset of the FX toward the camera (keeps them in front of the bark).")] public float haloTowardCamera = 0.45f;
 
     Vector3 itemBase, visualBaseScale; Quaternion visualBase; bool captured; float phase;
     MaterialPropertyBlock mpb; Vector3 haloBase, raysBase; Camera cam;
@@ -86,7 +86,7 @@ public class TCPickupFX : MonoBehaviour
         if (cam)
         {
             var toCam = (cam.transform.position - centre).normalized;
-            fxRoot.position = centre - toCam * haloBehind;
+            fxRoot.position = centre + toCam * haloTowardCamera;
             fxRoot.rotation = Quaternion.LookRotation(-toCam, cam.transform.up);
         }
         float p = 1f + Mathf.Sin(t * 3.1f) * pulse;
@@ -120,8 +120,8 @@ public class TCPickupFX : MonoBehaviour
         var fx = new GameObject("PickupFX").transform;
         fx.SetParent(root.transform, false); fx.localPosition = centreLocal;
 
-        var halo = Quad(fx, "Halo", "Glow", size * 2.3f, 0f);
-        var rays = Quad(fx, "Rays", "Rays", size * 2.9f, -0.01f);
+        var halo = Quad(fx, "Halo", "Halo", size * 3.4f, 0.02f);
+        var rays = Quad(fx, "Rays", "Rays", size * 3.9f, 0.03f);
 
         // sonar ping ring
         var ping = TCFxLib.PS(fx, "Ping", "Ring", new Vector3(0, 0, -0.02f), 4);
@@ -129,7 +129,7 @@ public class TCPickupFX : MonoBehaviour
           var em = ping.emission; em.rateOverTime = 0.95f; TCFxLib.SizeLife(ping, 0, 0.25f, 1, 1); TCFxLib.ColorLife(ping, TCFxLib.Fade(Color.white, c2, 0.1f, 0.4f)); }
 
         // twinkles
-        var tw = TCFxLib.PS(fx, "Twinkles", "Star", new Vector3(0, 0, -0.26f), 16);
+        var tw = TCFxLib.PS(fx, "Twinkles", "Star", new Vector3(0, 0, -0.08f), 16);
         { var m = tw.main; m.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.1f); m.startSize = new ParticleSystem.MinMaxCurve(size * 0.25f, size * 0.55f); m.startColor = new ParticleSystem.MinMaxGradient(Color.white, c2);
           var em = tw.emission; em.rateOverTime = 7; TCFxLib.Sphere(tw, size * 0.95f, 0.35f); TCFxLib.SizeLife(tw, 0, 0, 0.3f, 1, 0.6f, 0.4f, 1, 0); TCFxLib.SpinRandom(tw, 90); }
 
@@ -137,13 +137,13 @@ public class TCPickupFX : MonoBehaviour
         {
             case TCPickupKind.Chilli:
             {
-                var fl = TCFxLib.PS(fx, "Flames", "Flame", new Vector3(0, -size * 0.25f, -0.12f), 30);
+                var fl = TCFxLib.PS(fx, "Flames", "Flame", new Vector3(0, -size * 0.25f, 0.04f), 30);
                 var m = fl.main; m.startLifetime = new ParticleSystem.MinMaxCurve(0.45f, 0.7f); m.startSize = new ParticleSystem.MinMaxCurve(size * 0.5f, size * 0.85f);
                 m.startSpeed = new ParticleSystem.MinMaxCurve(0.25f, 0.5f); m.startColor = Color.white;
                 var em = fl.emission; em.rateOverTime = 16; TCFxLib.Sphere(fl, size * 0.45f, 1f);
                 TCFxLib.SizeLife(fl, 0, 0.5f, 0.3f, 1f, 1, 0.1f); TCFxLib.ColorLife(fl, TCFxLib.Fade(Color.white, c1, 0.1f, 0.5f));
                 var vel = fl.velocityOverLifetime; vel.enabled = true; vel.space = ParticleSystemSimulationSpace.World; vel.y = new ParticleSystem.MinMaxCurve(0.35f, 0.6f); vel.x = new ParticleSystem.MinMaxCurve(0, 0); vel.z = new ParticleSystem.MinMaxCurve(0, 0);
-                var emb = TCFxLib.PS(fx, "Embers", "Spark", new Vector3(0, 0, -0.26f), 20);
+                var emb = TCFxLib.PS(fx, "Embers", "Spark", new Vector3(0, 0, -0.08f), 20);
                 var me = emb.main; me.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.0f); me.startSize = new ParticleSystem.MinMaxCurve(size * 0.08f, size * 0.16f); me.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.3f); me.startColor = new ParticleSystem.MinMaxGradient(c2, TCFxLib.Hex("#FF8A2B"));
                 var ee = emb.emission; ee.rateOverTime = 10; TCFxLib.Sphere(emb, size * 0.6f, 1f);
                 var ev = emb.velocityOverLifetime; ev.enabled = true; ev.space = ParticleSystemSimulationSpace.World; ev.y = new ParticleSystem.MinMaxCurve(0.4f, 0.8f); ev.x = new ParticleSystem.MinMaxCurve(0, 0); ev.z = new ParticleSystem.MinMaxCurve(0, 0);
@@ -153,12 +153,12 @@ public class TCPickupFX : MonoBehaviour
             }
             case TCPickupKind.Health:
             {
-                var h = TCFxLib.PS(fx, "Hearts", "Heart", new Vector3(0, 0, -0.26f), 10);
+                var h = TCFxLib.PS(fx, "Hearts", "Heart", new Vector3(0, 0, -0.08f), 10);
                 var m = h.main; m.startLifetime = new ParticleSystem.MinMaxCurve(1.0f, 1.4f); m.startSize = new ParticleSystem.MinMaxCurve(size * 0.28f, size * 0.42f); m.startColor = new ParticleSystem.MinMaxGradient(c2, TCFxLib.Hex("#FF4F7B"));
                 var em = h.emission; em.rateOverTime = 3.2f; TCFxLib.Sphere(h, size * 0.7f, 0.2f);
                 var v = h.velocityOverLifetime; v.enabled = true; v.space = ParticleSystemSimulationSpace.World; v.y = new ParticleSystem.MinMaxCurve(0.25f, 0.4f); v.x = new ParticleSystem.MinMaxCurve(0, 0); v.z = new ParticleSystem.MinMaxCurve(0, 0);
                 TCFxLib.SizeLife(h, 0, 0, 0.2f, 1.15f, 0.35f, 1, 1, 0.6f); TCFxLib.ColorLife(h, TCFxLib.Fade(Color.white, Color.white, 0.12f, 0.6f));
-                var plus = TCFxLib.PS(fx, "Cross", "Spark", new Vector3(0, 0, -0.26f), 12);
+                var plus = TCFxLib.PS(fx, "Cross", "Spark", new Vector3(0, 0, -0.08f), 12);
                 var mp = plus.main; mp.startLifetime = 0.8f; mp.startSize = new ParticleSystem.MinMaxCurve(size * 0.12f, size * 0.2f); mp.startColor = TCFxLib.Hex("#B8FFD6");
                 var ep = plus.emission; ep.rateOverTime = 6; TCFxLib.Sphere(plus, size * 0.85f, 0.3f);
                 var vp = plus.velocityOverLifetime; vp.enabled = true; vp.space = ParticleSystemSimulationSpace.World; vp.y = new ParticleSystem.MinMaxCurve(0.15f, 0.3f); vp.x = new ParticleSystem.MinMaxCurve(0, 0); vp.z = new ParticleSystem.MinMaxCurve(0, 0);
@@ -167,7 +167,7 @@ public class TCPickupFX : MonoBehaviour
             }
             case TCPickupKind.SlowMo:
             {
-                var s = TCFxLib.PS(fx, "Snowflakes", "Snow", new Vector3(0, 0, -0.26f), 14);
+                var s = TCFxLib.PS(fx, "Snowflakes", "Snow", new Vector3(0, 0, -0.08f), 14);
                 var m = s.main; m.startLifetime = new ParticleSystem.MinMaxCurve(1.4f, 2.0f); m.startSize = new ParticleSystem.MinMaxCurve(size * 0.18f, size * 0.32f); m.startColor = new ParticleSystem.MinMaxGradient(Color.white, c1);
                 var em = s.emission; em.rateOverTime = 4.5f; TCFxLib.Sphere(s, size * 1.0f, 0.15f); TCFxLib.SpinRandom(s, 60);
                 var v = s.velocityOverLifetime; v.enabled = true; v.space = ParticleSystemSimulationSpace.Local; v.orbitalZ = new ParticleSystem.MinMaxCurve(0.9f, 1.3f); v.y = new ParticleSystem.MinMaxCurve(-0.08f, -0.03f); v.x = new ParticleSystem.MinMaxCurve(0, 0); v.z = new ParticleSystem.MinMaxCurve(0, 0);
@@ -179,12 +179,12 @@ public class TCPickupFX : MonoBehaviour
             }
             case TCPickupKind.Magnet:
             {
-                var c = TCFxLib.PS(fx, "CoinsIn", "Coin", new Vector3(0, 0, -0.26f), 14);
+                var c = TCFxLib.PS(fx, "CoinsIn", "Coin", new Vector3(0, 0, -0.08f), 14);
                 var m = c.main; m.startLifetime = 0.9f; m.startSize = new ParticleSystem.MinMaxCurve(size * 0.2f, size * 0.3f); m.startColor = Color.white;
                 var em = c.emission; em.rateOverTime = 5; TCFxLib.Sphere(c, size * 1.5f, 0f);
                 var v = c.velocityOverLifetime; v.enabled = true; v.space = ParticleSystemSimulationSpace.Local; v.radial = new ParticleSystem.MinMaxCurve(-1.4f, -1.1f); v.orbitalZ = new ParticleSystem.MinMaxCurve(1.5f, 2.0f); v.x = new ParticleSystem.MinMaxCurve(0, 0); v.y = new ParticleSystem.MinMaxCurve(0, 0); v.z = new ParticleSystem.MinMaxCurve(0, 0);
                 TCFxLib.SizeLife(c, 0, 0.6f, 0.2f, 1, 0.8f, 0.8f, 1, 0); TCFxLib.ColorLife(c, TCFxLib.Fade(Color.white, Color.white, 0.15f, 0.8f));
-                var b = TCFxLib.PS(fx, "Bolts", "Bolt", new Vector3(0, 0, -0.26f), 6);
+                var b = TCFxLib.PS(fx, "Bolts", "Bolt", new Vector3(0, 0, -0.08f), 6);
                 var mb = b.main; mb.startLifetime = new ParticleSystem.MinMaxCurve(0.12f, 0.2f); mb.startSize = new ParticleSystem.MinMaxCurve(size * 0.4f, size * 0.6f); mb.startColor = new ParticleSystem.MinMaxGradient(c2, TCFxLib.Hex("#7FD8FF"));
                 mb.startRotation = new ParticleSystem.MinMaxCurve(-0.6f, 0.6f);
                 var eb = b.emission; eb.rateOverTime = 5; TCFxLib.Sphere(b, size * 0.85f, 0f);
@@ -240,7 +240,7 @@ public class TCPickupFX : MonoBehaviour
     {
         Palette(k, out var c1, out var c2);
         bool coin = k == TCPickupKind.Coin, big = k == TCPickupKind.BoostStart;
-        float S = coin ? 0.45f : big ? 1.5f : 1f;
+        float S = coin ? 0.35f : big ? 0.75f : 0.6f;
         var root = TCFxLib.PS(host, "Burst_" + k, "Glow", Vector3.zero, 2);
         // flash
         { TCFxLib.OneShot(root, 0.22f); var m = root.main; m.startSize = 1.5f * S; m.startColor = new Color(c2.r, c2.g, c2.b, 1); TCFxLib.Burst(root, 1); TCFxLib.SizeLife(root, 0, 0.4f, 0.3f, 1, 1, 1.15f); TCFxLib.ColorLife(root, TCFxLib.Fade(Color.white, c1, 0.02f, 0.3f)); }
@@ -255,7 +255,7 @@ public class TCPickupFX : MonoBehaviour
 
         string theme = k == TCPickupKind.Health ? "Heart" : k == TCPickupKind.SlowMo ? "Snow" : k == TCPickupKind.Magnet ? "Coin" : "Flame";
         var th = TCFxLib.PS(root.transform, "Theme", theme, Vector3.zero, 24);
-        { TCFxLib.OneShot(th, 0.55f, 0.85f); var m = th.main; m.startSpeed = new ParticleSystem.MinMaxCurve(1.2f * S, 2.6f * S); m.startSize = new ParticleSystem.MinMaxCurve(0.16f * S, 0.3f * S);
+        { TCFxLib.OneShot(th, 0.55f, 0.85f); var m = th.main; m.startSpeed = new ParticleSystem.MinMaxCurve(0.9f * S, 2.0f * S); m.startSize = new ParticleSystem.MinMaxCurve(0.22f * S, 0.4f * S);
           m.startColor = k == TCPickupKind.Health ? new ParticleSystem.MinMaxGradient(c2, TCFxLib.Hex("#FF4F7B")) : k == TCPickupKind.SlowMo ? new ParticleSystem.MinMaxGradient(Color.white, c1) : new ParticleSystem.MinMaxGradient(Color.white);
           TCFxLib.Burst(th, big ? 22 : 12); TCFxLib.Sphere(th, 0.15f); var lim = th.limitVelocityOverLifetime; lim.enabled = true; lim.limit = 0.4f; lim.dampen = 0.12f;
           if (k == TCPickupKind.Health || k == TCPickupKind.Chilli || big) { m.gravityModifier = -0.25f; }

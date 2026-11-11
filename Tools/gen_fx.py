@@ -36,7 +36,7 @@ k = 12
 rays = np.abs(np.cos(ang * k / 2)) ** 18
 long_ = 0.55 + 0.45 * (np.cos(ang * k / 2 * 0) * 0 + (np.cos(ang * k) > 0))
 rays_a = rays * np.clip(1 - r / (0.55 + 0.4 * (np.cos(ang * k / 2 + 0.0) ** 2 > 0.5)), 0, 1) ** 1.5
-save('fx_rays', None, np.clip(rays_a * smooth(0.06, 0.2, r) + np.exp(-(r / 0.18) ** 2) * 0.4, 0, 1))
+save('fx_rays', None, np.clip(rays_a * smooth(0.3, 0.45, r), 0, 1))
 
 n = 128
 x, y = grid(n); r = np.hypot(x, y); ang = np.arctan2(y, x)
@@ -137,3 +137,10 @@ hd = hexdist(px, py)
 edge = smooth(0.80, 0.95, hd)
 save('fx_hex', None, np.clip(edge, 0, 1))
 print('wrote', sorted(os.listdir(OUT)))
+
+# pickup halo: soft annulus (bright rim, dim centre so the model stays readable in front of it)
+N = 256
+x, y = grid(N); r = np.hypot(x, y)
+halo = np.exp(-((r - 0.58) / 0.16) ** 2) * 0.9 + 0.12 * smooth(0.2, 0.5, r)
+save('fx_halo', None, halo * smooth(1.0, 0.86, r) * smooth(0.22, 0.42, r))
+print('halo ok')

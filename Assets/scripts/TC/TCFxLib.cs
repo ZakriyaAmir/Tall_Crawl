@@ -10,6 +10,7 @@ public static class TCFxLib
     static readonly Dictionary<string, (string tex, float add, float boost)> defs = new Dictionary<string, (string, float, float)>
     {
         { "Glow",  ("FX/fx_glow", 0.8f, 1f) },
+        { "Halo",  ("FX/fx_halo", 0.7f, 1.2f) },
         { "GlowSoft", ("FX/fx_glow", 0.25f, 1f) },
         { "Star",  ("FX/fx_star", 0.85f, 1.35f) },
         { "Ring",  ("FX/fx_ring", 0.55f, 1.1f) },
@@ -45,6 +46,8 @@ public static class TCFxLib
         if (t) m.mainTexture = t;
         if (m.HasProperty("_Additive")) m.SetFloat("_Additive", d.add);
         if (m.HasProperty("_Boost")) m.SetFloat("_Boost", d.boost);
+        // pickup halo/rays/rings/themed sprites sit on the curved trunk: test depth a bit closer so the bark doesn't slice them
+        if (m.HasProperty("_DepthPull")) m.SetFloat("_DepthPull", name == "Halo" || name == "Rays" ? 0.4f : name == "Ring" || name == "Snow" || name == "Bolt" || name == "Star" ? 0.3f : 0f);
         return m;
     }
 

@@ -303,7 +303,7 @@ public class TCGameUI : MonoBehaviour
             if (pausePanel.gameObject.activeSelf) HidePause(); else ShowPause();
         }
         int m = (int)pl.currentScore;
-        if (m != shownMetres) { shownMetres = m; scoreText.text = m + "M"; }
+        if (m != shownMetres) { if (shownMetres > 0 && m / 100 > shownMetres / 100 && scoreText) StartCoroutine(TCUI.Punch(scoreText.transform.parent, 0.18f, 0.3f)); shownMetres = m; scoreText.text = m + "M"; } // polish2: milestone pop every 100 m
         if (gm.coinsCollected != shownCoins)
         {
             if (shownCoins >= 0 && coinPunchCo == null && coinText != null)

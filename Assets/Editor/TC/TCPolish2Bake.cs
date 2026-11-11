@@ -75,10 +75,11 @@ public static class TCPolish2Bake
                     if (!item) { Debug.LogWarning("TCPolish2Bake: no tagged item in " + path); continue; }
                     Transform visual = item;
                     foreach (Transform c in item) if (c.GetComponentInChildren<Renderer>(true)) { visual = c; break; }
+                    if (p.kind == TCPickupKind.Health) FaceOutward(root.transform, visual);
                     var rs = item.GetComponentsInChildren<Renderer>(true);
                     var b = rs.Length > 0 ? rs[0].bounds : new Bounds(item.position, Vector3.one * 0.3f);
                     foreach (var r in rs) b.Encapsulate(r.bounds);
-                    float size = Mathf.Clamp(Mathf.Max(b.extents.x, b.extents.y, b.extents.z), 0.12f, 0.4f);
+                    float size = Mathf.Clamp(Mathf.Max(b.extents.x, b.extents.y, b.extents.z), 0.12f, 0.26f);
                     var centre = root.transform.InverseTransformPoint(b.center);
                     // retire the old flat glow disc (kept in the prefab, renderer off) - the new halo replaces it
                     foreach (var g in root.GetComponentsInChildren<TCPickupGlow>(true)) { var mr = g.GetComponent<Renderer>(); if (mr) mr.enabled = false; }
@@ -88,6 +89,18 @@ public static class TCPolish2Bake
                 }
                 finally { PrefabUtility.UnloadPrefabContents(root); }
             }
+    }
+
+    /// Turns a flat model (heart) so its broad face looks out from the trunk toward the player camera.
+    static void FaceOutward(Transform root, Transform visual)
+    {
+        var mf = visual.GetComponentInChildren<MeshFilter>(true); if (!mf || !mf.sharedMesh) return;
+        var sz = mf.sharedMesh.bounds.size; sz = Vector3.Scale(sz, mf.transform.lossyScale);
+        Vector3 axis = sz.x <= sz.y && sz.x <= sz.z ? Vector3.right : sz.y <= sz.z ? Vector3.up : Vector3.forward;
+        var w = mf.transform.TransformDirection(axis);
+        if (Vector3.Dot(w, root.forward) < 0) w = -w;
+        visual.rotation = Quaternion.FromToRotation(w, root.forward) * visual.rotation;
+        Debug.Log("TCPolish2Bake: heart thin axis " + axis + " size " + sz);
     }
 
     static Transform FindPath(string path)
@@ -180,7 +193,7 @@ public static class TCPolish2Bake
             }
             EditorSceneManager.MarkSceneDirty(sc); EditorSceneManager.SaveScene(sc);
         }
-        Do("Assets/Scenes/MainMenu.unity", "TC_MenuUI/Safe/Play", "TC_MenuUI/Safe/Daily/Card/Claim");
+        Do("Assets/Scenes/MainMenu.unity", "TC_MenuUI/Safe/Play");
         Do("Assets/Scenes/gameplay.unity", "TC_GameUI/Results/Card/Again", "TC_GameUI/Revive/Card/Ad");
         Debug.Log("TCPolish2Bake: shine");
     }

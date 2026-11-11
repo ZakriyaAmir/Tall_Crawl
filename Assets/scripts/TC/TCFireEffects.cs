@@ -84,7 +84,7 @@ public class TCFireEffects : MonoBehaviour
         // heat glow behind everything
         heatGlow = TCFxLib.PS(fireRoot.transform, "HeatGlow", "Glow", new Vector3(0, 0.15f, 0.2f), 6);
         {
-            var m = heatGlow.main; m.playOnAwake = false; m.startLifetime = 0.45f; m.startSize = new ParticleSystem.MinMaxCurve(1.6f, 2.1f);
+            var m = heatGlow.main; m.playOnAwake = false; m.startLifetime = 0.45f; m.startSize = new ParticleSystem.MinMaxCurve(2.4f, 3.0f);
             m.startColor = new Color(1f, 0.55f, 0.15f, 0.55f);
             var em = heatGlow.emission; em.rateOverTime = 9; TCFxLib.ColorLife(heatGlow, TCFxLib.Fade(Color.white, TCFxLib.Hex("#FF7A2A"), 0.25f, 0.6f));
         }
@@ -92,10 +92,10 @@ public class TCFireEffects : MonoBehaviour
         trailFlames = TCFxLib.PS(fireRoot.transform, "TrailFlames", "Flame", new Vector3(0, 0.12f, -0.15f), 120);
         {
             var m = trailFlames.main; m.playOnAwake = false; m.simulationSpace = ParticleSystemSimulationSpace.World;
-            m.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.5f); m.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.6f);
+            m.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.5f); m.startSize = new ParticleSystem.MinMaxCurve(0.9f, 1.5f);
             m.startRotation = new ParticleSystem.MinMaxCurve(-0.3f, 0.3f); m.startColor = Color.white;
-            var em = trailFlames.emission; em.rateOverTime = 55; em.rateOverDistance = 10;
-            TCFxLib.Sphere(trailFlames, 0.18f, 1);
+            var em = trailFlames.emission; em.rateOverTime = 60; em.rateOverDistance = 45;
+            TCFxLib.Sphere(trailFlames, 0.35f, 1);
             TCFxLib.SizeLife(trailFlames, 0, 1f, 0.5f, 0.75f, 1, 0.05f);
             TCFxLib.ColorLife(trailFlames, TCFxLib.Fade3(Color.white, TCFxLib.Hex("#FFA030"), TCFxLib.Hex("#E8280E")));
             var r = trailFlames.GetComponent<ParticleSystemRenderer>(); r.alignment = ParticleSystemRenderSpace.View; r.sortingFudge = 2;
@@ -103,10 +103,10 @@ public class TCFireEffects : MonoBehaviour
         trailSmoke = TCFxLib.PS(fireRoot.transform, "TrailSmoke", "Smoke", new Vector3(0, 0.12f, -0.3f), 40);
         {
             var m = trailSmoke.main; m.playOnAwake = false; m.simulationSpace = ParticleSystemSimulationSpace.World;
-            m.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 0.9f); m.startSize = new ParticleSystem.MinMaxCurve(0.3f, 0.5f);
+            m.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 0.9f); m.startSize = new ParticleSystem.MinMaxCurve(0.8f, 1.3f);
             m.startColor = new Color(0.45f, 0.32f, 0.3f, 0.45f);
             var em = trailSmoke.emission; em.rateOverTime = 16;
-            TCFxLib.Sphere(trailSmoke, 0.2f, 1); TCFxLib.SpinRandom(trailSmoke, 60);
+            TCFxLib.Sphere(trailSmoke, 0.4f, 1); TCFxLib.SpinRandom(trailSmoke, 60);
             TCFxLib.SizeLife(trailSmoke, 0, 0.5f, 1, 1.6f);
             TCFxLib.ColorLife(trailSmoke, TCFxLib.Fade(TCFxLib.Hex("#FFB070"), TCFxLib.Hex("#6B5A58"), 0.2f, 0.4f, 0.8f));
             var r = trailSmoke.GetComponent<ParticleSystemRenderer>(); r.sortingFudge = 6;
@@ -114,10 +114,10 @@ public class TCFireEffects : MonoBehaviour
         trailEmbers = TCFxLib.PS(fireRoot.transform, "TrailEmbers", "Spark", new Vector3(0, 0.12f, -0.1f), 60);
         {
             var m = trailEmbers.main; m.playOnAwake = false; m.simulationSpace = ParticleSystemSimulationSpace.World;
-            m.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f); m.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.09f);
-            m.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.6f); m.startColor = new ParticleSystem.MinMaxGradient(TCFxLib.Hex("#FFF2A0"), TCFxLib.Hex("#FF7A1E"));
+            m.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f); m.startSize = new ParticleSystem.MinMaxCurve(0.1f, 0.2f);
+            m.startSpeed = new ParticleSystem.MinMaxCurve(1.5f, 4f); m.startColor = new ParticleSystem.MinMaxGradient(TCFxLib.Hex("#FFF2A0"), TCFxLib.Hex("#FF7A1E"));
             var em = trailEmbers.emission; em.rateOverTime = 45;
-            TCFxLib.Sphere(trailEmbers, 0.3f, 1);
+            TCFxLib.Sphere(trailEmbers, 0.6f, 1);
             var nz = trailEmbers.noise; nz.enabled = true; nz.strength = 0.8f; nz.frequency = 2f; nz.quality = ParticleSystemNoiseQuality.Low;
             var r = trailEmbers.GetComponent<ParticleSystemRenderer>(); r.renderMode = ParticleSystemRenderMode.Stretch; r.velocityScale = 0.08f; r.lengthScale = 1.5f;
             TCFxLib.ColorLife(trailEmbers, TCFxLib.Fade(Color.white, TCFxLib.Hex("#FF4A12"), 0.02f, 0.6f));
