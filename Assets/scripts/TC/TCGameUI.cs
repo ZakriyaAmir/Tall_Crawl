@@ -256,8 +256,11 @@ public class TCGameUI : MonoBehaviour
         }
     }
 
+    TCLivesPanel livesPanel; bool livesChecked;
     void RefreshHearts()
     {
+        if (!livesChecked) { livesChecked = true; livesPanel = heartsRow ? heartsRow.GetComponent<TCLivesPanel>() : null; }
+        if (livesPanel) { livesPanel.SetLives(spider.life, spider.MaxLife); return; }
         int max = spider.MaxLife;
         while (hearts.Count < max)
         {

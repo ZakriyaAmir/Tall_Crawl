@@ -386,22 +386,43 @@ public static class TCUI
     {
         var card = cg.transform.Find("Card");
         cg.interactable = false; cg.blocksRaycasts = true;
-        float dur = show ? 0.32f : 0.18f;
-        for (float t = 0; t < dur; t += Time.unscaledDeltaTime)
+        // polish2: jelly card pop (squash & stretch) + staggered pop-in of the card's contents
+        Transform[] kids = null; Vector3[] kidBase = null;
+        if (card && pop && show)
+        {
+            kids = new Transform[card.childCount]; kidBase = new Vector3[card.childCount];
+            for (int i = 0; i < card.childCount; i++) { kids[i] = card.GetChild(i); kidBase[i] = kids[i].localScale; }
+        }
+        float dur = show ? 0.42f : 0.18f, total = dur + (kids != null ? Mathf.Min(0.36f, kids.Length * 0.035f) : 0f);
+        for (float t = 0; t < total; t += Time.unscaledDeltaTime)
         {
             if (!show && !hiding.Contains(cg)) yield break; // re-opened mid-close
-            float k = t / dur;
-            cg.alpha = show ? EaseOut(k) : 1 - k;
-            if (card && pop) card.localScale = Vector3.one * (show ? Mathf.LerpUnclamped(0.8f, 1f, EaseOutBack(k)) : Mathf.Lerp(1f, 0.9f, k));
+            float k = Mathf.Clamp01(t / dur);
+            cg.alpha = show ? EaseOut(Mathf.Clamp01(k * 1.6f)) : 1 - k;
+            if (card && pop)
+            {
+                if (show) { float e = Elastic(k); card.localScale = new Vector3(Mathf.LerpUnclamped(0.7f, 1f, e), Mathf.LerpUnclamped(0.7f, 1f, Elastic(Mathf.Clamp01(k * 1.1f - 0.04f))), 1); }
+                else card.localScale = Vector3.one * Mathf.Lerp(1f, 0.86f, EaseOut(k));
+            }
+            if (kids != null)
+                for (int i = 0; i < kids.Length; i++)
+                {
+                    if (!kids[i]) continue;
+                    float kk = Mathf.Clamp01((t - 0.06f - i * 0.035f) / 0.28f);
+                    kids[i].localScale = kidBase[i] * Mathf.LerpUnclamped(0.5f, 1f, EaseOutBack(kk));
+                }
             yield return null;
         }
         if (!show && !hiding.Contains(cg)) yield break;
+        if (kids != null) for (int i = 0; i < kids.Length; i++) if (kids[i]) kids[i].localScale = kidBase[i];
         cg.alpha = show ? 1 : 0; if (card) card.localScale = Vector3.one;
         cg.interactable = show; cg.blocksRaycasts = show;
         if (!show) cg.gameObject.SetActive(false);
         done?.Invoke();
     }
     public static float EaseOut(float k) => 1 - (1 - k) * (1 - k);
+    /// Bouncy elastic ease-out (0..1), small overshoot - the "jelly" pop of hypercasual panels.
+    public static float Elastic(float k) { if (k <= 0) return 0; if (k >= 1) return 1; return Mathf.Pow(2, -9 * k) * Mathf.Sin((k * 7.5f - 0.75f) * (2 * Mathf.PI / 3f)) + 1; }
     public static float EaseOutBack(float k) { const float c1 = 1.70158f, c3 = c1 + 1; return 1 + c3 * Mathf.Pow(k - 1, 3) + c1 * Mathf.Pow(k - 1, 2); }
 
     public static IEnumerator Punch(Transform t, float amount = 0.2f, float dur = 0.25f)

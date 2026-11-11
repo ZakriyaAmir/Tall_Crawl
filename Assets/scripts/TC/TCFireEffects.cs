@@ -9,23 +9,15 @@ using UnityEngine;
 /// </summary>
 public class TCFireEffects : MonoBehaviour
 {
+    // polish2: transparent fresnel fire shield (hex energy + scrolling flame noise), full-body shield bubble,
+    // flames streaming back from the shield rim, a world-space fire + smoke + ember trail, heat glow,
+    // pop-in / fade-out and an "about to end" flicker.
     playerInteract pi;
     GameObject fireRoot;
-    ParticleSystem rimFireParticles;
-    ParticleSystem sparkParticles;
-
-    Transform shieldRoot;
-    Transform outerDomeTransform;
-    Transform innerDomeTransform;
-    Transform shieldRimTransform;
-
-    Material outerDomeMat;
-    Material innerDomeMat;
-    Material rimMat;
-
-    bool wasActive;
-    float spinAngle;
-
+    ParticleSystem rimFireParticles, sparkParticles, trailFlames, trailSmoke, trailEmbers, heatGlow;
+    Transform shieldRoot, outerDomeTransform, innerDomeTransform, bubbleTransform;
+    Material outerDomeMat, innerDomeMat, bubbleMat;
+    bool wasActive; float spinAngle, fade, popT;
     static Mesh convexShieldMesh;
 
     void Awake()
@@ -34,258 +26,160 @@ public class TCFireEffects : MonoBehaviour
         BuildFireEffects();
     }
 
-    static void ConfigureParticleRenderer(ParticleSystemRenderer renderer, Material material, float minSize, float maxSize)
+    static Material ShieldMat(string name, Color rim, Color core, float fill, float hex, float opacity, float power)
     {
-        if (!renderer) return;
-        if (material) renderer.sharedMaterial = material;
-        renderer.renderMode = ParticleSystemRenderMode.Billboard;
-        renderer.alignment = ParticleSystemRenderSpace.View;
-        renderer.minParticleSize = minSize;
-        renderer.maxParticleSize = maxSize;
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        renderer.receiveShadows = false;
-        renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-        renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
-        renderer.enableGPUInstancing = false;
+        var m = new Material(TCFxLib.Shield) { name = name };
+        m.SetColor("_Color", rim); m.SetColor("_CoreColor", core); m.SetFloat("_Fill", fill); m.SetFloat("_HexStrength", hex);
+        m.SetFloat("_Opacity", opacity); m.SetFloat("_RimPower", power); return m;
     }
 
     void BuildFireEffects()
     {
         fireRoot = new GameObject("Chilli_Fire_Effects");
         fireRoot.transform.SetParent(transform, false);
-        fireRoot.transform.localPosition = Vector3.zero;
 
-        // 1. Shaders & Materials
-        // Prefer Legacy Shaders/Particles/Additive (in AlwaysIncludedShaders and compiled on Android)
-        // and never fall back to opaque Standard, which renders particles as solid lit quads on mobile.
-        var partShader = Shader.Find("Legacy Shaders/Particles/Additive")
-            ?? Shader.Find("Mobile/Particles/Additive")
-            ?? Shader.Find("Particles/Standard Unlit")
-            ?? Shader.Find("Sprites/Default");
-        var fireTex = Resources.Load<Texture2D>("TCUI/fire_particle");
-        var energyTex = Resources.Load<Texture2D>("TCUI/fire_shield_energy");
-
-        Material partMat = partShader ? new Material(partShader) : null;
-        if (partMat)
-        {
-            if (fireTex) partMat.mainTexture = fireTex;
-            partMat.color = new Color(1f, 0.7f, 0.25f, 1f);
-            // Legacy Particles/Additive multiplies by 2x _TintColor; halve it so brightness and alpha match Editor.
-            if (partMat.HasProperty("_TintColor")) partMat.SetColor("_TintColor", new Color(0.55f, 0.48f, 0.38f, 0.5f));
-        }
-
-        // 2. High-Quality Convex Fire Shield ahead of spider
         shieldRoot = new GameObject("ConvexFireShield").transform;
         shieldRoot.SetParent(fireRoot.transform, false);
-        // Placed ahead of the spider's front ocular snout / legs
         shieldRoot.localPosition = new Vector3(0, 0.16f, 0.46f);
-        shieldRoot.localRotation = Quaternion.identity;
+        if (!convexShieldMesh) convexShieldMesh = CreateConvexShieldMesh(14, 36, 0.62f, 0.36f);
 
-        if (!convexShieldMesh) convexShieldMesh = CreateConvexShieldMesh(12, 28, 0.58f, 0.28f);
+        outerDomeMat = ShieldMat("FireShield_Outer", TCFxLib.Hex("#FF5A12"), TCFxLib.Hex("#FFD84A"), 0.22f, 0.8f, 0.85f, 1.6f);
+        innerDomeMat = ShieldMat("FireShield_Inner", TCFxLib.Hex("#FFB02E"), TCFxLib.Hex("#FFF6C8"), 0.35f, 0.3f, 0.6f, 1.2f);
+        innerDomeMat.SetVector("_Scroll", new Vector4(0, -0.9f, -0.2f, 2.2f));
+        bubbleMat = ShieldMat("FireShield_Bubble", TCFxLib.Hex("#FF7A1E"), TCFxLib.Hex("#FFE08A"), 0.0f, 0.55f, 0.75f, 2.6f);
+        bubbleMat.SetTextureScale("_HexTex", new Vector2(5, 3));
 
-        var celShader = Shader.Find("TallCrawl/SpiderPreBaked") ?? Shader.Find("Standard") ?? Shader.Find("Mobile/Diffuse") ?? Shader.Find("Sprites/Default");
+        outerDomeTransform = MeshObj("OuterConvexDome", shieldRoot, convexShieldMesh, outerDomeMat, Vector3.zero, Vector3.one).transform;
+        innerDomeTransform = MeshObj("InnerCoreDome", shieldRoot, convexShieldMesh, innerDomeMat, new Vector3(0, 0, 0.02f), Vector3.one * 0.74f).transform;
 
-        // Outer blazing convex dome material
-        outerDomeMat = new Material(celShader);
-        outerDomeMat.color = new Color(1.0f, 0.48f, 0.12f, 1.0f);
-        if (energyTex) outerDomeMat.mainTexture = energyTex;
-        if (outerDomeMat.HasProperty("_EmissionColor"))
+        // full-body bubble (shield read): sphere mesh around the spider
+        var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        var sm = sphere.GetComponent<MeshFilter>().sharedMesh; Destroy(sphere);
+        bubbleTransform = MeshObj("ShieldBubble", fireRoot.transform, sm, bubbleMat, new Vector3(0, 0.14f, 0.02f), new Vector3(1.05f, 0.75f, 1.35f)).transform;
+
+        // flames streaming back from the shield rim (comet look), local to the spider
+        rimFireParticles = TCFxLib.PS(shieldRoot, "RimFireParticles", "Flame", new Vector3(0, 0, 0.02f), 90);
         {
-            outerDomeMat.SetColor("_EmissionColor", new Color(1.0f, 0.42f, 0.08f) * 2.4f);
-            outerDomeMat.EnableKeyword("_EMISSION");
+            var m = rimFireParticles.main; m.playOnAwake = false; m.startLifetime = new ParticleSystem.MinMaxCurve(0.22f, 0.36f);
+            m.startSpeed = 0; m.startSize = new ParticleSystem.MinMaxCurve(0.22f, 0.42f); m.startColor = Color.white;
+            m.startRotation = new ParticleSystem.MinMaxCurve(-0.4f, 0.4f);
+            var em = rimFireParticles.emission; em.rateOverTime = 110;
+            var sh = rimFireParticles.shape; sh.enabled = true; sh.shapeType = ParticleSystemShapeType.Circle; sh.radius = 0.56f; sh.radiusThickness = 0.15f;
+            var v = rimFireParticles.velocityOverLifetime; v.enabled = true; v.space = ParticleSystemSimulationSpace.Local;
+            v.x = new ParticleSystem.MinMaxCurve(0, 0); v.y = new ParticleSystem.MinMaxCurve(0, 0); v.z = new ParticleSystem.MinMaxCurve(-2.6f, -1.6f);
+            TCFxLib.SizeLife(rimFireParticles, 0, 0.6f, 0.25f, 1f, 1, 0.15f);
+            TCFxLib.ColorLife(rimFireParticles, TCFxLib.Fade3(Color.white, TCFxLib.Hex("#FFB43A"), TCFxLib.Hex("#FF3A12")));
         }
-        if (outerDomeMat.HasProperty("_OutlineColor")) outerDomeMat.SetColor("_OutlineColor", new Color(1.0f, 0.95f, 0.4f, 1f));
-        if (outerDomeMat.HasProperty("_OutlineWidth")) outerDomeMat.SetFloat("_OutlineWidth", 1.8f);
-
-        // Inner hot core dome (brighter, smaller, creates rich layer depth)
-        innerDomeMat = new Material(celShader);
-        innerDomeMat.color = new Color(1.0f, 0.88f, 0.35f, 1.0f);
-        if (innerDomeMat.HasProperty("_EmissionColor"))
+        // forward sparks off the ramming crest
+        sparkParticles = TCFxLib.PS(shieldRoot, "Sparks", "Spark", new Vector3(0, 0, 0.3f), 40);
         {
-            innerDomeMat.SetColor("_EmissionColor", new Color(1.0f, 0.92f, 0.55f) * 3.0f);
-            innerDomeMat.EnableKeyword("_EMISSION");
+            var m = sparkParticles.main; m.playOnAwake = false; m.startLifetime = new ParticleSystem.MinMaxCurve(0.15f, 0.3f);
+            m.startSpeed = new ParticleSystem.MinMaxCurve(2.5f, 5f); m.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.1f);
+            m.startColor = new ParticleSystem.MinMaxGradient(Color.white, TCFxLib.Hex("#FFD56A"));
+            var em = sparkParticles.emission; em.rateOverTime = 40;
+            var sh = sparkParticles.shape; sh.enabled = true; sh.shapeType = ParticleSystemShapeType.Cone; sh.angle = 55f; sh.radius = 0.3f;
+            var r = sparkParticles.GetComponent<ParticleSystemRenderer>(); r.renderMode = ParticleSystemRenderMode.Stretch; r.velocityScale = 0.05f; r.lengthScale = 1.2f;
+            TCFxLib.ColorLife(sparkParticles, TCFxLib.Fade(Color.white, TCFxLib.Hex("#FF8A2B"), 0.02f, 0.5f));
         }
-
-        // Gold-amber protective outer rim
-        rimMat = new Material(celShader);
-        rimMat.color = new Color(1.0f, 0.75f, 0.2f, 1.0f);
-        if (rimMat.HasProperty("_EmissionColor"))
+        // heat glow behind everything
+        heatGlow = TCFxLib.PS(fireRoot.transform, "HeatGlow", "Glow", new Vector3(0, 0.15f, 0.2f), 6);
         {
-            rimMat.SetColor("_EmissionColor", new Color(1.0f, 0.65f, 0.15f) * 2.0f);
-            rimMat.EnableKeyword("_EMISSION");
+            var m = heatGlow.main; m.playOnAwake = false; m.startLifetime = 0.45f; m.startSize = new ParticleSystem.MinMaxCurve(1.6f, 2.1f);
+            m.startColor = new Color(1f, 0.55f, 0.15f, 0.55f);
+            var em = heatGlow.emission; em.rateOverTime = 9; TCFxLib.ColorLife(heatGlow, TCFxLib.Fade(Color.white, TCFxLib.Hex("#FF7A2A"), 0.25f, 0.6f));
         }
-        if (rimMat.HasProperty("_OutlineColor")) rimMat.SetColor("_OutlineColor", new Color(0.35f, 0.15f, 0.02f, 1f));
-        if (rimMat.HasProperty("_OutlineWidth")) rimMat.SetFloat("_OutlineWidth", 1.5f);
-
-        // Outer Dome
-        var outerObj = new GameObject("OuterConvexDome");
-        outerObj.transform.SetParent(shieldRoot, false);
-        var mfOuter = outerObj.AddComponent<MeshFilter>();
-        mfOuter.sharedMesh = convexShieldMesh;
-        var mrOuter = outerObj.AddComponent<MeshRenderer>();
-        mrOuter.sharedMaterial = outerDomeMat;
-        mrOuter.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        mrOuter.receiveShadows = false;
-        outerDomeTransform = outerObj.transform;
-
-        // Inner Core Dome
-        var innerObj = new GameObject("InnerCoreDome");
-        innerObj.transform.SetParent(shieldRoot, false);
-        innerObj.transform.localPosition = new Vector3(0, 0, 0.02f);
-        innerObj.transform.localScale = Vector3.one * 0.78f;
-        var mfInner = innerObj.AddComponent<MeshFilter>();
-        mfInner.sharedMesh = convexShieldMesh;
-        var mrInner = innerObj.AddComponent<MeshRenderer>();
-        mrInner.sharedMaterial = innerDomeMat;
-        mrInner.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        mrInner.receiveShadows = false;
-        innerDomeTransform = innerObj.transform;
-
-        // Solid Torus / Cylinder Reinforcement Rim at base of convex shield
-        var rimObj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        var colRim = rimObj.GetComponent<Collider>(); if (colRim) DestroyImmediate(colRim);
-        rimObj.transform.SetParent(shieldRoot, false);
-        rimObj.transform.localPosition = new Vector3(0, 0, 0.02f);
-        rimObj.transform.localRotation = Quaternion.Euler(90f, 0, 0);
-        rimObj.transform.localScale = new Vector3(1.18f, 0.015f, 1.18f);
-        var mrRim = rimObj.GetComponent<MeshRenderer>();
-        if (mrRim)
+        // world-space trail left on the trunk: flames, smoke, embers
+        trailFlames = TCFxLib.PS(fireRoot.transform, "TrailFlames", "Flame", new Vector3(0, 0.12f, -0.15f), 120);
         {
-            mrRim.sharedMaterial = rimMat;
-            mrRim.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mrRim.receiveShadows = false;
+            var m = trailFlames.main; m.playOnAwake = false; m.simulationSpace = ParticleSystemSimulationSpace.World;
+            m.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.5f); m.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.6f);
+            m.startRotation = new ParticleSystem.MinMaxCurve(-0.3f, 0.3f); m.startColor = Color.white;
+            var em = trailFlames.emission; em.rateOverTime = 55; em.rateOverDistance = 10;
+            TCFxLib.Sphere(trailFlames, 0.18f, 1);
+            TCFxLib.SizeLife(trailFlames, 0, 1f, 0.5f, 0.75f, 1, 0.05f);
+            TCFxLib.ColorLife(trailFlames, TCFxLib.Fade3(Color.white, TCFxLib.Hex("#FFA030"), TCFxLib.Hex("#E8280E")));
+            var r = trailFlames.GetComponent<ParticleSystemRenderer>(); r.alignment = ParticleSystemRenderSpace.View; r.sortingFudge = 2;
         }
-        shieldRimTransform = rimObj.transform;
-
-        // 3. Dynamic Flame Rim Particles (Sweeps around the perimeter of the convex shield)
-        var rimPsObj = new GameObject("RimFireParticles");
-        rimPsObj.transform.SetParent(shieldRoot, false);
-        rimPsObj.transform.localPosition = new Vector3(0, 0, 0.04f);
-
-        rimFireParticles = rimPsObj.AddComponent<ParticleSystem>();
-        var rmr = rimPsObj.GetComponent<ParticleSystemRenderer>();
-        ConfigureParticleRenderer(rmr, partMat, 0.02f, 1.0f);
-
-        var rmain = rimFireParticles.main;
-        rmain.loop = true;
-        rmain.playOnAwake = false;
-        rmain.scalingMode = ParticleSystemScalingMode.Hierarchy;
-        rmain.startLifetime = 0.35f;
-        rmain.startSpeed = new ParticleSystem.MinMaxCurve(0.4f, 1.4f);
-        rmain.startSize = new ParticleSystem.MinMaxCurve(0.25f, 0.48f);
-        rmain.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.9f, 0.4f, 0.95f), new Color(1f, 0.35f, 0.05f, 0.95f));
-        rmain.simulationSpace = ParticleSystemSimulationSpace.Local;
-        rmain.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
-
-        var remission = rimFireParticles.emission;
-        remission.rateOverTime = 60f;
-
-        var rshape = rimFireParticles.shape;
-        rshape.shapeType = ParticleSystemShapeType.Circle;
-        rshape.radius = 0.58f;
-        rshape.arc = 360f;
-        rshape.rotation = new Vector3(0, 0, 0);
-
-        var rcol = rimFireParticles.colorOverLifetime;
-        rcol.enabled = true;
-        var rgrad = new Gradient();
-        rgrad.SetKeys(
-            new GradientColorKey[] { new GradientColorKey(new Color(1f, 0.95f, 0.5f), 0f), new GradientColorKey(new Color(1f, 0.35f, 0.05f), 0.5f), new GradientColorKey(new Color(0.6f, 0.08f, 0.0f), 1f) },
-            new GradientAlphaKey[] { new GradientAlphaKey(0.95f, 0f), new GradientAlphaKey(0.85f, 0.4f), new GradientAlphaKey(0f, 1f) }
-        );
-        rcol.color = rgrad;
-
-        var rsize = rimFireParticles.sizeOverLifetime;
-        rsize.enabled = true;
-        var sc = new AnimationCurve();
-        sc.AddKey(0f, 0.4f);
-        sc.AddKey(0.4f, 1.0f);
-        sc.AddKey(1f, 0.1f);
-        rsize.size = new ParticleSystem.MinMaxCurve(1f, sc);
-
-        // 4. Directional Spark Trail Particles bursting forward from shield edge
-        var sparkObj = new GameObject("Sparks");
-        sparkObj.transform.SetParent(shieldRoot, false);
-        sparkObj.transform.localPosition = new Vector3(0, 0, 0.15f);
-
-        sparkParticles = sparkObj.AddComponent<ParticleSystem>();
-        var smr = sparkObj.GetComponent<ParticleSystemRenderer>();
-        ConfigureParticleRenderer(smr, partMat, 0.01f, 0.8f);
-
-        var smain = sparkParticles.main;
-        smain.loop = true;
-        smain.playOnAwake = false;
-        smain.scalingMode = ParticleSystemScalingMode.Hierarchy;
-        smain.startLifetime = 0.28f;
-        smain.startSpeed = new ParticleSystem.MinMaxCurve(1.6f, 3.8f);
-        smain.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.18f);
-        smain.startColor = new Color(1f, 0.98f, 0.8f, 1f);
-        smain.simulationSpace = ParticleSystemSimulationSpace.Local;
-        smain.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
-
-        var semission = sparkParticles.emission;
-        semission.rateOverTime = 36f;
-
-        var sshape = sparkParticles.shape;
-        sshape.shapeType = ParticleSystemShapeType.Cone;
-        sshape.angle = 25f;
-        sshape.radius = 0.35f;
-
+        trailSmoke = TCFxLib.PS(fireRoot.transform, "TrailSmoke", "Smoke", new Vector3(0, 0.12f, -0.3f), 40);
+        {
+            var m = trailSmoke.main; m.playOnAwake = false; m.simulationSpace = ParticleSystemSimulationSpace.World;
+            m.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 0.9f); m.startSize = new ParticleSystem.MinMaxCurve(0.3f, 0.5f);
+            m.startColor = new Color(0.45f, 0.32f, 0.3f, 0.45f);
+            var em = trailSmoke.emission; em.rateOverTime = 16;
+            TCFxLib.Sphere(trailSmoke, 0.2f, 1); TCFxLib.SpinRandom(trailSmoke, 60);
+            TCFxLib.SizeLife(trailSmoke, 0, 0.5f, 1, 1.6f);
+            TCFxLib.ColorLife(trailSmoke, TCFxLib.Fade(TCFxLib.Hex("#FFB070"), TCFxLib.Hex("#6B5A58"), 0.2f, 0.4f, 0.8f));
+            var r = trailSmoke.GetComponent<ParticleSystemRenderer>(); r.sortingFudge = 6;
+        }
+        trailEmbers = TCFxLib.PS(fireRoot.transform, "TrailEmbers", "Spark", new Vector3(0, 0.12f, -0.1f), 60);
+        {
+            var m = trailEmbers.main; m.playOnAwake = false; m.simulationSpace = ParticleSystemSimulationSpace.World;
+            m.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f); m.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.09f);
+            m.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.6f); m.startColor = new ParticleSystem.MinMaxGradient(TCFxLib.Hex("#FFF2A0"), TCFxLib.Hex("#FF7A1E"));
+            var em = trailEmbers.emission; em.rateOverTime = 45;
+            TCFxLib.Sphere(trailEmbers, 0.3f, 1);
+            var nz = trailEmbers.noise; nz.enabled = true; nz.strength = 0.8f; nz.frequency = 2f; nz.quality = ParticleSystemNoiseQuality.Low;
+            var r = trailEmbers.GetComponent<ParticleSystemRenderer>(); r.renderMode = ParticleSystemRenderMode.Stretch; r.velocityScale = 0.08f; r.lengthScale = 1.5f;
+            TCFxLib.ColorLife(trailEmbers, TCFxLib.Fade(Color.white, TCFxLib.Hex("#FF4A12"), 0.02f, 0.6f));
+        }
         fireRoot.SetActive(false);
+    }
+
+    static GameObject MeshObj(string name, Transform parent, Mesh mesh, Material mat, Vector3 pos, Vector3 scale)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false); go.transform.localPosition = pos; go.transform.localScale = scale;
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var mr = go.AddComponent<MeshRenderer>(); mr.sharedMaterial = mat;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; mr.receiveShadows = false;
+        mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off; mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        return go;
+    }
+
+    void SetEmit(bool on)
+    {
+        foreach (var ps in new[] { rimFireParticles, sparkParticles, trailFlames, trailSmoke, trailEmbers, heatGlow })
+        {
+            if (!ps) continue;
+            if (on) { ps.Clear(true); ps.Play(true); } else ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+        }
     }
 
     void Update()
     {
         if (!pi) pi = GetComponentInParent<playerInteract>();
-        bool active = pi != null && pi.boostDuration > 0;
+        bool active = pi != null && pi.boostDuration > 0 && !pi.IsDead;
+        float dt = Time.deltaTime;
 
         if (active != wasActive)
         {
             wasActive = active;
             if (!fireRoot) return;
-
-            if (active)
-            {
-                fireRoot.SetActive(true);
-                if (rimFireParticles) { rimFireParticles.Clear(true); rimFireParticles.Play(true); }
-                if (sparkParticles) { sparkParticles.Clear(true); sparkParticles.Play(true); }
-                spinAngle = 0f;
-            }
-            else
-            {
-                if (rimFireParticles) rimFireParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-                if (sparkParticles) sparkParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-                fireRoot.SetActive(false);
-            }
+            if (active) { fireRoot.SetActive(true); SetEmit(true); spinAngle = 0f; popT = 0f; }
+            else SetEmit(false);
         }
 
-        if (active)
+        fade = Mathf.MoveTowards(fade, active ? 1f : 0f, dt * (active ? 6f : 3.5f));
+        if (!active && fade <= 0f) { if (fireRoot && fireRoot.activeSelf && (!trailFlames || trailFlames.particleCount == 0)) fireRoot.SetActive(false); }
+        if (!fireRoot || !fireRoot.activeSelf) return;
+
+        // about-to-end warning flicker
+        float warn = (active && pi.boostDuration < 0.9f) ? (0.55f + 0.45f * Mathf.Sign(Mathf.Sin(Time.time * 28f))) : 1f;
+        float a = fade * warn;
+        outerDomeMat.SetFloat("_Alpha", a); innerDomeMat.SetFloat("_Alpha", a); bubbleMat.SetFloat("_Alpha", a * 0.9f);
+
+        popT += dt;
+        float pop = popT < 0.35f ? Mathf.LerpUnclamped(0.2f, 1f, TCUI.EaseOutBack(Mathf.Clamp01(popT / 0.35f))) : 1f;
+        spinAngle += dt * 220f;
+        float pulse = 1f + 0.06f * Mathf.Sin(Time.time * 20f);
+        if (shieldRoot)
         {
-            float dt = Time.deltaTime;
-            spinAngle += dt * 260f; // clean rhythmic rotation of energy vortex
-
-            // Smooth forward ramming thrust & expansion pulse
-            float pulse = 1f + 0.08f * Mathf.Sin(Time.time * 20f);
-            float forwardThrust = 0.48f + 0.05f * Mathf.Sin(Time.time * 26f);
-
-            if (shieldRoot)
-            {
-                shieldRoot.localPosition = new Vector3(0, 0.16f, forwardThrust);
-                shieldRoot.localScale = new Vector3(pulse, pulse, 1f + 0.12f * Mathf.Sin(Time.time * 18f));
-            }
-
-            // Outer dome rotation with texture swirl
-            if (outerDomeTransform)
-            {
-                outerDomeTransform.localRotation = Quaternion.Euler(0, 0, spinAngle);
-            }
-
-            // Inner core counter-rotation
-            if (innerDomeTransform)
-            {
-                innerDomeTransform.localRotation = Quaternion.Euler(0, 0, -spinAngle * 1.4f);
-            }
+            shieldRoot.localPosition = new Vector3(0, 0.16f, 0.48f + 0.04f * Mathf.Sin(Time.time * 26f));
+            shieldRoot.localScale = new Vector3(pulse, pulse, 1f + 0.1f * Mathf.Sin(Time.time * 18f)) * pop;
         }
+        if (bubbleTransform) bubbleTransform.localScale = new Vector3(1.05f, 0.75f, 1.35f) * (pop * (1f + 0.03f * Mathf.Sin(Time.time * 9f)));
+        if (outerDomeTransform) outerDomeTransform.localRotation = Quaternion.Euler(0, 0, spinAngle);
+        if (innerDomeTransform) innerDomeTransform.localRotation = Quaternion.Euler(0, 0, -spinAngle * 1.4f);
     }
 
     /// <summary>

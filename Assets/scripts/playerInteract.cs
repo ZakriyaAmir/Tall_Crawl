@@ -101,7 +101,8 @@ public class playerInteract : MonoBehaviour
         CooldownInventory = 0;
         TCSkins.Apply(gameObject, TCSave.SelectedSkin);
         if (!GetComponentInChildren<TCFireEffects>()) gameObject.AddComponent<TCFireEffects>();
-        renderers = System.Array.FindAll(GetComponentsInChildren<Renderer>(true), r => r.enabled); // skip the hidden realistic mesh
+        if (!FindObjectOfType<TCSpeedLines>()) gameObject.AddComponent<TCSpeedLines>();
+        renderers = System.Array.FindAll(GetComponentsInChildren<Renderer>(true), r => r.enabled && !(r is ParticleSystemRenderer) && !IsFx(r.transform)); // skip the hidden realistic mesh and the VFX
     }
 
     void Update()
@@ -123,6 +124,8 @@ public class playerInteract : MonoBehaviour
         }
     }
 
+    bool IsFx(Transform t) { for (; t && t != transform; t = t.parent) if (t.name == "Chilli_Fire_Effects") return true; return false; }
+
     void SetVisible(bool v) { foreach (var r in renderers) if (r && !(r is TrailRenderer)) r.enabled = v; }
 
     void Play(AudioClip c, float vol = 1f) { if (c && audioSource) audioSource.PlayOneShot(c, vol); }
@@ -131,6 +134,9 @@ public class playerInteract : MonoBehaviour
     {
         if (IsDead || (p != null && p.GameOver)) return false;
         if (!other || !other.gameObject.activeSelf) return false;
+
+        var fxKind = TCPickupFX.KindFromTag(other.tag);
+        if (fxKind.HasValue) TCPickupFX.Burst(fxKind.Value, other.bounds.center);
 
         if (other.CompareTag("points"))
         {
@@ -377,6 +383,7 @@ public class playerInteract : MonoBehaviour
     public void StartBoost(float secs)
     {
         if (IsDead || (p != null && p.GameOver)) return;
+        if (boostDuration <= 0) TCPickupFX.Burst(TCPickupKind.BoostStart, transform.position + transform.up * 0.2f);
         boostDuration = Mathf.Max(boostDuration, secs);
         OnEvent?.Invoke("boost", transform.position);
     }
