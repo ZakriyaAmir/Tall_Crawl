@@ -32,6 +32,7 @@ public class continuousRotation : MonoBehaviour
 
     void Update()
     {
+        if (speed == 0f || (!x && !y && !z)) return;
         float dt = Time.deltaTime;
         if (dt <= 0) return;
         float angle = speed * dt;

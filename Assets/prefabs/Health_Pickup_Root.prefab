@@ -28,8 +28,8 @@ Transform:
   m_GameObject: {fileID: 1602210997874364161}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.105, z: 0.605}
-  m_LocalScale: {x: 0.65, y: 0.65, z: 0.65}
+  m_LocalPosition: {x: 0, y: -0.105, z: 0.5464}
+  m_LocalScale: {x: 0.8, y: 0.8, z: 0.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4293001519251797720}
@@ -104,8 +104,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TCPickupGlow
   targetPickup: {fileID: 3282201255586438734}
-  pulseSpeed: 2.8
-  pulseMagnitude: 0.06
+  pulseSpeed: 0
+  pulseMagnitude: 0
 --- !u!1 &4293001519251797721
 GameObject:
   m_ObjectHideFlags: 0
@@ -116,7 +116,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4293001519251797720}
   m_Layer: 0
-  m_Name: healthParent
+  m_Name: Health_Pickup_Root
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -175,7 +175,7 @@ PrefabInstance:
     - target: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.209
+      value: -0.396
       objectReference: {fileID: 0}
     - target: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,
         type: 3}
@@ -185,7 +185,7 @@ PrefabInstance:
     - target: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,
         type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.5060338
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,
         type: 3}
@@ -195,7 +195,7 @@ PrefabInstance:
     - target: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,
         type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.86251366
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,
         type: 3}
@@ -210,7 +210,7 @@ PrefabInstance:
     - target: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 119.2
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,
         type: 3}
@@ -323,7 +323,7 @@ MonoBehaviour:
   x: 0
   y: 1
   z: 0
-  speed: 150
+  speed: 90
 --- !u!4 &3282201255586438734 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -4216859302048453862, guid: 5908db2fb0d249241abff06e34538076,

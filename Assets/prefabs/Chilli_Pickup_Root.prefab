@@ -109,12 +109,12 @@ GameObject:
   m_Component:
   - component: {fileID: 5534702792140497045}
   m_Layer: 0
-  m_Name: boostParent
+  m_Name: Chilli_Pickup_Root
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &5534702792140497045
 Transform:
   m_ObjectHideFlags: 0
@@ -160,8 +160,8 @@ Transform:
   m_GameObject: {fileID: 5906790635243427186}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.046, z: 0.59}
-  m_LocalScale: {x: 0.68, y: 0.68, z: 0.68}
+  m_LocalPosition: {x: 0, y: -0.046, z: 0.523}
+  m_LocalScale: {x: 0.8, y: 0.8, z: 0.8}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 5534702792140497045}
@@ -269,7 +269,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: ca787d856e0221a45b4941e1b90db7c1,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: -1.4333336
+      value: 0.31
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: ca787d856e0221a45b4941e1b90db7c1,
         type: 3}

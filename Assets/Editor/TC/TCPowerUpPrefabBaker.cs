@@ -619,7 +619,7 @@ public static class TCPowerUpPrefabBaker
 
     static void BakeHealthGlow()
     {
-        string path = $"{PrefabsDir}/healthParent.prefab";
+        string path = $"{PrefabsDir}/Health_Pickup_Root.prefab";
         if (!File.Exists(path)) return;
 
         var root = PrefabUtility.LoadPrefabContents(path);
@@ -634,9 +634,9 @@ public static class TCPowerUpPrefabBaker
 
             var glowObj = new GameObject("CircularGlow_Green");
             glowObj.transform.SetParent(root.transform, false);
-            glowObj.transform.localPosition = new Vector3(0f, -0.105f, 0.605f);
+            glowObj.transform.localPosition = new Vector3(0f, -0.105f, 0.5464f);
             glowObj.transform.localRotation = Quaternion.identity;
-            glowObj.transform.localScale = Vector3.one * 0.65f;
+            glowObj.transform.localScale = Vector3.one * 0.8f;
 
             var mf = glowObj.AddComponent<MeshFilter>();
             mf.sharedMesh = glowMesh;
@@ -646,9 +646,22 @@ public static class TCPowerUpPrefabBaker
             mr.receiveShadows = false;
 
             var pg = glowObj.AddComponent<TCPickupGlow>();
-            if (heart) pg.targetPickup = heart;
+            pg.pulseSpeed = 0f;
+            pg.pulseMagnitude = 0f;
+            if (heart)
+            {
+                pg.targetPickup = heart;
+                heart.localPosition = new Vector3(0f, -0.4105f, 0.6253f);
+                heart.localRotation = Quaternion.Euler(0f, 119.2f, 0f);
+                heart.localScale = new Vector3(3f, 3f, 3f);
 
-            PrefabUtility.SaveAsPrefabAsset(root, path);
+                var rot = heart.GetComponent<continuousRotation>();
+                if (rot) Object.DestroyImmediate(rot);
+                var anim = heart.GetComponent<Animator>();
+                if (anim) Object.DestroyImmediate(anim);
+            }
+
+            SavePrefab(root, "Health_Pickup_Root");
         }
         finally
         {
@@ -658,7 +671,7 @@ public static class TCPowerUpPrefabBaker
 
     static void BakeBoostGlow()
     {
-        string path = $"{PrefabsDir}/boostParent.prefab";
+        string path = $"{PrefabsDir}/Chilli_Pickup_Root.prefab";
         if (!File.Exists(path)) return;
 
         var root = PrefabUtility.LoadPrefabContents(path);
@@ -687,7 +700,7 @@ public static class TCPowerUpPrefabBaker
             var pg = glowObj.AddComponent<TCPickupGlow>();
             if (picante) pg.targetPickup = picante;
 
-            PrefabUtility.SaveAsPrefabAsset(root, path);
+            SavePrefab(root, "Chilli_Pickup_Root");
         }
         finally
         {

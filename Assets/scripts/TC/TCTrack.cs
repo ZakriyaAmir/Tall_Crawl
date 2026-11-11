@@ -97,8 +97,15 @@ public class TCTrack : MonoBehaviour
         branchPool = new TCPool(branchPrefab, hazardParent, 24);
         beePool = new TCPool(beesPrefab, hazardParent, 3);
         coinPool = new TCPool(coinPrefab, bonusParent, 120);
-        heartPool = new TCPool(heartPrefab, bonusParent, 2);
-        boostPool = new TCPool(boostPrefab, bonusParent, 2);
+        var hProto = heartPrefab;
+        if (!hProto) hProto = Resources.Load<GameObject>("PowerUps/Health_Pickup_Root");
+        if (hProto != null) hProto.SetActive(false);
+        heartPool = new TCPool(hProto, bonusParent, 2);
+
+        var bProto = boostPrefab;
+        if (!bProto) bProto = Resources.Load<GameObject>("PowerUps/Chilli_Pickup_Root");
+        if (bProto != null) bProto.SetActive(false);
+        boostPool = new TCPool(bProto, bonusParent, 2);
         var cProto = cooldownPrefab;
         if (!cProto) cProto = Resources.Load<GameObject>("PowerUps/Cooldown_Pickup_Root");
         if (!cProto) cProto = TCTimeDilation.CreateCooldownPickupPrefab(bonusParent);
@@ -153,6 +160,7 @@ public class TCTrack : MonoBehaviour
 
     void Tick()
     {
+        if (trunkPool == null || !player) return;
         if (pl && !pl.paused && !pl.GameOver)
         {
             runActiveTimer += Time.deltaTime;
@@ -648,7 +656,9 @@ public class TCTrack : MonoBehaviour
 
     TCPooled Spawn(TCPool pool, string kind, float y, float angle)
     {
+        if (pool == null) return null;
         var g = pool.Get(new Vector3(0, y, 0), Quaternion.Euler(0, angle, 0));
+        if (!g) return null;
         var p = g.GetComponent<TCPooled>();
         if (!p) p = g.AddComponent<TCPooled>();
         p.pool = pool; p.kind = kind; p.y = y;
@@ -669,6 +679,34 @@ public class TCTrack : MonoBehaviour
             {
                 ch.localPosition = new Vector3(0f, 0f, 0.603f);
                 ch.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            }
+            else if (kind == "heart")
+            {
+                if (ch.CompareTag("health") || ch.name.IndexOf("Heart", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    ch.localPosition = new Vector3(0f, -0.4105f, 0.6253f);
+                    ch.localRotation = Quaternion.Euler(0f, 119.2f, 0f);
+                    ch.localScale = new Vector3(3f, 3f, 3f);
+
+                    var anim = ch.GetComponent<Animator>();
+                    if (anim) anim.enabled = false;
+                    var rot = ch.GetComponent<continuousRotation>();
+                    if (rot) rot.enabled = false;
+                }
+                else if (ch.name.IndexOf("CircularGlow", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         ch.name.IndexOf("Circle", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    ch.localPosition = new Vector3(0f, -0.105f, 0.5464f);
+                    ch.localRotation = Quaternion.identity;
+                    ch.localScale = new Vector3(0.8f, 0.8f, 0.8f);
+
+                    var glow = ch.GetComponent<TCPickupGlow>();
+                    if (glow)
+                    {
+                        glow.pulseSpeed = 0f;
+                        glow.pulseMagnitude = 0f;
+                    }
+                }
             }
         }
         live.Add(p);

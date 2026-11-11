@@ -39,6 +39,10 @@ public class TCPickupGlow : MonoBehaviour
             baseScale = transform.localScale;
             initializedBaseScale = true;
         }
+        else if (initializedBaseScale && (pulseSpeed <= 0f || pulseMagnitude <= 0f))
+        {
+            transform.localScale = baseScale;
+        }
     }
 
     void FindTargetPickup()
@@ -67,7 +71,7 @@ public class TCPickupGlow : MonoBehaviour
         }
 
         // 2. Gentle breathing pulse during gameplay
-        if (Application.isPlaying && initializedBaseScale && pulseSpeed > 0f)
+        if (Application.isPlaying && initializedBaseScale && pulseSpeed > 0f && pulseMagnitude > 0f)
         {
             float s = 1f + Mathf.Sin(Time.time * pulseSpeed) * pulseMagnitude;
             transform.localScale = baseScale * s;
