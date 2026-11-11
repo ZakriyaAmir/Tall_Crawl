@@ -734,7 +734,11 @@ public class TCGameUI : MonoBehaviour
         if (hintText) hintText.raycastTarget = false;
         if (hand) { var hi = hand.GetComponent<Image>(); if (hi) hi.raycastTarget = false; }
         gm.BeginRun();
-        if (TCSave.TutorialDone) TCUI.Hide(this, startOverlay);
+        if (TCSave.TutorialDone)
+        {
+            if (pl) { pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); }
+            TCUI.Hide(this, startOverlay);
+        }
         else tutorialCo = StartCoroutine(Tutorial());
     }
 
@@ -1294,12 +1298,24 @@ public class TCGameUI : MonoBehaviour
             TCTrack.Instance.OnTutorialFinished();
         }
 
+        // Re-enable controls immediately so normal gameplay can be controlled!
+        if (pl)
+        {
+            pl.SetSteerAllowed(true);
+            pl.SetJumpAllowed(true);
+        }
+
         hintText.text = "ALL SET!\nYOU'RE GOOD TO GO!";
         TCSfx.Play("celebrate", 0.95f);
         StartCoroutine(TCUI.Punch(hintText.transform, 0.35f, 0.45f));
 
         yield return new WaitForSeconds(2.0f);
         TCUI.Hide(this, startOverlay);
+        if (pl)
+        {
+            pl.SetSteerAllowed(true);
+            pl.SetJumpAllowed(true);
+        }
     }
 
     // ---------------- Pause ----------------

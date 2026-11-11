@@ -139,9 +139,9 @@ public class TCCoinMagnet : MonoBehaviour
                             float phaseOffset = (float)i / SubtleWaveCount;
                             float u = Mathf.Repeat((emissionTimer / WaveLoopPeriod) + phaseOffset, 1.0f);
 
-                            // Smooth ease-out expansion from spider body out past the legs (0.18m to 0.58m)
+                            // Smooth ease-out expansion from spider body out past the legs (0.10m to 0.32m)
                             float ease = 1f - Mathf.Pow(1f - u, 2.0f);
-                            float radius = Mathf.Lerp(0.18f, 0.58f, ease);
+                            float radius = Mathf.Lerp(0.10f, 0.32f, ease);
                             wave.root.localScale = new Vector3(radius, 1f, radius);
 
                             // Crisp bell curve with punchy opacity clearly visible on phone screens
@@ -175,8 +175,8 @@ public class TCCoinMagnet : MonoBehaviour
 
                             // Dynamic rhythmic electric pulse for each bolt
                             float pulse = 0.5f + 0.5f * Mathf.Sin(basePulseTime + i * 0.785f);
-                            float radius = 0.44f + 0.05f * pulse;
-                            float scale = Mathf.Lerp(0.95f, 1.35f, pulse);
+                            float radius = 0.28f + 0.03f * pulse;
+                            float scale = Mathf.Lerp(0.70f, 0.98f, pulse);
 
                             bolt.root.localPosition = new Vector3(Mathf.Cos(angleRad) * radius, 0.005f, Mathf.Sin(angleRad) * radius);
                             // Point the bolt outward radially away from the spider
@@ -369,8 +369,8 @@ public class TCCoinMagnet : MonoBehaviour
         if (cachedBoltQuadMesh != null) return cachedBoltQuadMesh;
 
         var mesh = new Mesh { name = "Magnet_Bolt_Quad" };
-        float halfW = 0.08f;
-        float halfH = 0.12f;
+        float halfW = 0.050f;
+        float halfH = 0.075f;
         mesh.vertices = new Vector3[]
         {
             new Vector3(-halfW, 0f, -halfH),
