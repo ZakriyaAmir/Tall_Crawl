@@ -388,6 +388,7 @@ public static class TCSetup
         var track = sys.GetComponent<TCTrack>() ?? sys.AddComponent<TCTrack>();
         P(ref track.trunkPrefab, "treeChunk"); P(ref track.branchPrefab, "branchParent"); P(ref track.beesPrefab, "beesParent");
         P(ref track.coinPrefab, "coin"); P(ref track.heartPrefab, "healthParent"); P(ref track.boostPrefab, "boostParent");
+        P(ref track.cooldownPrefab, "Cooldown_Pickup_Root"); P(ref track.magnetPrefab, "Magnet_Pickup_Root");
         track.stemParent = stem; track.hazardParent = GameObject.Find("level/branches").transform; track.bonusParent = GameObject.Find("level/bonus").transform;
         track.player = Object.FindObjectOfType<player>().transform;
         if (!sys.GetComponent<TCGameUI>()) sys.AddComponent<TCGameUI>();

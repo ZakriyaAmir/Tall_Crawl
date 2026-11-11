@@ -99,11 +99,15 @@ public class TCTrack : MonoBehaviour
         coinPool = new TCPool(coinPrefab, bonusParent, 120);
         heartPool = new TCPool(heartPrefab, bonusParent, 2);
         boostPool = new TCPool(boostPrefab, bonusParent, 2);
-        var cProto = cooldownPrefab ? cooldownPrefab : TCTimeDilation.CreateCooldownPickupPrefab(bonusParent);
+        var cProto = cooldownPrefab;
+        if (!cProto) cProto = Resources.Load<GameObject>("PowerUps/Cooldown_Pickup_Root");
+        if (!cProto) cProto = TCTimeDilation.CreateCooldownPickupPrefab(bonusParent);
         if (cProto != null) cProto.SetActive(false);
         cooldownPool = new TCPool(cProto, bonusParent, 3);
 
-        var mProto = magnetPrefab ? magnetPrefab : TCCoinMagnet.CreateMagnetPickupPrefab(bonusParent);
+        var mProto = magnetPrefab;
+        if (!mProto) mProto = Resources.Load<GameObject>("PowerUps/Magnet_Pickup_Root");
+        if (!mProto) mProto = TCCoinMagnet.CreateMagnetPickupPrefab(bonusParent);
         if (mProto != null) mProto.SetActive(false);
         magnetPool = new TCPool(mProto, bonusParent, 3);
 
@@ -244,12 +248,22 @@ public class TCTrack : MonoBehaviour
         // Bee swarms only spawn after crossing 2000 metres
         if (!lastWasBee && metres >= 2000f && Random.value < C.beeChance * d + 0.02f)
         {
-            // Bee swarm row: full 360 jump ring hazard. Never spawns coins or pickups directly inside it.
+            // Bee swarm row: full 360 jump ring hazard. Spawns an arching coin string over the bees!
             float beeY = y + gap * 0.4f;
             Spawn(beePool, "bees", beeY, 0);
             lastHazardY = beeY + 0.3f;
             lastWasBee = true;
             OnRow?.Invoke(beeY, safeAngle, 0, 360, gap / C.ClimbSpeedAtDistance(metres), metres);
+
+            // Vertical arc string over bees so spider can jump and collect coins over the swarm
+            // In classic endless runners (like Subway Surfers), jump coin arcs are canonical:
+            // exactly 8 coins, fixed uniform angle along the track, farthest uniform flight & landing span (3.5m).
+            const float jumpSpan = LongestArcSpan;
+            // Parabolic symmetric apex is at t = 0.5 (dead center); place apex directly over the bee swarm centre (beeY)
+            float arcStartY = Mathf.Max(beeY - jumpSpan * 0.5f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+            float arcEndY = arcStartY + jumpSpan;
+            SpawnCoinArc(arcStartY, arcEndY, safeAngle, SpiderJumpHeight, 8);
+
             nextRowY = beeY + gap * 1.5f;
             return;
         }
@@ -338,13 +352,36 @@ public class TCTrack : MonoBehaviour
         }
         else if (Random.value < C.coinTrailChance)
         {
-            // String of uniformly spaced coins (5-10 coins) along the safe climbing trajectory
-            // Placed before the hazard row leading smoothly into the safe gap
-            int stringCount = Random.Range(5, 11); // 5 to 10 coins
+            // Spawn one of three coin string patterns randomly:
+            // 0: Standard smooth climbing trail (leads smoothly into safe gap)
+            // 1: Zigzag string (player weaves left and right across climbing path)
+            // 2: Vertical jump arc string (spider jumps to collect the arced coins in the air)
+            int pattern = Random.Range(0, 3);
+            int stringCount = Random.Range(6, 11); // 6 to 10 coins
             float trailSpan = (stringCount - 1) * UniformCoinSpacing;
             float trailEndY = y - 0.35f;
             float trailStartY = Mathf.Max(trailEndY - trailSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
-            SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.70f), newSafe, stringCount);
+
+            if (pattern == 1)
+            {
+                // Zigzag pattern
+                float centerAngle = Mathf.LerpAngle(safeAngle, newSafe, 0.5f);
+                float angleAmp = Random.Range(14f, 22f);
+                SpawnCoinZigzag(trailStartY, trailEndY, centerAngle, angleAmp, stringCount);
+            }
+            else if (pattern == 2)
+            {
+                // Vertical arc pattern straight upward (constant angle, Subway Surfers style canonical 8-coin jump arc, farthest landing span)
+                const float jumpSpan = LongestArcSpan;
+                float arcEndY = y - 0.35f;
+                float arcStartY = Mathf.Max(arcEndY - jumpSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
+                SpawnCoinArc(arcStartY, arcEndY, newSafe, SpiderJumpHeight, 8);
+            }
+            else
+            {
+                // Classic smooth trail
+                SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.70f), newSafe, stringCount);
+            }
         }
 
         safeAngle = newSafe;
@@ -398,6 +435,139 @@ public class TCTrack : MonoBehaviour
             Spawn(coinPool, "coin", cy, ca);
             lastCoinY = cy;
         }
+    }
+
+    void SpawnCoinZigzag(float startY, float endY, float centerAngle, float amplitudeDeg = 18f, int count = 8)
+    {
+        float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+        float spanY = endY - minY;
+        if (spanY <= 0.05f || count < 3) return;
+
+        const float trunkRadius = 0.603f;
+        // Start zigzag direction randomly (-1 or +1)
+        float dir = Random.value < 0.5f ? -1f : 1f;
+        float freq = Mathf.PI * 2.5f;
+
+        // Discretize the continuous zigzag path at high resolution to measure true arc-length on the trunk cylinder
+        const int Samples = 240;
+        float[] sampleY = new float[Samples + 1];
+        float[] sampleAngle = new float[Samples + 1];
+        float[] cumDist = new float[Samples + 1];
+        cumDist[0] = 0f;
+
+        float prevY = minY;
+        float prevAngle = centerAngle;
+        sampleY[0] = prevY;
+        sampleAngle[0] = prevAngle;
+
+        for (int s = 1; s <= Samples; s++)
+        {
+            float t = (float)s / Samples;
+            float cy = minY + t * spanY;
+            float ca = centerAngle + Mathf.Sin(t * freq) * amplitudeDeg * dir;
+
+            sampleY[s] = cy;
+            sampleAngle[s] = ca;
+
+            float dy = cy - prevY;
+            float dAngleRad = Mathf.DeltaAngle(prevAngle, ca) * Mathf.Deg2Rad;
+            float dArc = trunkRadius * dAngleRad;
+            float ds = Mathf.Sqrt(dy * dy + dArc * dArc);
+
+            cumDist[s] = cumDist[s - 1] + ds;
+            prevY = cy;
+            prevAngle = ca;
+        }
+
+        float totalPathLen = cumDist[Samples];
+        if (totalPathLen < UniformCoinSpacing * 0.7f) return;
+
+        // Determine number of steps matching UniformCoinSpacing
+        int steps = Mathf.Max(2, Mathf.RoundToInt(totalPathLen / UniformCoinSpacing));
+        if (count > 0)
+        {
+            steps = Mathf.Min(steps, count - 1);
+        }
+
+        float targetSpacing = totalPathLen / steps;
+
+        // Spawn coins along the zigzag trajectory with strictly uniform surface distance between consecutive coins
+        int sampleIdx = 0;
+        for (int i = 0; i <= steps; i++)
+        {
+            float targetDist = i * targetSpacing;
+            while (sampleIdx < Samples && cumDist[sampleIdx + 1] < targetDist)
+            {
+                sampleIdx++;
+            }
+
+            float d0 = cumDist[sampleIdx];
+            float d1 = (sampleIdx < Samples) ? cumDist[sampleIdx + 1] : d0;
+            float segFrac = (d1 > d0) ? Mathf.Clamp01((targetDist - d0) / (d1 - d0)) : 0f;
+
+            float coinY = Mathf.Lerp(sampleY[sampleIdx], sampleY[Mathf.Min(sampleIdx + 1, Samples)], segFrac);
+            float coinAngle = Mathf.LerpAngle(sampleAngle[sampleIdx], sampleAngle[Mathf.Min(sampleIdx + 1, Samples)], segFrac);
+
+            Spawn(coinPool, "coin", coinY, coinAngle);
+            lastCoinY = coinY;
+        }
+    }
+
+    public const float SpiderJumpHeight = 0.785f;
+    public const float LongestArcSpan = 1.75f; // Canonical landing span reduced by 50% from 3.50m (matches single jump climb distance)
+
+    /// <summary>
+    /// Computes normalized jump trajectory height [0..1] at normalized flight progress t [0..1].
+    /// In Subway Surfers and canonical platformers, the jump arc is a symmetric parabola:
+    /// h(t) = 4 * t * (1 - t)
+    /// - Launches from bark at t = 0 (h = 0)
+    /// - Smoothly peaks at apex at t = 0.5 (h = 1.0)
+    /// - Lands back on tree bark at t = 1.0 (h = 0)
+    /// </summary>
+    public static float EvaluateJumpTrajectory(float t)
+    {
+        t = Mathf.Clamp01(t);
+        return 4.0f * t * (1.0f - t);
+    }
+
+    void SpawnCoinArc(float startY, float endY, float angle, float peakArcHeight = SpiderJumpHeight, int count = 8)
+    {
+        float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+        // Use the uniform canonical span (LongestArcSpan = 1.75m, 50% reduced) consistently across all arc strings
+        float spanY = LongestArcSpan;
+        if (count < 3) return;
+
+        const float trunkRadius = 0.603f;
+        float stepY = spanY / (count - 1);
+
+        for (int i = 0; i < count; i++)
+        {
+            float t = (float)i / (count - 1);
+            float cy = minY + i * stepY;
+            // Straight vertical line: angle is constant across all coins in the arc
+            float ca = angle;
+
+            // Canonical Subway Surfers symmetric parabolic jump arc:
+            // - t = 0: height = 0 (on tree bark)
+            // - t = 0.5: apex height = peakArcHeight (exact peak centered)
+            // - t = 1.0: height = 0 (landing back on tree bark at farthest point)
+            float normHeight = EvaluateJumpTrajectory(t);
+            float r = trunkRadius + normHeight * peakArcHeight;
+
+            SpawnCoinAtRadius(cy, ca, r);
+            lastCoinY = cy;
+        }
+    }
+
+    TCPooled SpawnCoinAtRadius(float y, float angle, float radius)
+    {
+        var p = Spawn(coinPool, "coin", y, angle);
+        for (int i = 0; i < p.transform.childCount; i++)
+        {
+            var ch = p.transform.GetChild(i);
+            ch.localPosition = new Vector3(0f, 0f, radius);
+        }
+        return p;
     }
 
     public void AttractCoins(Vector3 spiderPos, float maxMetresDiff, float maxMove)

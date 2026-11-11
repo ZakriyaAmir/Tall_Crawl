@@ -5762,7 +5762,7 @@ Light:
   serializedVersion: 12
   m_Type: 1
   m_Color: {r: 1, g: 0.96, b: 0.88, a: 1}
-  m_Intensity: 1.15
+  m_Intensity: 1.25
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -5771,7 +5771,7 @@ Light:
     m_Type: 2
     m_Resolution: -1
     m_CustomResolution: -1
-    m_Strength: 0.45
+    m_Strength: 0.5
     m_Bias: 0.05
     m_NormalBias: 0.4
     m_NearPlane: 0.2
@@ -5824,7 +5824,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 705507993}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.4055798, y: -0.2345697, z: 0.1086887, w: 0.876798}
+  m_LocalRotation: {x: 0.40305823, y: -0.27253202, z: 0.12708378, w: 0.8643611}
   m_LocalPosition: {x: -0.58, y: 3, z: 1.83}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -13438,6 +13438,10 @@ MonoBehaviour:
   pineconePrefab: {fileID: 0}
   waspPrefab: {fileID: 0}
   squirrelPrefab: {fileID: 0}
+  cooldownPrefab: {fileID: 3312193601811910076, guid: fa2d2bb06bc8446e0a4144f3626d05ba,
+    type: 3}
+  magnetPrefab: {fileID: 8227479258679835623, guid: 57dcdc994b8cc4a44848929456b40bc3,
+    type: 3}
   stemParent: {fileID: 1480715054}
   hazardParent: {fileID: 1246268213}
   bonusParent: {fileID: 527316708}

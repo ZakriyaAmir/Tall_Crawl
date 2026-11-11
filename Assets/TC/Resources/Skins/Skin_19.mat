@@ -34,10 +34,10 @@ Material:
     - _CelIntensity: 0.25
     - _EdgeThreshold: 0.22
     - _OutlineWidth: 1.4
-    - _ShadowDull: 0.4
+    - _ShadowDull: 0.55
     m_Colors:
-    - _Color: {r: 1, g: 0.92, b: 0.5, a: 1}
-    - _EmissionColor: {r: 0.75, g: 0.58, b: 0.15, a: 1}
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _EmissionColor: {r: 0.014117648, g: 0.011764707, b: 0.012941177, a: 0.15}
     - _OutlineColor: {r: 0.12, g: 0.08, b: 0.1, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

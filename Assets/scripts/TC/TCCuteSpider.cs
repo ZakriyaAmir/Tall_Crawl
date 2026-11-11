@@ -520,6 +520,21 @@ public class TCCuteSpider : MonoBehaviour
 
         Vector3 off = new Vector3(rigOff.x, currentAirHeight, rigOff.z);
         root.localPosition = restRoot + off;
+
+        // Keep player colliders (hit box and points/pickup collector) synchronized with cute spider jumping altitude
+        if (pi != null)
+        {
+            Vector3 colliderLift = new Vector3(0f, 0f, currentAirHeight);
+            if (pi.HitCollider != null)
+            {
+                pi.HitCollider.center = playerInteract.BASE_COLLIDER_CENTER + colliderLift;
+            }
+            if (pi.PointsCollider != null)
+            {
+                pi.PointsCollider.center = playerInteract.BASE_COLLIDER_CENTER + colliderLift;
+            }
+        }
+
         float hop = Mathf.Clamp01(currentAirHeight * 3.5f);
 
         // Squash & stretch + scuttle bounce (gentle breathing when idle, active bounce when moving, dynamic stretch when jumping)

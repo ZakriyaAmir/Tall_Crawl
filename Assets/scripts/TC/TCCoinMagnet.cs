@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// Coin Magnet Controller & 3D Pickup Generator.
 /// When active, draws nearby coins along the trunk directly into the spider,
-/// while emitting a subtle, elegant, non-distracting magnetic ripple effect around the spider.
+/// while emitting a subtle, elegant, 70% transparent yellow circular ripple around the spider.
 /// Duration scales with Store Upgrade ID 6: 8.0s base up to 20.0s at Max Level 5 (+2.4s per level).
 /// </summary>
 public class TCCoinMagnet : MonoBehaviour
@@ -31,9 +31,9 @@ public class TCCoinMagnet : MonoBehaviour
     public float AttractionSpeed => 32.0f;
 
     // Subtle Spider Shockwave parameters:
-    // Stays strictly around the spider (peak radius 0.48m, 60% transparent = 40% peak opacity, warm yellowish tint)
+    // Stays strictly around the spider (peak radius 0.45m, ultra-subtle transparent golden ripple, thin pencil ring)
     const int SubtleWaveCount = 2;
-    const float WaveLoopPeriod = 1.35f;
+    const float WaveLoopPeriod = 1.70f;
 
     struct ShockwaveWave
     {
@@ -48,9 +48,6 @@ public class TCCoinMagnet : MonoBehaviour
     GameObject magnetAuraObj;
 
     ShockwaveWave[] subtleShockwaves;
-    Transform carapaceShimmer;
-    Material carapaceShimmerMat;
-    Transform[] microSparks;
     static Mesh cachedSubtleWaveMesh;
 
     void Awake()
@@ -117,7 +114,7 @@ public class TCCoinMagnet : MonoBehaviour
                     magnetAuraObj.transform.position = sp.position + sp.up * 0.04f;
                     magnetAuraObj.transform.rotation = sp.rotation;
 
-                    // 1. Subtle, Non-Distracting Shockwave Ripples (stay strictly around spider, r = 0.16m to 0.48m, 60% transparent, yellowish tint)
+                    // 1. Ultra-subtle yellow circular ripples (thin, delicate, whisper-faint transparency)
                     if (subtleShockwaves != null)
                     {
                         for (int i = 0; i < subtleShockwaves.Length; i++)
@@ -128,50 +125,28 @@ public class TCCoinMagnet : MonoBehaviour
                             float phaseOffset = (float)i / SubtleWaveCount;
                             float u = Mathf.Repeat((emissionTimer / WaveLoopPeriod) + phaseOffset, 1.0f);
 
-                            // Smooth ease-out expansion from spider carapace out to just past the legs (0.16m to 0.48m)
-                            float ease = 1f - Mathf.Pow(1f - u, 1.8f);
-                            float radius = Mathf.Lerp(0.16f, 0.48f, ease);
+                            // Smooth ease-out expansion from spider carapace out to just past the legs (0.16m to 0.44m)
+                            float ease = 1f - Mathf.Pow(1f - u, 2.0f);
+                            float radius = Mathf.Lerp(0.16f, 0.44f, ease);
                             wave.root.localScale = new Vector3(radius, 1f, radius);
 
-                            // Further reduced transparency by 50% (peak opacity = 0.20, fading smoothly to 0 at edges)
-                            float alpha = (u < 0.20f)
-                                ? (u / 0.20f)
-                                : Mathf.Pow(1f - (u - 0.20f) / 0.80f, 1.4f);
-                            alpha *= 0.20f; // 50% less opacity than before (0.40 -> 0.20)
+                            // Extremely gentle bell-shaped fade: max ~0.08 alpha so it never overwhelms or distracts
+                            float alpha = Mathf.Sin(u * Mathf.PI);
+                            alpha = Mathf.Pow(alpha, 1.5f) * 0.08f;
 
-                            // Warm luminous yellowish magnetic ripple (golden yellow crest shifting into soft warm amber)
+                            // Soft warm pastel gold tint that never blows out additively
                             Color waveCol = Color.Lerp(
-                                new Color(1.0f, 0.94f, 0.38f, alpha),
-                                new Color(1.0f, 0.82f, 0.20f, alpha * 0.75f),
+                                new Color(0.92f, 0.82f, 0.32f, alpha),
+                                new Color(0.85f, 0.70f, 0.20f, alpha * 0.5f),
                                 u
                             );
 
                             SetMatColor(wave.material, waveCol);
                         }
                     }
-
-                    // 2. Soft Carapace Shimmer with yellowish tint (gentle ambient pulse, alpha ~0.04)
-                    if (carapaceShimmer != null && carapaceShimmerMat != null)
-                    {
-                        float shimAlpha = 0.03f + 0.015f * Mathf.Sin(Time.time * 4f);
-                        SetMatColor(carapaceShimmerMat, new Color(1.0f, 0.92f, 0.40f, shimAlpha));
-                    }
-
-                    // 3. Four Micro-Sparks (2 Red, 2 Blue) orbiting tightly around the spider body
-                    if (microSparks != null)
-                    {
-                        for (int s = 0; s < microSparks.Length; s++)
-                        {
-                            if (microSparks[s] == null) continue;
-                            float ang = (Time.time * 125f + s * 90f) * Mathf.Deg2Rad;
-                            float r = 0.21f + 0.012f * Mathf.Sin(Time.time * 3f + s);
-                            float y = 0.015f * Mathf.Cos(Time.time * 4f + s);
-                            microSparks[s].localPosition = new Vector3(Mathf.Cos(ang) * r, y, Mathf.Sin(ang) * r);
-                        }
-                    }
                 }
 
-                // Attract nearby coins along trunk towards spider (strictly within 20m distance)
+                // Attract nearby coins along trunk towards spider (strictly within 40m distance)
                 if (TCTrack.Instance != null)
                 {
                     TCTrack.Instance.AttractCoins(sp.position, AttractionRadius, AttractionSpeed * Time.deltaTime);
@@ -202,7 +177,7 @@ public class TCCoinMagnet : MonoBehaviour
         var waveMesh = GetOrCreateSubtleShockwaveMesh();
         var addShader = FindAdditiveShader();
 
-        // 1. Subtle Shockwave Ripple Rings (2 concentric waves)
+        // Subtle Shockwave Ripple Rings (2 concentric hollow yellow circular rings)
         subtleShockwaves = new ShockwaveWave[SubtleWaveCount];
         for (int i = 0; i < SubtleWaveCount; i++)
         {
@@ -227,67 +202,26 @@ public class TCCoinMagnet : MonoBehaviour
                 material = mat
             };
         }
-
-        // 2. Soft Carapace Ambient Glow Disc
-        var shimObj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        var shimCol = shimObj.GetComponent<Collider>();
-        if (shimCol) { if (Application.isPlaying) Destroy(shimCol); else DestroyImmediate(shimCol); }
-        shimObj.name = "Carapace_Shimmer";
-        shimObj.transform.SetParent(magnetAuraObj.transform, false);
-        shimObj.transform.localPosition = Vector3.zero;
-        shimObj.transform.localScale = new Vector3(0.24f, 0.001f, 0.24f);
-
-        var shimMr = shimObj.GetComponent<MeshRenderer>();
-        if (shimMr)
-        {
-            carapaceShimmerMat = new Material(addShader) { name = "Carapace_Shimmer_Mat" };
-            SetMatColor(carapaceShimmerMat, new Color(1.0f, 0.92f, 0.40f, 0.08f));
-            shimMr.sharedMaterial = carapaceShimmerMat;
-            shimMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            shimMr.receiveShadows = false;
-        }
-        carapaceShimmer = shimObj.transform;
-
-        // 3. Four Micro-Sparks (2 Red North, 2 Blue South) orbiting the spider body
-        microSparks = new Transform[4];
-        var redSparkMat = CreateAdditiveGlowMaterial(new Color(1.0f, 0.20f, 0.28f, 0.45f));
-        var blueSparkMat = CreateAdditiveGlowMaterial(new Color(0.20f, 0.70f, 1.0f, 0.45f));
-
-        for (int s = 0; s < 4; s++)
-        {
-            var spk = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            var spkCol = spk.GetComponent<Collider>();
-            if (spkCol) { if (Application.isPlaying) Destroy(spkCol); else DestroyImmediate(spkCol); }
-            spk.name = "MagnetSpark_" + s;
-            spk.transform.SetParent(magnetAuraObj.transform, false);
-            spk.transform.localScale = Vector3.one * 0.022f; // tiny, delicate
-            var sr = spk.GetComponent<MeshRenderer>();
-            if (sr)
-            {
-                sr.sharedMaterial = (s % 2 == 0) ? redSparkMat : blueSparkMat;
-                sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                sr.receiveShadows = false;
-            }
-            microSparks[s] = spk.transform;
-        }
     }
 
     /// <summary>
-    /// Creates a smooth, planar annulus ripple mesh with soft radial alpha falloff and warm yellowish vertex tint.
-    /// Inner rim (0.62) = alpha 0, Crest (0.80) = alpha 1, Outer rim (1.00) = alpha 0.
+    /// Creates a smooth, planar, ultra-thin annulus ripple mesh with soft radial alpha falloff and warm yellow vertex tint.
+    /// Thin ring: Inner rim (0.90) = alpha 0, Crest (0.95) = alpha 0.4, Outer rim (1.00) = alpha 0.
+    /// Completely hollow middle so there is zero white or solid background in the center.
     /// </summary>
     static Mesh GetOrCreateSubtleShockwaveMesh()
     {
         if (cachedSubtleWaveMesh != null) return cachedSubtleWaveMesh;
 
-        int segments = 36;
+        int segments = 40;
         var mesh = new Mesh { name = "Subtle_Shockwave_Mesh" };
 
-        float[] radii = { 0.62f, 0.80f, 1.00f };
+        // Very thin, pencil-like delicate ring (thickness only 10% of radius)
+        float[] radii = { 0.90f, 0.95f, 1.00f };
         Color[] baseColors = {
-            new Color(1f, 0.95f, 0.40f, 0.0f),  // inner edge (transparent)
-            new Color(1f, 0.95f, 0.40f, 1.0f),  // soft crest with yellowish tint
-            new Color(1f, 0.85f, 0.25f, 0.0f)   // outer edge (transparent)
+            new Color(0.95f, 0.85f, 0.35f, 0.0f),  // inner edge (transparent)
+            new Color(0.95f, 0.85f, 0.35f, 0.40f), // soft delicate crest
+            new Color(0.90f, 0.75f, 0.25f, 0.0f)   // outer edge (transparent)
         };
 
         int ringCount = radii.Length;
@@ -363,58 +297,95 @@ public class TCCoinMagnet : MonoBehaviour
     }
 
     // =========================================================================
-    // 3D MAGNET POWER-UP PICKUP GENERATION (HIGH-QUALITY 3D HORSESHOE MAGNET)
+    // 3D MAGNET POWER-UP PICKUP GENERATION (SINGLE U-SHAPED HORSESHOE MAGNET)
     // =========================================================================
 
-    static Mesh cachedHorseshoeArchMesh;
+    static Mesh cachedSingleUMagnetMesh;
 
     /// <summary>
-    /// Procedurally creates a smooth swept tubular arch mesh sweeping 180 degrees from 0 to PI.
-    /// Arch radius R = 0.16m, tube cross-section radius r = 0.050m.
+    /// Procedurally creates a single continuous U-shaped swept tubular horseshoe magnet mesh.
+    /// Contains two submeshes:
+    /// Submesh 0: Right half of U (Candy Electric Blue)
+    /// Submesh 1: Left half of U (Candy Ruby Red)
+    /// Seamlessly joined at the apex top (X=0, Y=R).
     /// </summary>
-    static Mesh GetOrCreateHorseshoeArchMesh()
+    public static Mesh GetOrCreateSingleUMagnetMesh()
     {
-        if (cachedHorseshoeArchMesh != null) return cachedHorseshoeArchMesh;
+        if (cachedSingleUMagnetMesh != null) return cachedSingleUMagnetMesh;
 
-        int archSegs = 24;
+        float archRadius = 0.16f;
+        float tubeRadius = 0.050f;
+        float legLength = 0.16f;
+
+        int legSegs = 10;
+        int archSegs = 20;
         int tubeSegs = 16;
-        float R = 0.16f;
-        float r = 0.050f;
 
-        var mesh = new Mesh { name = "Horseshoe_Curved_Arch" };
-        int vertCount = (archSegs + 1) * (tubeSegs + 1);
-        var verts = new Vector3[vertCount];
-        var normals = new Vector3[vertCount];
-        var uvs = new Vector2[vertCount];
+        var path = new System.Collections.Generic.List<Vector3>(48);
+        var normals = new System.Collections.Generic.List<Vector3>(48);
+        var binormals = new System.Collections.Generic.List<Vector3>(48);
 
+        // 1. Right leg (Blue) moving UP from Y = -legLength to 0 at X = +archRadius
+        for (int i = 0; i < legSegs; i++)
+        {
+            float t = i / (float)legSegs;
+            float y = -legLength + t * legLength;
+            path.Add(new Vector3(archRadius, y, 0f));
+            normals.Add(new Vector3(1f, 0f, 0f));
+            binormals.Add(new Vector3(0f, 0f, 1f));
+        }
+
+        // 2. Arch moving counter-clockwise from theta = 0 to pi in Y > 0
         for (int i = 0; i <= archSegs; i++)
         {
             float theta = (i / (float)archSegs) * Mathf.PI;
-            float cx = R * Mathf.Cos(theta);
-            float cy = R * Mathf.Sin(theta);
+            float cx = archRadius * Mathf.Cos(theta);
+            float cy = archRadius * Mathf.Sin(theta);
+            path.Add(new Vector3(cx, cy, 0f));
+            normals.Add(new Vector3(Mathf.Cos(theta), Mathf.Sin(theta), 0f));
+            binormals.Add(new Vector3(0f, 0f, 1f));
+        }
 
-            float nx = Mathf.Cos(theta);
-            float ny = Mathf.Sin(theta);
+        // 3. Left leg (Red) moving DOWN from Y = 0 to -legLength at X = -archRadius
+        for (int i = 1; i <= legSegs; i++)
+        {
+            float t = i / (float)legSegs;
+            float y = -t * legLength;
+            path.Add(new Vector3(-archRadius, y, 0f));
+            normals.Add(new Vector3(-1f, 0f, 0f));
+            binormals.Add(new Vector3(0f, 0f, 1f));
+        }
+
+        int totalSlices = path.Count;
+        int vertCount = totalSlices * (tubeSegs + 1);
+        var verts = new Vector3[vertCount];
+        var meshNormals = new Vector3[vertCount];
+        var uvs = new Vector2[vertCount];
+
+        for (int i = 0; i < totalSlices; i++)
+        {
+            Vector3 P = path[i];
+            Vector3 N = normals[i];
+            Vector3 B = binormals[i];
 
             for (int j = 0; j <= tubeSegs; j++)
             {
                 float phi = (j / (float)tubeSegs) * Mathf.PI * 2f;
-                float vx = Mathf.Cos(phi) * nx;
-                float vy = Mathf.Cos(phi) * ny;
-                float vz = Mathf.Sin(phi);
+                Vector3 vNorm = (Mathf.Cos(phi) * N + Mathf.Sin(phi) * B).normalized;
 
                 int idx = i * (tubeSegs + 1) + j;
-                verts[idx] = new Vector3(cx + r * vx, cy + r * vy, r * vz);
-                normals[idx] = new Vector3(vx, vy, vz).normalized;
-                uvs[idx] = new Vector2(i / (float)archSegs, j / (float)tubeSegs);
+                verts[idx] = P + tubeRadius * vNorm;
+                meshNormals[idx] = vNorm;
+                uvs[idx] = new Vector2(i / (float)(totalSlices - 1), j / (float)tubeSegs);
             }
         }
 
-        int quadCount = archSegs * tubeSegs;
-        var tris = new int[quadCount * 12]; // double-sided
-        int tIdx = 0;
+        // Submesh 0: Right half of U (slices 0 to midSlice) -> Blue
+        // Submesh 1: Left half of U (slices midSlice to totalSlices-1) -> Red
+        int midSlice = legSegs + archSegs / 2;
 
-        for (int i = 0; i < archSegs; i++)
+        var trisBlue = new System.Collections.Generic.List<int>(midSlice * tubeSegs * 12);
+        for (int i = 0; i < midSlice; i++)
         {
             int rowA = i * (tubeSegs + 1);
             int rowB = (i + 1) * (tubeSegs + 1);
@@ -426,33 +397,52 @@ public class TCCoinMagnet : MonoBehaviour
                 int v3 = rowA + j + 1;
 
                 // Front
-                tris[tIdx++] = v0; tris[tIdx++] = v1; tris[tIdx++] = v3;
-                tris[tIdx++] = v1; tris[tIdx++] = v2; tris[tIdx++] = v3;
+                trisBlue.Add(v0); trisBlue.Add(v1); trisBlue.Add(v3);
+                trisBlue.Add(v1); trisBlue.Add(v2); trisBlue.Add(v3);
 
                 // Back
-                tris[tIdx++] = v0; tris[tIdx++] = v3; tris[tIdx++] = v1;
-                tris[tIdx++] = v1; tris[tIdx++] = v3; tris[tIdx++] = v2;
+                trisBlue.Add(v0); trisBlue.Add(v3); trisBlue.Add(v1);
+                trisBlue.Add(v1); trisBlue.Add(v3); trisBlue.Add(v2);
             }
         }
 
+        var trisRed = new System.Collections.Generic.List<int>((totalSlices - 1 - midSlice) * tubeSegs * 12);
+        for (int i = midSlice; i < totalSlices - 1; i++)
+        {
+            int rowA = i * (tubeSegs + 1);
+            int rowB = (i + 1) * (tubeSegs + 1);
+            for (int j = 0; j < tubeSegs; j++)
+            {
+                int v0 = rowA + j;
+                int v1 = rowB + j;
+                int v2 = rowB + j + 1;
+                int v3 = rowA + j + 1;
+
+                // Front
+                trisRed.Add(v0); trisRed.Add(v1); trisRed.Add(v3);
+                trisRed.Add(v1); trisRed.Add(v2); trisRed.Add(v3);
+
+                // Back
+                trisRed.Add(v0); trisRed.Add(v3); trisRed.Add(v1);
+                trisRed.Add(v1); trisRed.Add(v3); trisRed.Add(v2);
+            }
+        }
+
+        var mesh = new Mesh { name = "Single_U_Horseshoe_Magnet" };
+        mesh.subMeshCount = 2;
         mesh.vertices = verts;
-        mesh.normals = normals;
+        mesh.normals = meshNormals;
         mesh.uv = uvs;
-        mesh.triangles = tris;
+        mesh.SetTriangles(trisBlue.ToArray(), 0);
+        mesh.SetTriangles(trisRed.ToArray(), 1);
         mesh.RecalculateBounds();
 
-        cachedHorseshoeArchMesh = mesh;
-        return cachedHorseshoeArchMesh;
+        cachedSingleUMagnetMesh = mesh;
+        return cachedSingleUMagnetMesh;
     }
 
     /// <summary>
-    /// Builds the visual hierarchy for the overhauled 3D Horseshoe Magnet Pickup:
-    /// - Smooth swept tubular Mirror-Chrome arch with Golden Insulator Clamp at apex.
-    /// - Candy Gloss Ruby Red North leg with Chrome collar, shoe, embossed white "N", and glowing red node.
-    /// - Candy Gloss Electric Blue South leg with Chrome collar, shoe, embossed white "S", and glowing blue node.
-    /// - Crackling dynamic electric plasma arc between the two poles.
-    /// - Twinkling star glints.
-    /// (No weird background discs or cylinder rings).
+    /// Builds a single clean U-shaped cartoon Horseshoe Magnet (Red and Blue halves with silver ends).
     /// </summary>
     public static GameObject BuildMagnetMesh(Transform parent)
     {
@@ -463,8 +453,9 @@ public class TCCoinMagnet : MonoBehaviour
 
         float archRadius = 0.16f;
         float tubeRadius = 0.050f;
+        float legBottomY = -0.16f;
 
-        // 1. Shining PBR Materials with specular and HDR emission
+        // 1. Shining PBR Materials: Candy Red, Candy Blue, and Polished Chrome
         var redShineMat = CreateShiningMaterial(
             new Color(1.0f, 0.10f, 0.22f, 1f),
             new Color(1.0f, 0.12f, 0.25f) * 1.8f,
@@ -480,148 +471,54 @@ public class TCCoinMagnet : MonoBehaviour
             new Color(0.50f, 0.55f, 0.65f) * 0.9f,
             smoothness: 0.98f, metallic: 0.98f
         );
-        var goldTrimMat = CreateShiningMaterial(
-            new Color(1.0f, 0.82f, 0.20f, 1f),
-            new Color(1.0f, 0.75f, 0.18f) * 1.4f,
-            smoothness: 0.95f, metallic: 0.92f
-        );
         var whiteEmblemMat = CreateShiningMaterial(
             new Color(0.98f, 0.98f, 1.0f, 1f),
             new Color(0.85f, 0.90f, 1.0f) * 1.2f,
             smoothness: 0.92f, metallic: 0.35f
         );
 
-        // Additive Glow Materials
-        var starMat = CreateAdditiveGlowMaterial(new Color(1.0f, 1.0f, 1.0f, 0.95f));
-        var arcMat = CreateAdditiveGlowMaterial(new Color(0.35f, 0.85f, 1.0f, 0.90f));
+        // 2. Single Continuous U-Shaped Magnet Mesh (Right half = Blue, Left half = Red)
+        var uBody = new GameObject("U_Magnet_Body");
+        uBody.transform.SetParent(model.transform, false);
+        var mf = uBody.AddComponent<MeshFilter>();
+        mf.sharedMesh = GetOrCreateSingleUMagnetMesh();
+        var mr = uBody.AddComponent<MeshRenderer>();
+        mr.sharedMaterials = new Material[] { blueShineMat, redShineMat };
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-        // 2. Top Semicircular Curved Tube Arch (Mirror Chrome)
-        var archObj = new GameObject("Curved_Chrome_Arch");
-        archObj.transform.SetParent(model.transform, false);
-        var archMf = archObj.AddComponent<MeshFilter>();
-        archMf.sharedMesh = GetOrCreateHorseshoeArchMesh();
-        var archMr = archObj.AddComponent<MeshRenderer>();
-        archMr.sharedMaterial = chromeMat;
-        archMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-        // Golden Insulator Apex Clamp Ring
+        // 3. Left Pole Tip (North - Silver / Chrome Cap & Pole Shoe)
         CreatePart(PrimitiveType.Cylinder, model.transform,
-            new Vector3(0, archRadius, 0),
-            new Vector3(0.115f, 0.022f, 0.115f),
-            goldTrimMat,
-            Quaternion.Euler(0, 0, 90f)
-        );
-
-        // 3. Left Leg: Candy Ruby Red (North Pole)
-        // Red Leg Tube
-        CreatePart(PrimitiveType.Cylinder, model.transform,
-            new Vector3(-archRadius, -0.075f, 0),
-            new Vector3(tubeRadius * 2f, 0.075f, tubeRadius * 2f),
-            redShineMat
-        );
-        // Chrome Collar Ring
-        CreatePart(PrimitiveType.Cylinder, model.transform,
-            new Vector3(-archRadius, -0.150f, 0),
-            new Vector3(tubeRadius * 2.2f, 0.010f, tubeRadius * 2.2f),
+            new Vector3(-archRadius, legBottomY - 0.025f, 0f),
+            new Vector3(tubeRadius * 2f, 0.025f, tubeRadius * 2f),
             chromeMat
         );
-        // Chrome Pole Shoe
-        CreatePart(PrimitiveType.Cylinder, model.transform,
-            new Vector3(-archRadius, -0.185f, 0),
-            new Vector3(tubeRadius * 2f, 0.028f, tubeRadius * 2f),
-            chromeMat
-        );
-        // Rounded bottom cap
         CreatePart(PrimitiveType.Sphere, model.transform,
-            new Vector3(-archRadius, -0.213f, 0),
+            new Vector3(-archRadius, legBottomY - 0.050f, 0f),
             Vector3.one * (tubeRadius * 2f),
             chromeMat
         );
-        // Red Node Sphere
-        CreatePart(PrimitiveType.Sphere, model.transform,
-            new Vector3(-archRadius, -0.225f, 0),
-            Vector3.one * 0.075f,
-            redShineMat
-        );
-        // Embossed "N" Monogram directly on the red leg (no background disc)
+        // Embossed 3D "N" directly on the red leg
         BuildLetterBadge(model.transform, new Vector3(-archRadius, -0.075f, tubeRadius + 0.003f), 'N', whiteEmblemMat);
 
-        // 4. Right Leg: Candy Electric Blue (South Pole)
-        // Blue Leg Tube
+        // 4. Right Pole Tip (South - Silver / Chrome Cap & Pole Shoe)
         CreatePart(PrimitiveType.Cylinder, model.transform,
-            new Vector3(archRadius, -0.075f, 0),
-            new Vector3(tubeRadius * 2f, 0.075f, tubeRadius * 2f),
-            blueShineMat
-        );
-        // Chrome Collar Ring
-        CreatePart(PrimitiveType.Cylinder, model.transform,
-            new Vector3(archRadius, -0.150f, 0),
-            new Vector3(tubeRadius * 2.2f, 0.010f, tubeRadius * 2.2f),
+            new Vector3(archRadius, legBottomY - 0.025f, 0f),
+            new Vector3(tubeRadius * 2f, 0.025f, tubeRadius * 2f),
             chromeMat
         );
-        // Chrome Pole Shoe
-        CreatePart(PrimitiveType.Cylinder, model.transform,
-            new Vector3(archRadius, -0.185f, 0),
-            new Vector3(tubeRadius * 2f, 0.028f, tubeRadius * 2f),
-            chromeMat
-        );
-        // Rounded bottom cap
         CreatePart(PrimitiveType.Sphere, model.transform,
-            new Vector3(archRadius, -0.213f, 0),
+            new Vector3(archRadius, legBottomY - 0.050f, 0f),
             Vector3.one * (tubeRadius * 2f),
             chromeMat
         );
-        // Blue Node Sphere
-        CreatePart(PrimitiveType.Sphere, model.transform,
-            new Vector3(archRadius, -0.225f, 0),
-            Vector3.one * 0.075f,
-            blueShineMat
-        );
-        // Embossed "S" Monogram directly on the blue leg (no background disc)
+        // Embossed 3D "S" directly on the blue leg
         BuildLetterBadge(model.transform, new Vector3(archRadius, -0.075f, tubeRadius + 0.003f), 'S', whiteEmblemMat);
 
-        // 5. Dynamic Inter-Pole Plasma Arc Bridge
-        var arcObj = CreatePart(PrimitiveType.Cylinder, model.transform,
-            new Vector3(0, -0.225f, 0),
-            new Vector3(0.035f, archRadius, 0.035f),
-            arcMat,
-            Quaternion.Euler(0, 0, 90f)
-        );
-
-        // 6. Shining Star Glints
-        var starMesh = GetOrCreateStarGlintMesh();
-        var glints = new Transform[3];
-        Vector3[] glintPositions = {
-            new Vector3(-archRadius, -0.225f, 0.055f), // North Pole Node
-            new Vector3(archRadius, -0.225f, 0.055f),  // South Pole Node
-            new Vector3(0f, archRadius + 0.035f, 0.045f) // Apex Chrome Arch
-        };
-
-        for (int i = 0; i < 3; i++)
-        {
-            var glintObj = new GameObject("StarGlint_" + i);
-            glintObj.transform.SetParent(model.transform, false);
-            glintObj.transform.localPosition = glintPositions[i];
-            glintObj.transform.localScale = Vector3.one * 0.18f;
-
-            var mf = glintObj.AddComponent<MeshFilter>();
-            mf.sharedMesh = starMesh;
-
-            var mr = glintObj.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = starMat;
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-
-            glints[i] = glintObj.transform;
-        }
-
-        // 7. Attach dynamic shining animator
+        // 5. Attach dynamic shining animator for metallic reflections
         var shine = model.AddComponent<TCMagnetShine>();
         shine.redMat = redShineMat;
         shine.blueMat = blueShineMat;
         shine.chromeMat = chromeMat;
-        shine.plasmaArc = arcObj.transform;
-        shine.starGlints = glints;
 
         return model;
     }
@@ -722,7 +619,7 @@ public class TCCoinMagnet : MonoBehaviour
         rot.y = true;
         rot.speed = 105f;
 
-        // Visual Model
+        // Visual Model (Single U-shaped Horseshoe Magnet)
         BuildMagnetMesh(item.transform);
 
         root.SetActive(false);
@@ -763,58 +660,6 @@ public class TCCoinMagnet : MonoBehaviour
         return mat;
     }
 
-    static Mesh cachedStarMesh;
-    static Mesh GetOrCreateStarGlintMesh()
-    {
-        if (cachedStarMesh != null) return cachedStarMesh;
-
-        var mesh = new Mesh { name = "Star_Glint_Mesh" };
-        var verts = new Vector3[]
-        {
-            new Vector3(0.0f, 0.0f, 0.0f),       // 0: Center
-            new Vector3(0.0f, 0.5f, 0.0f),       // 1: North
-            new Vector3(0.08f, 0.08f, 0.0f),     // 2: NE
-            new Vector3(0.5f, 0.0f, 0.0f),       // 3: East
-            new Vector3(0.08f, -0.08f, 0.0f),    // 4: SE
-            new Vector3(0.0f, -0.5f, 0.0f),      // 5: South
-            new Vector3(-0.08f, -0.08f, 0.0f),   // 6: SW
-            new Vector3(-0.5f, 0.0f, 0.0f),      // 7: West
-            new Vector3(-0.08f, 0.08f, 0.0f)     // 8: NW
-        };
-
-        var colors = new Color[]
-        {
-            new Color(1f, 1f, 1f, 1f),
-            new Color(1f, 1f, 1f, 0f),
-            new Color(1f, 1f, 1f, 0.25f),
-            new Color(1f, 1f, 1f, 0f),
-            new Color(1f, 1f, 1f, 0.25f),
-            new Color(1f, 1f, 1f, 0f),
-            new Color(1f, 1f, 1f, 0.25f),
-            new Color(1f, 1f, 1f, 0f),
-            new Color(1f, 1f, 1f, 0.25f)
-        };
-
-        var tris = new int[48]; // double-sided (24 front + 24 back)
-        int idx = 0;
-        for (int i = 1; i <= 8; i++)
-        {
-            int nxt = (i == 8) ? 1 : i + 1;
-            // Front
-            tris[idx++] = 0; tris[idx++] = i; tris[idx++] = nxt;
-            // Back
-            tris[idx++] = 0; tris[idx++] = nxt; tris[idx++] = i;
-        }
-
-        mesh.vertices = verts;
-        mesh.colors = colors;
-        mesh.triangles = tris;
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-        cachedStarMesh = mesh;
-        return cachedStarMesh;
-    }
-
     static GameObject CreatePart(PrimitiveType type, Transform parent, Vector3 localPos, Vector3 scale, Material mat, Quaternion? rot = null)
     {
         var g = GameObject.CreatePrimitive(type);
@@ -832,15 +677,13 @@ public class TCCoinMagnet : MonoBehaviour
 }
 
 /// <summary>
-/// Animates dynamic shining emission, crackling plasma arc, and star glints on the 3D magnet pickup.
+/// Animates dynamic shining emission on the single 3D U-shaped magnet pickup.
 /// </summary>
 public class TCMagnetShine : MonoBehaviour
 {
     public Material redMat;
     public Material blueMat;
     public Material chromeMat;
-    public Transform plasmaArc;
-    public Transform[] starGlints;
 
     Color redEmissionBase = new Color(1.0f, 0.12f, 0.25f);
     Color blueEmissionBase = new Color(0.05f, 0.50f, 1.0f);
@@ -850,7 +693,7 @@ public class TCMagnetShine : MonoBehaviour
         float t = Time.time;
         float pulse = 0.5f + 0.5f * Mathf.Sin(t * 6f);
 
-        // Animate emissive shining shader glow
+        // Animate emissive shining shader glow on red and blue nodes
         if (redMat != null)
         {
             Color c = redEmissionBase * (1.4f + 0.9f * pulse);
@@ -860,27 +703,6 @@ public class TCMagnetShine : MonoBehaviour
         {
             Color c = blueEmissionBase * (1.4f + 0.9f * pulse);
             if (blueMat.HasProperty("_EmissionColor")) blueMat.SetColor("_EmissionColor", c);
-        }
-
-        // Animate dynamic crackling magnetic plasma arc between poles
-        if (plasmaArc != null)
-        {
-            float jitter = Mathf.Sin(t * 28f) * 0.004f;
-            float arcPulse = 1f + 0.30f * Mathf.Sin(t * 18f);
-            plasmaArc.localPosition = new Vector3(0, -0.225f + jitter, jitter * 0.5f);
-            plasmaArc.localScale = new Vector3(0.035f * arcPulse, 0.16f, 0.035f * arcPulse);
-        }
-
-        // Rotate and twinkle shining star glints
-        if (starGlints != null)
-        {
-            for (int i = 0; i < starGlints.Length; i++)
-            {
-                if (starGlints[i] == null) continue;
-                starGlints[i].Rotate(0, 0, (110f + i * 40f) * Time.deltaTime, Space.Self);
-                float starPulse = 0.16f + 0.05f * Mathf.Sin(t * 8f + i * 1.6f);
-                starGlints[i].localScale = Vector3.one * starPulse;
-            }
         }
     }
 }
