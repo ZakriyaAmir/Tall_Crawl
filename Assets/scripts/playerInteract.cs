@@ -15,6 +15,7 @@ public class playerInteract : MonoBehaviour
     public AudioClip woodImpactSound, beesImpactSound, deathSound, boostSound, coinSound, healthSound, jumpSound;
 
     public int MaxLife { get; private set; }
+    public bool IsDead => initialized && life <= 0;
     public bool Invulnerable => invulnTimer > 0 || boostDuration > 0 || IsRolling;
     public bool IsJumping => jumpTimer > 0;
     public bool IsRolling => boostDuration > 0 || (p != null && p.boost);
@@ -34,10 +35,11 @@ public class playerInteract : MonoBehaviour
     public CapsuleCollider PointsCollider { get; private set; }
 
     AudioSource audioSource; player p; Animator animator; Renderer[] renderers;
-    float invulnTimer, jumpTimer, rollTimer; bool blinking;
+    float invulnTimer, jumpTimer, rollTimer; bool blinking, initialized;
 
     void Awake()
     {
+        p = GetComponentInParent<player>();
         SetupColliders();
     }
 
@@ -88,13 +90,14 @@ public class playerInteract : MonoBehaviour
 
     void Start()
     {
-        p = GetComponentInParent<player>();
+        if (!p) p = GetComponentInParent<player>();
         animator = GetComponent<Animator>();
         audioSource = GetComponent<AudioSource>();
         renderers = GetComponentsInChildren<Renderer>(true);
         if (GameOverScreen) GameOverScreen.SetActive(false);
         MaxLife = TCConfig.I.baseHearts + Mathf.Min(2, TCSave.Upgrade(2));
         life = MaxLife;
+        initialized = true;
         CooldownInventory = 0;
         TCSkins.Apply(gameObject, TCSave.SelectedSkin);
         if (!GetComponentInChildren<TCFireEffects>()) gameObject.AddComponent<TCFireEffects>();
@@ -126,7 +129,7 @@ public class playerInteract : MonoBehaviour
 
     public bool HandlePickup(Collider other)
     {
-        if (p != null && p.GameOver) return false;
+        if (IsDead || (p != null && p.GameOver)) return false;
         if (!other || !other.gameObject.activeSelf) return false;
 
         if (other.CompareTag("points"))
@@ -178,7 +181,7 @@ public class playerInteract : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
-        if (p == null || p.GameOver) return;
+        if (IsDead || p == null || p.GameOver) return;
         if (!other) return;
 
         // Collect coins/powerups if they overlap the main hit collider
@@ -348,10 +351,24 @@ public class playerInteract : MonoBehaviour
 
     public void death()
     {
+        initialized = true;
         life = 0;
-        if (animator) { animator.SetTrigger("death"); animator.SetBool("death", true); }
+        jumpTimer = 0f;
+        if (animator)
+        {
+            animator.ResetTrigger("jump");
+            animator.SetTrigger("death");
+            animator.SetBool("death", true);
+        }
         Play(TCSfx.Get("death") ?? deathSound, 0.85f);
-        p.GameOver = true; p.boost = false; boostDuration = 0;
+        if (!p) p = GetComponentInParent<player>();
+        if (p)
+        {
+            p.GameOver = true;
+            p.boost = false;
+            p.ResetInputState();
+        }
+        boostDuration = 0;
         SetVisible(true);
         OnEvent?.Invoke("death", transform.position);
         gameManager.Instance?.OnPlayerDied();
@@ -359,11 +376,17 @@ public class playerInteract : MonoBehaviour
 
     public void StartBoost(float secs)
     {
+        if (IsDead || (p != null && p.GameOver)) return;
         boostDuration = Mathf.Max(boostDuration, secs);
         OnEvent?.Invoke("boost", transform.position);
     }
 
-    public void jump(float duration = 0.6f) { jumpTimer = duration; Play(TCSfx.Get("jump") ?? jumpSound, 0.7f); }
+    public void jump(float duration = 0.6f)
+    {
+        if (IsDead || (p != null && p.IsInputBlocked)) return;
+        jumpTimer = duration;
+        Play(TCSfx.Get("jump") ?? jumpSound, 0.7f);
+    }
 
     public void roll(float duration = 1.2f)
     {
@@ -372,6 +395,7 @@ public class playerInteract : MonoBehaviour
 
     public void doubleJump(float duration = 0.85f)
     {
+        if (IsDead || (p != null && p.IsInputBlocked)) return;
         jumpTimer = duration;
         Play(TCSfx.Get("menu_flip") ?? TCSfx.Get("jump") ?? jumpSound, 0.85f);
         var cute = GetComponentInChildren<TCCuteSpider>();

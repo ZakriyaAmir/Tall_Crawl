@@ -84,7 +84,12 @@ public class TCEnemy : MonoBehaviour
 
     static Material CreateCelMaterial(Color tint, Texture2D tex, float outlineWidth = 1.4f, Color? outlineColor = null, Color? emission = null)
     {
-        var shader = Shader.Find("TallCrawl/SpiderPreBaked") ?? Shader.Find("Standard") ?? Shader.Find("Diffuse");
+        var shader = Shader.Find("TallCrawl/SpiderPreBaked")
+            ?? Shader.Find("Standard")
+            ?? Shader.Find("Mobile/Diffuse")
+            ?? Shader.Find("Sprites/Default")
+            ?? Shader.Find("Diffuse");
+        if (!shader) return null;
         var mat = new Material(shader);
         mat.shader = shader;
         mat.color = tint;
@@ -138,11 +143,19 @@ public class TCEnemy : MonoBehaviour
         if (!waspWingMat)
         {
             var tex = LoadTexture("Wasp_Wing");
-            var shader = Shader.Find("Mobile/Particles/Alpha Blended") ?? Shader.Find("Particles/Standard Unlit") ?? Shader.Find("Unlit/Transparent") ?? Shader.Find("Transparent/Diffuse");
-            waspWingMat = new Material(shader);
-            waspWingMat.shader = shader;
-            waspWingMat.color = new Color(0.92f, 0.96f, 1f, 0.75f);
-            if (tex != null) waspWingMat.mainTexture = tex;
+            var shader = Shader.Find("Mobile/Particles/Alpha Blended")
+                ?? Shader.Find("Particles/Standard Unlit")
+                ?? Shader.Find("Unlit/Transparent")
+                ?? Shader.Find("Transparent/Diffuse")
+                ?? Shader.Find("Sprites/Default")
+                ?? Shader.Find("Standard");
+            if (shader != null)
+            {
+                waspWingMat = new Material(shader);
+                waspWingMat.shader = shader;
+                waspWingMat.color = new Color(0.92f, 0.96f, 1f, 0.75f);
+                if (tex != null) waspWingMat.mainTexture = tex;
+            }
         }
 
         if (!squirrelMat)
@@ -170,9 +183,12 @@ public class TCEnemy : MonoBehaviour
         g.transform.localScale = scale;
         if (rot.HasValue) g.transform.localRotation = rot.Value;
         var r = g.GetComponent<MeshRenderer>();
-        if (r && mat) r.sharedMaterial = mat;
-        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        r.receiveShadows = false;
+        if (r)
+        {
+            if (mat) r.sharedMaterial = mat;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+        }
         return g;
     }
 
@@ -430,10 +446,10 @@ public class TCEnemy : MonoBehaviour
         if (rot.HasValue) go.transform.localRotation = rot.Value;
 
         var mf = go.AddComponent<MeshFilter>();
-        mf.sharedMesh = mesh;
+        if (mesh) mf.sharedMesh = mesh;
 
         var mr = go.AddComponent<MeshRenderer>();
-        mr.sharedMaterial = mat;
+        if (mat) mr.sharedMaterial = mat;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         mr.receiveShadows = false;
         mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;

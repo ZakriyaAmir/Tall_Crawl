@@ -118,14 +118,14 @@ public class TCTrack : MonoBehaviour
         if (mProto != null) mProto.SetActive(false);
         magnetPool = new TCPool(mProto, bonusParent, 3);
 
-        var pProto = pineconePrefab ? pineconePrefab : TCEnemy.CreatePineconePrefab(hazardParent);
-        pineconePool = new TCPool(pProto, hazardParent, 5);
+        var pProto = pineconePrefab ? pineconePrefab : SafeCreateEnemy(() => TCEnemy.CreatePineconePrefab(hazardParent));
+        pineconePool = pProto ? new TCPool(pProto, hazardParent, 5) : null;
 
-        var sProto = squirrelPrefab ? squirrelPrefab : TCEnemy.CreateSquirrelPrefab(hazardParent);
-        squirrelPool = new TCPool(sProto, hazardParent, 5);
+        var sProto = squirrelPrefab ? squirrelPrefab : SafeCreateEnemy(() => TCEnemy.CreateSquirrelPrefab(hazardParent));
+        squirrelPool = sProto ? new TCPool(sProto, hazardParent, 5) : null;
 
-        var wProto = waspPrefab ? waspPrefab : TCEnemy.CreateWaspPrefab(hazardParent);
-        waspPool = new TCPool(wProto, hazardParent, 5);
+        var wProto = waspPrefab ? waspPrefab : SafeCreateEnemy(() => TCEnemy.CreateWaspPrefab(hazardParent));
+        waspPool = wProto ? new TCPool(wProto, hazardParent, 5) : null;
 
         float py = player.position.y;
         float chunkH = C.trunkChunkHeight;
@@ -295,6 +295,7 @@ public class TCTrack : MonoBehaviour
                 float a = newSafe + window * 0.5f + 20 + (blocked - 40) * ((k + Random.Range(0.2f, 0.8f)) / count);
                 angles.Add(a);
                 var b = Spawn(branchPool, "branch", y, a);
+                if (!b) continue;
                 b.transform.rotation = Quaternion.Euler(0, a, 0);
 
                 // Apply flower/foliage variant (None, Red, Yellow, Pink, Thorn):
@@ -568,6 +569,7 @@ public class TCTrack : MonoBehaviour
     TCPooled SpawnCoinAtRadius(float y, float angle, float radius)
     {
         var p = Spawn(coinPool, "coin", y, angle);
+        if (!p) return null;
         for (int i = 0; i < p.transform.childCount; i++)
         {
             var ch = p.transform.GetChild(i);
@@ -717,9 +719,16 @@ public class TCTrack : MonoBehaviour
         lastBonusY = py;
     }
 
+    static GameObject SafeCreateEnemy(System.Func<GameObject> factory)
+    {
+        try { return factory != null ? factory() : null; }
+        catch (System.Exception e) { Debug.LogWarning("[TCTrack] Enemy prefab creation failed: " + e); return null; }
+    }
+
     public TCPooled SpawnTutorialBranch(float y, float angle)
     {
         var b = Spawn(branchPool, "branch", y, angle);
+        if (!b) return null;
         b.transform.rotation = Quaternion.Euler(0, angle, 0);
         var bv = b.GetComponent<TCBranchVariant>();
         if (!bv) bv = b.gameObject.AddComponent<TCBranchVariant>();
@@ -730,6 +739,7 @@ public class TCTrack : MonoBehaviour
     public TCWasp SpawnTutorialWasp(float y, float angle)
     {
         var p = Spawn(waspPool, "wasp", y, angle);
+        if (!p) return null;
         var wasp = p.GetComponent<TCWasp>();
         if (wasp) wasp.Init(y, angle, 0f, 0f);
         return wasp;

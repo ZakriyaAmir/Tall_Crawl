@@ -31,9 +31,10 @@ public class TCCoinMagnet : MonoBehaviour
     public float AttractionSpeed => 32.0f;
 
     // Spider Shockwave parameters:
-    // Concentric expanding golden magnetic shockwave rings around the spider
+    // Concentric expanding silver magnetic shockwave rings and 8 electric bolts around the spider
     const int SubtleWaveCount = 3;
     const float WaveLoopPeriod = 1.40f;
+    const int BoltCount = 8;
 
     struct ShockwaveWave
     {
@@ -42,13 +43,24 @@ public class TCCoinMagnet : MonoBehaviour
         public Material material;
     }
 
+    struct MagnetBolt
+    {
+        public Transform root;
+        public MeshRenderer renderer;
+        public Material material;
+        public float baseAngle;
+    }
+
     float activeTimeRemaining = 0f;
     float emissionTimer = 0f;
+    float boltOrbitAngle = 0f;
     Transform spiderTransform;
     GameObject magnetAuraObj;
 
     ShockwaveWave[] subtleShockwaves;
+    MagnetBolt[] magnetBolts;
     static Mesh cachedSubtleWaveMesh;
+    static Mesh cachedBoltQuadMesh;
 
     void Awake()
     {
@@ -83,6 +95,7 @@ public class TCCoinMagnet : MonoBehaviour
     {
         activeTimeRemaining = Duration;
         emissionTimer = 0f;
+        boltOrbitAngle = 0f;
         TCSfx.Play("cooldown_activate", 0.9f);
         TCFx.Shake(0.08f);
 
@@ -100,8 +113,9 @@ public class TCCoinMagnet : MonoBehaviour
     {
         if (activeTimeRemaining > 0f)
         {
-            activeTimeRemaining -= Time.deltaTime;
-            emissionTimer += Time.deltaTime;
+            float dt = Time.deltaTime;
+            activeTimeRemaining -= dt;
+            emissionTimer += dt;
 
             var sp = ResolveSpider();
             if (sp != null)
@@ -114,7 +128,7 @@ public class TCCoinMagnet : MonoBehaviour
                     magnetAuraObj.transform.position = sp.position + sp.up * 0.04f;
                     magnetAuraObj.transform.rotation = sp.rotation;
 
-                    // 1. Ultra-subtle yellow circular ripples (thin, delicate, whisper-faint transparency)
+                    // 1. Shimmering silver circular shockwaves (gleaming platinum / silver-white ripples)
                     if (subtleShockwaves != null)
                     {
                         for (int i = 0; i < subtleShockwaves.Length; i++)
@@ -130,18 +144,53 @@ public class TCCoinMagnet : MonoBehaviour
                             float radius = Mathf.Lerp(0.18f, 0.58f, ease);
                             wave.root.localScale = new Vector3(radius, 1f, radius);
 
-                            // Crisp bell curve with punchy opacity clearly visible on bright phone screens
+                            // Crisp bell curve with punchy opacity clearly visible on phone screens
                             float alpha = Mathf.Sin(u * Mathf.PI);
-                            alpha = Mathf.Pow(alpha, 1.2f) * 0.75f;
+                            alpha = Mathf.Pow(alpha, 1.2f) * 0.85f;
 
-                            // Vibrant electric gold / radiant yellow magnetic pulse
+                            // Brilliant electric silver / metallic platinum pulse
                             Color waveCol = Color.Lerp(
-                                new Color(1.0f, 0.90f, 0.30f, alpha),
-                                new Color(0.95f, 0.72f, 0.15f, alpha * 0.65f),
+                                new Color(0.95f, 0.98f, 1.0f, alpha),
+                                new Color(0.75f, 0.85f, 0.98f, alpha * 0.70f),
                                 u
                             );
 
                             SetMatColor(wave.material, waveCol);
+                        }
+                    }
+
+                    // 2. 8 Electric Bolt Icons pulsing around the spider in gleaming silver-white
+                    if (magnetBolts != null)
+                    {
+                        boltOrbitAngle += dt * 32f;
+                        float basePulseTime = Time.unscaledTime * 7f;
+
+                        for (int i = 0; i < magnetBolts.Length; i++)
+                        {
+                            var bolt = magnetBolts[i];
+                            if (bolt.root == null || bolt.material == null) continue;
+
+                            float angleDeg = bolt.baseAngle + boltOrbitAngle;
+                            float angleRad = angleDeg * Mathf.Deg2Rad;
+
+                            // Dynamic rhythmic electric pulse for each bolt
+                            float pulse = 0.5f + 0.5f * Mathf.Sin(basePulseTime + i * 0.785f);
+                            float radius = 0.44f + 0.05f * pulse;
+                            float scale = Mathf.Lerp(0.95f, 1.35f, pulse);
+
+                            bolt.root.localPosition = new Vector3(Mathf.Cos(angleRad) * radius, 0.005f, Mathf.Sin(angleRad) * radius);
+                            // Point the bolt outward radially away from the spider
+                            bolt.root.localRotation = Quaternion.Euler(0f, -angleDeg + 90f, 0f);
+                            bolt.root.localScale = Vector3.one * scale;
+
+                            // Shimmering silver electric bolt color
+                            float alpha = Mathf.Lerp(0.65f, 1.0f, pulse);
+                            Color boltCol = Color.Lerp(
+                                new Color(0.85f, 0.92f, 1.0f, alpha),
+                                new Color(1.0f, 1.0f, 1.0f, alpha),
+                                pulse
+                            );
+                            SetMatColor(bolt.material, boltCol);
                         }
                     }
                 }
@@ -177,7 +226,7 @@ public class TCCoinMagnet : MonoBehaviour
         var waveMesh = GetOrCreateSubtleShockwaveMesh();
         var addShader = FindAdditiveShader();
 
-        // Subtle Shockwave Ripple Rings (2 concentric hollow yellow circular rings)
+        // 1. Silver Shockwave Ripple Rings (concentric hollow circular rings)
         subtleShockwaves = new ShockwaveWave[SubtleWaveCount];
         for (int i = 0; i < SubtleWaveCount; i++)
         {
@@ -194,6 +243,8 @@ public class TCCoinMagnet : MonoBehaviour
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
+            mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
             subtleShockwaves[i] = new ShockwaveWave
             {
@@ -202,10 +253,42 @@ public class TCCoinMagnet : MonoBehaviour
                 material = mat
             };
         }
+
+        // 2. 8 Electric Bolt Icons pulsing around the spider
+        var boltMesh = GetOrCreateBoltQuadMesh();
+        var boltTex = Resources.Load<Texture2D>("TCUI/icon_bolt");
+        magnetBolts = new MagnetBolt[BoltCount];
+
+        for (int i = 0; i < BoltCount; i++)
+        {
+            var boltObj = new GameObject("Magnet_Bolt_" + i);
+            boltObj.transform.SetParent(magnetAuraObj.transform, false);
+
+            var mf = boltObj.AddComponent<MeshFilter>();
+            mf.sharedMesh = boltMesh;
+
+            var mr = boltObj.AddComponent<MeshRenderer>();
+            var mat = new Material(addShader) { name = "MagnetBolt_Mat_" + i };
+            if (boltTex) mat.mainTexture = boltTex;
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+
+            float baseAng = i * (360f / BoltCount);
+            magnetBolts[i] = new MagnetBolt
+            {
+                root = boltObj.transform,
+                renderer = mr,
+                material = mat,
+                baseAngle = baseAng
+            };
+        }
     }
 
     /// <summary>
-    /// Creates a smooth, planar annulus ripple mesh with soft radial alpha falloff and warm yellow vertex tint.
+    /// Creates a smooth, planar annulus ripple mesh with soft radial alpha falloff and silver-white vertex tint.
     /// Double-ring crest: Inner rim (0.80) = alpha 0, Crest (0.90 to 0.95) = alpha 0.9, Outer rim (1.00) = alpha 0.
     /// Completely hollow middle so there is zero obstruction in the center.
     /// </summary>
@@ -219,10 +302,10 @@ public class TCCoinMagnet : MonoBehaviour
         // Defined ring thickness (20% of radius) for sharp, clear visibility on mobile screens
         float[] radii = { 0.80f, 0.90f, 0.95f, 1.00f };
         Color[] baseColors = {
-            new Color(1.0f, 0.92f, 0.35f, 0.0f),  // inner edge (transparent)
-            new Color(1.0f, 0.92f, 0.35f, 0.90f), // sharp inner crest
-            new Color(1.0f, 0.88f, 0.25f, 0.90f), // sharp outer crest
-            new Color(0.95f, 0.75f, 0.15f, 0.0f)  // outer edge (transparent)
+            new Color(0.85f, 0.92f, 1.0f, 0.0f),  // inner edge (transparent silver)
+            new Color(0.95f, 0.98f, 1.0f, 0.92f), // sharp inner crest (gleaming silver-white)
+            new Color(0.82f, 0.90f, 1.0f, 0.92f), // sharp outer crest (silver chrome)
+            new Color(0.70f, 0.82f, 0.95f, 0.0f)  // outer edge (transparent)
         };
 
         int ringCount = radii.Length;
@@ -281,17 +364,56 @@ public class TCCoinMagnet : MonoBehaviour
         return cachedSubtleWaveMesh;
     }
 
+    static Mesh GetOrCreateBoltQuadMesh()
+    {
+        if (cachedBoltQuadMesh != null) return cachedBoltQuadMesh;
+
+        var mesh = new Mesh { name = "Magnet_Bolt_Quad" };
+        float halfW = 0.08f;
+        float halfH = 0.12f;
+        mesh.vertices = new Vector3[]
+        {
+            new Vector3(-halfW, 0f, -halfH),
+            new Vector3( halfW, 0f, -halfH),
+            new Vector3(-halfW, 0f,  halfH),
+            new Vector3( halfW, 0f,  halfH)
+        };
+        mesh.uv = new Vector2[]
+        {
+            new Vector2(0f, 0f),
+            new Vector2(1f, 0f),
+            new Vector2(0f, 1f),
+            new Vector2(1f, 1f)
+        };
+        mesh.normals = new Vector3[]
+        {
+            Vector3.up, Vector3.up, Vector3.up, Vector3.up
+        };
+        mesh.triangles = new int[]
+        {
+            // Front (visible from +Y)
+            0, 2, 1, 2, 3, 1,
+            // Back (visible from -Y)
+            0, 1, 2, 2, 1, 3
+        };
+        mesh.RecalculateBounds();
+        cachedBoltQuadMesh = mesh;
+        return cachedBoltQuadMesh;
+    }
+
     static void SetMatColor(Material mat, Color c)
     {
         if (!mat) return;
-        if (mat.HasProperty("_TintColor")) mat.SetColor("_TintColor", c);
+        // Legacy Shaders/Particles/Additive applies a 2x factor on _TintColor; halve it for 1:1 parity
+        if (mat.HasProperty("_TintColor")) mat.SetColor("_TintColor", c * 0.5f);
         if (mat.HasProperty("_Color")) mat.SetColor("_Color", c);
         mat.color = c;
     }
 
     static Shader FindAdditiveShader()
     {
-        return Shader.Find("Mobile/Particles/Additive")
+        return Shader.Find("Legacy Shaders/Particles/Additive")
+            ?? Shader.Find("Mobile/Particles/Additive")
             ?? Shader.Find("Particles/Standard Unlit")
             ?? Shader.Find("Universal Render Pipeline/Unlit")
             ?? Shader.Find("Sprites/Default");

@@ -86,10 +86,14 @@ public class TCGameUI : MonoBehaviour
             if (frozenOverlayImg && !frozenOverlayImg.sprite)
                 frozenOverlayImg.sprite = Resources.Load<Sprite>("TCUI/overlay_frozen");
         }
+        if (frozenOverlayImg) frozenOverlayImg.raycastTarget = false;
         frozenOverlay.alpha = 0f;
+        frozenOverlay.interactable = false;
+        frozenOverlay.blocksRaycasts = false;
     }
     void OnDestroy()
     {
+        IsTutorialFrozen = false;
         Time.timeScale = 1f;
         playerInteract.OnEvent -= OnGameEvent;
         player.OnTurned = null;
@@ -245,9 +249,9 @@ public class TCGameUI : MonoBehaviour
 
     void OnClickCooldown()
     {
-        if (playerInteract.CooldownInventory > 0)
+        if (!started || pl == null || pl.IsInputBlocked) return;
+        if (playerInteract.CooldownInventory > 0 && TCTimeDilation.TriggerCooldown())
         {
-            TCTimeDilation.TriggerCooldown();
             if (cooldownBtn != null) StartCoroutine(TCUI.Punch((RectTransform)cooldownBtn.transform, 0.2f));
         }
     }
@@ -270,6 +274,9 @@ public class TCGameUI : MonoBehaviour
     }
 
     public bool Started => started;
+    public bool IsPauseOpen => pausePanel != null && pausePanel.gameObject.activeSelf;
+    public bool IsTutorialFrozen { get; private set; }
+    bool IsPausedOrDead => IsPauseOpen || (gm != null && (gm.IsPaused || gm.runEnded)) || (pl != null && pl.GameOver);
     float SpiderY => (spider != null) ? spider.transform.position.y : (pl != null ? pl.p1.position.y : 0f);
 
     void Update()
@@ -277,8 +284,16 @@ public class TCGameUI : MonoBehaviour
         if (!pl) return;
         if (!started)
         {
-            bool fingerDown = (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began) || Input.GetMouseButtonDown(0);
-            if (fingerDown) StartRun();
+            if (!IsPausedOrDead)
+            {
+                bool fingerDown = (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began) || Input.GetMouseButtonDown(0);
+                if (fingerDown) StartRun();
+            }
+        }
+        else if (startOverlay != null && (startOverlay.blocksRaycasts || startOverlay.interactable))
+        {
+            startOverlay.blocksRaycasts = false;
+            startOverlay.interactable = false;
         }
         if (Input.GetKeyDown(KeyCode.Escape)) // Android back: pause / resume
         {
@@ -405,6 +420,10 @@ public class TCGameUI : MonoBehaviour
 
             if (shouldShow)
             {
+                bool canUseCooldown = started && pl != null && !pl.IsInputBlocked;
+                if (cooldownBtn.interactable != canUseCooldown)
+                    cooldownBtn.interactable = canUseCooldown;
+
                 if (cdCount != lastCooldownCount)
                 {
                     lastCooldownCount = cdCount;
@@ -620,21 +639,32 @@ public class TCGameUI : MonoBehaviour
         TCUI.Place(hand, new Vector2(0.5f, 0.2f), Vector2.zero, new Vector2(150, 150));
         if (Application.isPlaying) StartCoroutine(HandWiggle());
     }
+    bool IsTutorialAborted => pl == null || pl.GameOver || (spider != null && spider.IsDead) || (gm != null && gm.runEnded);
+    bool IsPausedOverlay => IsPauseOpen || (gm != null && gm.IsPaused);
+    IEnumerator WaitWhilePausedOverlay() { while (IsPausedOverlay && !IsTutorialAborted) yield return null; }
+
     IEnumerator SmoothTimeScale(float targetScale, float duration)
     {
         currentTargetTimeScale = targetScale;
+        yield return WaitWhilePausedOverlay();
+        if (IsTutorialAborted) yield break;
+
         float start = Time.timeScale;
         if (duration <= 0.001f)
         {
             Time.timeScale = targetScale;
             yield break;
         }
-        for (float elapsed = 0; elapsed < duration; elapsed += Time.unscaledDeltaTime)
+        for (float elapsed = 0; elapsed < duration; )
         {
-            Time.timeScale = Mathf.Lerp(start, targetScale, elapsed / duration);
+            if (IsTutorialAborted) yield break;
+            if (IsPausedOverlay) { yield return null; continue; }
+            elapsed += Time.unscaledDeltaTime;
+            Time.timeScale = Mathf.Lerp(start, targetScale, Mathf.Clamp01(elapsed / duration));
             yield return null;
         }
-        Time.timeScale = targetScale;
+        yield return WaitWhilePausedOverlay();
+        if (!IsTutorialAborted) Time.timeScale = targetScale;
     }
 
     IEnumerator HandWiggle()
@@ -646,6 +676,7 @@ public class TCGameUI : MonoBehaviour
                 if (handMode == HandAnimMode.Horizontal)
                 {
                     if (!hand.gameObject.activeSelf) hand.gameObject.SetActive(true);
+                    hand.localScale = Vector3.one;
                     hand.localEulerAngles = Vector3.zero;
                     hand.anchoredPosition = new Vector2(Mathf.Sin(Time.unscaledTime * 3.5f) * 180f, 0);
                     var img = hand.GetComponent<Image>();
@@ -654,6 +685,7 @@ public class TCGameUI : MonoBehaviour
                 else if (handMode == HandAnimMode.SwipeUp)
                 {
                     if (!hand.gameObject.activeSelf) hand.gameObject.SetActive(true);
+                    hand.localScale = Vector3.one;
                     hand.localEulerAngles = new Vector3(0, 0, 90f); // point finger upwards
                     float t = Mathf.Repeat(Time.unscaledTime * 1.6f, 1f);
                     hand.anchoredPosition = new Vector2(0, Mathf.Lerp(-70f, 110f, t));
@@ -715,7 +747,11 @@ public class TCGameUI : MonoBehaviour
         pl.SetJumpAllowed(false);
         handMode = HandAnimMode.Horizontal;
         hintText.text = "DRAG LEFT / RIGHT\nto circle the trunk";
-        TCUI.Show(this, startOverlay);
+        startOverlay.gameObject.SetActive(true);
+        startOverlay.alpha = 1f;
+        startOverlay.interactable = false;
+        startOverlay.blocksRaycasts = false;
+        startOverlay.transform.SetAsLastSibling();
 
         float initialYaw = pl.CurrentYaw;
         turnedOnce = false;
@@ -723,6 +759,8 @@ public class TCGameUI : MonoBehaviour
         // Wait until player moves left or right
         while (!turnedOnce && Mathf.Abs(Mathf.DeltaAngle(initialYaw, pl.CurrentYaw)) < 4f)
         {
+            if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+            if (pl.IsInputBlocked) { yield return null; continue; }
             if (Input.GetAxisRaw("Horizontal") != 0f || (Input.touchCount > 0 && Mathf.Abs(Input.GetTouch(0).deltaPosition.x) > 2f))
             {
                 break;
@@ -734,11 +772,15 @@ public class TCGameUI : MonoBehaviour
         hintText.text = "";
         handMode = HandAnimMode.Hidden;
         pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
         yield return new WaitForSeconds(0.7f);
 
         // -------------------------------------------------------------
         // STEP 2: DODGE THE BRANCH
         // -------------------------------------------------------------
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
         // Spawn a spiky branch directly in the spider's path ahead
         float branchAngle = pl.CurrentYaw;
         float branchY = SpiderY + 4.5f;
@@ -757,39 +799,142 @@ public class TCGameUI : MonoBehaviour
             yield return null;
         }
 
-        // Freeze right in front of the branch!
-        Time.timeScale = 0f;
-        currentTargetTimeScale = 0f;
+        if (branch != null && branch.gameObject.activeInHierarchy)
+        {
+            // Freeze right in front of the branch!
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+            IsTutorialFrozen = true;
+            Time.timeScale = 0f;
+            currentTargetTimeScale = 0f;
 
-        pl.SetSteerAllowed(true);
+            pl.SetSteerAllowed(true);
+            pl.SetJumpAllowed(false);
+            handMode = HandAnimMode.Horizontal;
+            hintText.text = "DRAG TO DODGE\nthe branch!";
+
+            // Let the player move enough (at least 50 degrees away from the branch) to dodge it properly!
+            while (branch != null && branch.gameObject.activeInHierarchy && Mathf.Abs(Mathf.DeltaAngle(branchAngle, pl.CurrentYaw)) < 50f)
+            {
+                if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+                yield return null;
+            }
+
+            // Player moved enough to fully clear the branch! Lock controls and climb straight past safely
+            IsTutorialFrozen = false;
+            hintText.text = "";
+            handMode = HandAnimMode.Hidden;
+            pl.SetSteerAllowed(false);
+            pl.SetJumpAllowed(false);
+            foreach (var col in branch.GetComponentsInChildren<Collider>()) col.enabled = false;
+
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) yield break;
+            Time.timeScale = 1.0f;
+            currentTargetTimeScale = 1.0f;
+
+            // Wait until spider climbs past the branch
+            while (branch != null && branch.gameObject.activeInHierarchy && SpiderY < branchY + 0.8f)
+            {
+                if (IsTutorialAborted) yield break;
+                yield return null;
+            }
+        }
+        else
+        {
+            IsTutorialFrozen = false;
+            yield return WaitWhilePausedOverlay();
+            if (!IsTutorialAborted) { Time.timeScale = 1.0f; currentTargetTimeScale = 1.0f; }
+        }
+
+        // Lock controls again until next step
+        pl.SetSteerAllowed(false);
         pl.SetJumpAllowed(false);
-        handMode = HandAnimMode.Horizontal;
-        hintText.text = "DRAG TO DODGE\nthe branch!";
-
-        // Wait until player turns away from the branch's angle by at least 24 degrees
-        while (Mathf.Abs(Mathf.DeltaAngle(branchAngle, pl.CurrentYaw)) < 24f)
-        {
-            yield return null;
-        }
-
-        // Dodge performed! Clear prompt immediately and resume real time!
-        hintText.text = "";
-        handMode = HandAnimMode.Hidden;
-        Time.timeScale = 1.0f;
-        currentTargetTimeScale = 1.0f;
-
-        // Keep steering responsive while spider climbs past the branch
-        while (SpiderY < branchY + 0.6f)
-        {
-            yield return null;
-        }
-
-        // Steering lock disabled during transition to keep controls feeling natural
         yield return new WaitForSeconds(0.6f);
 
         // -------------------------------------------------------------
-        // STEP 3: JUMP OVER BEES
+        // STEP 3: DODGE THE WASP
         // -------------------------------------------------------------
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
+        // Spawn a wasp directly in the spider's path ahead
+        float waspAngle = pl.CurrentYaw;
+        float waspY = SpiderY + 4.5f;
+        var wasp = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialWasp(waspY, waspAngle) : null;
+
+        // Climb forward until approaching the wasp (2.0m away)
+        while (wasp != null && wasp.gameObject.activeInHierarchy && (waspY - SpiderY) > 2.0f)
+        {
+            yield return null;
+        }
+
+        // Approach in slow motion until frozen clearly in front of the wasp (1.15m clears hovering sting collider)
+        yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
+        while (wasp != null && wasp.gameObject.activeInHierarchy && (waspY - SpiderY) > 1.15f)
+        {
+            yield return null;
+        }
+
+        if (wasp != null && wasp.gameObject.activeInHierarchy)
+        {
+            // Freeze the spider completely right in front of the wasp!
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+            IsTutorialFrozen = true;
+            Time.timeScale = 0f;
+            currentTargetTimeScale = 0f;
+
+            pl.SetSteerAllowed(true);
+            pl.SetJumpAllowed(false);
+            handMode = HandAnimMode.Horizontal;
+            hintText.text = "DRAG TO DODGE\nthe wasp!";
+
+            // Let the player move enough (at least 50 degrees away from the wasp) to dodge it properly!
+            while (wasp != null && wasp.gameObject.activeInHierarchy && Mathf.Abs(Mathf.DeltaAngle(waspAngle, pl.CurrentYaw)) < 50f)
+            {
+                if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+                yield return null;
+            }
+
+            // Player moved enough to fully clear the wasp! Lock controls and climb straight past safely
+            IsTutorialFrozen = false;
+            hintText.text = "";
+            handMode = HandAnimMode.Hidden;
+            pl.SetSteerAllowed(false);
+            pl.SetJumpAllowed(false);
+            foreach (var col in wasp.GetComponentsInChildren<Collider>()) col.enabled = false;
+
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) yield break;
+            Time.timeScale = 1.0f;
+            currentTargetTimeScale = 1.0f;
+
+            // Wait until spider climbs past the wasp
+            while (wasp != null && wasp.gameObject.activeInHierarchy && SpiderY < waspY + 0.8f)
+            {
+                if (IsTutorialAborted) yield break;
+                yield return null;
+            }
+        }
+        else
+        {
+            IsTutorialFrozen = false;
+            yield return WaitWhilePausedOverlay();
+            if (!IsTutorialAborted) { Time.timeScale = 1.0f; currentTargetTimeScale = 1.0f; }
+        }
+
+        // Lock controls again until next step
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+        yield return new WaitForSeconds(0.6f);
+
+        // -------------------------------------------------------------
+        // STEP 4: JUMP OVER BEES
+        // -------------------------------------------------------------
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
         // Spawn bees into the scene ahead
         float beeY = SpiderY + 4.5f;
         var bees = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBees(beeY) : null;
@@ -807,132 +952,166 @@ public class TCGameUI : MonoBehaviour
             yield return null;
         }
 
-        // Freeze completely right in front of the bees!
-        Time.timeScale = 0f;
-        currentTargetTimeScale = 0f;
-
-        pl.SetJumpAllowed(true);
-        handMode = HandAnimMode.SwipeUp;
-        hintText.text = "SWIPE UP TO JUMP\nover hazards!";
-
-        jumpedOnce = false;
-        Vector2 touchDownPos = Vector2.zero;
-        bool isDown = false;
-        float tutLastTapTime = -1f;
-        Vector2 tutLastTapPos = Vector2.zero;
-
-        // Wait until player jumps (listen for swipe up, double tap, or spacebar)
-        while (!jumpedOnce && (spider == null || !spider.IsJumping))
+        if (bees != null && bees.gameObject.activeInHierarchy)
         {
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
+            // Freeze completely right in front of the bees!
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+            IsTutorialFrozen = true;
+            Time.timeScale = 0f;
+            currentTargetTimeScale = 0f;
+
+            pl.SetSteerAllowed(false);
+            pl.SetJumpAllowed(true);
+            handMode = HandAnimMode.SwipeUp;
+            hintText.text = "SWIPE UP TO JUMP\nover hazards!";
+
+            jumpedOnce = false;
+            Vector2 touchDownPos = Vector2.zero;
+            bool isDown = false;
+            float tutLastTapTime = -1f;
+            Vector2 tutLastTapPos = Vector2.zero;
+
+            // Wait until player jumps (listen for swipe up, double tap, or spacebar)
+            while (!jumpedOnce && (spider == null || !spider.IsJumping))
             {
-                pl.jump();
-                jumpedOnce = true;
-                break;
-            }
-            if (Input.touchCount > 0)
-            {
-                var t = Input.GetTouch(0);
-                if (t.phase == TouchPhase.Began) { touchDownPos = t.position; isDown = true; }
-                else if (isDown)
+                if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+                if (IsPausedOverlay || pl.IsInputBlocked)
                 {
-                    float upDist = t.position.y - touchDownPos.y;
-                    float sideDist = Mathf.Abs(t.position.x - touchDownPos.x);
-                    if (upDist > Screen.height * 0.055f && upDist > sideDist * 1.35f)
-                    {
-                        tutLastTapTime = -1f;
-                        pl.jump();
-                        jumpedOnce = true;
-                        break;
-                    }
+                    isDown = false;
+                    tutLastTapTime = -1f;
+                    yield return null;
+                    continue;
                 }
-                else if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled)
+                if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
                 {
-                    if (isDown && Vector2.Distance(t.position, touchDownPos) < Screen.height * 0.04f)
+                    pl.jump();
+                    jumpedOnce = true;
+                    break;
+                }
+                if (Input.touchCount > 0)
+                {
+                    var t = Input.GetTouch(0);
+                    if (t.phase == TouchPhase.Began) { touchDownPos = t.position; isDown = true; }
+                    else if (isDown)
                     {
-                        // Double tap required: single tap does NOT jump
-                        if (tutLastTapTime > 0 && (Time.unscaledTime - tutLastTapTime) < 0.35f
-                            && Vector2.Distance(t.position, tutLastTapPos) < Screen.height * 0.12f)
+                        float upDist = t.position.y - touchDownPos.y;
+                        float sideDist = Mathf.Abs(t.position.x - touchDownPos.x);
+                        if (upDist > Screen.height * 0.055f && upDist > sideDist * 1.35f)
                         {
                             tutLastTapTime = -1f;
                             pl.jump();
                             jumpedOnce = true;
                             break;
                         }
-                        else
+                        if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled)
                         {
-                            tutLastTapTime = Time.unscaledTime;
-                            tutLastTapPos = t.position;
+                            if (Vector2.Distance(t.position, touchDownPos) < Screen.height * 0.04f)
+                            {
+                                // Double tap required: single tap does NOT jump
+                                if (tutLastTapTime > 0 && (Time.unscaledTime - tutLastTapTime) < 0.35f
+                                    && Vector2.Distance(t.position, tutLastTapPos) < Screen.height * 0.12f)
+                                {
+                                    tutLastTapTime = -1f;
+                                    pl.jump();
+                                    jumpedOnce = true;
+                                    break;
+                                }
+                                else
+                                {
+                                    tutLastTapTime = Time.unscaledTime;
+                                    tutLastTapPos = t.position;
+                                }
+                            }
+                            else
+                            {
+                                tutLastTapTime = -1f;
+                            }
+                            isDown = false;
                         }
                     }
-                    else
-                    {
-                        tutLastTapTime = -1f;
-                    }
-                    isDown = false;
                 }
-            }
-            else
-            {
-                if (Input.GetMouseButtonDown(0)) { touchDownPos = Input.mousePosition; isDown = true; }
-                else if (isDown)
+                else
                 {
-                    float upDist = ((Vector2)Input.mousePosition).y - touchDownPos.y;
-                    float sideDist = Mathf.Abs(((Vector2)Input.mousePosition).x - touchDownPos.x);
-                    if (upDist > Screen.height * 0.055f && upDist > sideDist * 1.35f)
+                    if (Input.GetMouseButtonDown(0)) { touchDownPos = Input.mousePosition; isDown = true; }
+                    else if (isDown)
                     {
-                        tutLastTapTime = -1f;
-                        pl.jump();
-                        jumpedOnce = true;
-                        break;
-                    }
-                }
-                else if (Input.GetMouseButtonUp(0))
-                {
-                    if (isDown && Vector2.Distance(Input.mousePosition, touchDownPos) < Screen.height * 0.04f)
-                    {
-                        // Double click required: single click does NOT jump
-                        if (tutLastTapTime > 0 && (Time.unscaledTime - tutLastTapTime) < 0.35f
-                            && Vector2.Distance(Input.mousePosition, tutLastTapPos) < Screen.height * 0.12f)
+                        float upDist = ((Vector2)Input.mousePosition).y - touchDownPos.y;
+                        float sideDist = Mathf.Abs(((Vector2)Input.mousePosition).x - touchDownPos.x);
+                        if (upDist > Screen.height * 0.055f && upDist > sideDist * 1.35f)
                         {
                             tutLastTapTime = -1f;
                             pl.jump();
                             jumpedOnce = true;
                             break;
                         }
-                        else
+                        if (Input.GetMouseButtonUp(0))
                         {
-                            tutLastTapTime = Time.unscaledTime;
-                            tutLastTapPos = Input.mousePosition;
+                            if (Vector2.Distance(Input.mousePosition, touchDownPos) < Screen.height * 0.04f)
+                            {
+                                // Double click required: single click does NOT jump
+                                if (tutLastTapTime > 0 && (Time.unscaledTime - tutLastTapTime) < 0.35f
+                                    && Vector2.Distance(Input.mousePosition, tutLastTapPos) < Screen.height * 0.12f)
+                                {
+                                    tutLastTapTime = -1f;
+                                    pl.jump();
+                                    jumpedOnce = true;
+                                    break;
+                                }
+                                else
+                                {
+                                    tutLastTapTime = Time.unscaledTime;
+                                    tutLastTapPos = Input.mousePosition;
+                                }
+                            }
+                            else
+                            {
+                                tutLastTapTime = -1f;
+                            }
+                            isDown = false;
                         }
                     }
-                    else
-                    {
-                        tutLastTapTime = -1f;
-                    }
-                    isDown = false;
                 }
+                yield return null;
             }
-            yield return null;
+
+            // Jump performed! Instantly restore normal time so player sees the full jump!
+            IsTutorialFrozen = false;
+            hintText.text = "";
+            handMode = HandAnimMode.Hidden;
+            pl.SetSteerAllowed(false);
+            pl.SetJumpAllowed(false);
+            foreach (var col in bees.GetComponentsInChildren<Collider>()) col.enabled = false;
+
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) yield break;
+            Time.timeScale = 1.0f;
+            currentTargetTimeScale = 1.0f;
+
+            // Let the player sail safely over the bees
+            while (bees != null && bees.gameObject.activeInHierarchy && SpiderY < beeY + 0.8f)
+            {
+                if (IsTutorialAborted) yield break;
+                yield return null;
+            }
         }
-
-        // Jump performed! Instantly restore normal time so player sees the full jump!
-        hintText.text = "";
-        handMode = HandAnimMode.Hidden;
-        Time.timeScale = 1.0f;
-        currentTargetTimeScale = 1.0f;
-
-        // Let the player sail safely over the bees
-        while (SpiderY < beeY + 0.6f)
+        else
         {
-            yield return null;
+            IsTutorialFrozen = false;
+            yield return WaitWhilePausedOverlay();
+            if (!IsTutorialAborted) { Time.timeScale = 1.0f; currentTargetTimeScale = 1.0f; }
         }
 
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
         yield return new WaitForSeconds(0.6f);
 
         // -------------------------------------------------------------
-        // STEP 4: REACH THE CHILLI & COMPLETE TUTORIAL
+        // STEP 5: REACH THE CHILLI
         // -------------------------------------------------------------
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
         // Spawn a chilli ahead in the spider's path
         float chilliAngle = pl.CurrentYaw;
         float chilliY = SpiderY + 4.2f;
@@ -956,6 +1135,8 @@ public class TCGameUI : MonoBehaviour
         }
 
         // Spider is very close to the chilli: restore normal time scale right before contact!
+        yield return WaitWhilePausedOverlay();
+        if (IsTutorialAborted) yield break;
         Time.timeScale = 1.0f;
         currentTargetTimeScale = 1.0f;
         pl.SetSteerAllowed(true);
@@ -967,7 +1148,144 @@ public class TCGameUI : MonoBehaviour
             yield return null;
         }
 
+        hintText.text = "";
         yield return new WaitForSeconds(1.8f);
+
+        // -------------------------------------------------------------
+        // STEP 6: SLOW MOTION POWER UP
+        // -------------------------------------------------------------
+        // Restrict steering left/right & jumping until slow-mo power up is collected
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
+        // Spawn a cooldown slow-mo pickup directly in the spider's forward path
+        float cdAngle = pl.CurrentYaw;
+        float cdY = SpiderY + 4.2f;
+        var cdPickup = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialCooldown(cdY, cdAngle) : null;
+        hintText.text = "COLLECT SLOW-MO ITEM!";
+        handMode = HandAnimMode.Hidden;
+
+        // Approach cooldown pickup until collected or passed
+        while (cdPickup != null && cdPickup.gameObject.activeInHierarchy && (cdY - SpiderY) > -0.6f && playerInteract.CooldownInventory <= 0)
+        {
+            yield return null;
+        }
+
+        float cdWaitElapsed = 0f;
+        while (playerInteract.CooldownInventory <= 0 && cdWaitElapsed < 0.8f)
+        {
+            cdWaitElapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        // Safety fallback so high boost speed or physics hitch on mobile can never softlock collection
+        if (playerInteract.CooldownInventory <= 0)
+        {
+            if (cdPickup != null)
+            {
+                for (int i = 0; i < cdPickup.transform.childCount; i++)
+                    cdPickup.transform.GetChild(i).gameObject.SetActive(false);
+            }
+            playerInteract.CooldownInventory = 1;
+            playerInteract.OnEvent?.Invoke("cooldown", spider != null ? spider.transform.position : pl.transform.position);
+            TCSfx.Play("cooldown_collect", 0.85f);
+        }
+
+        // Wait for 2 seconds after collecting (and finish any remaining upgraded chilli boost) before hurdle prompt
+        hintText.text = "";
+        yield return new WaitForSeconds(2.0f);
+        while (spider != null && (spider.boostDuration > 0f || pl.boost))
+        {
+            yield return null;
+        }
+
+        // Spawn a hurdle ahead to dodge using slow motion
+        float hurdleAngle = pl.CurrentYaw;
+        float hurdleY = SpiderY + 5.0f;
+        var hurdle = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBranch(hurdleY, hurdleAngle) : null;
+
+        // Approach hurdle until 2.2m away
+        while (hurdle != null && hurdle.gameObject.activeInHierarchy && (hurdleY - SpiderY) > 2.2f)
+        {
+            yield return null;
+        }
+
+        if (hurdle != null && hurdle.gameObject.activeInHierarchy)
+        {
+            // Ensure player has a Slow-Mo charge available if they tapped it early while waiting
+            if (playerInteract.CooldownInventory <= 0 && (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive))
+            {
+                playerInteract.CooldownInventory = 1;
+            }
+            if (startOverlay != null)
+            {
+                startOverlay.blocksRaycasts = false;
+                startOverlay.interactable = false;
+            }
+
+            // Ease into slow motion and freeze before collision if player takes time to tap the slow-mo button
+            hintText.text = "TAP SLOW-MO BUTTON\nto dodge tricky hurdles!";
+            handMode = HandAnimMode.PointCooldown;
+
+            float slowEaseStart = Time.timeScale;
+            float slowEaseElapsed = 0f;
+            while (hurdle != null && hurdle.gameObject.activeInHierarchy && (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive))
+            {
+                if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+                if (IsPausedOverlay) { yield return null; continue; }
+                if ((hurdleY - SpiderY) <= 1.0f)
+                {
+                    IsTutorialFrozen = true;
+                    Time.timeScale = 0f;
+                    currentTargetTimeScale = 0f;
+                }
+                else
+                {
+                    slowEaseElapsed += Time.unscaledDeltaTime;
+                    float frac = Mathf.Clamp01(slowEaseElapsed / 0.2f);
+                    float ts = Mathf.Lerp(slowEaseStart, 0.15f, frac);
+                    Time.timeScale = ts;
+                    currentTargetTimeScale = ts;
+                }
+                yield return null;
+            }
+            IsTutorialFrozen = false;
+
+            currentTargetTimeScale = 1.0f;
+
+            // Hide hand pointer and re-enable full steering & jump control to dodge the hurdle!
+            handMode = HandAnimMode.Hidden;
+            hintText.text = "DODGE THE HURDLE!";
+            pl.SetSteerAllowed(true);
+            pl.SetJumpAllowed(true);
+
+            // Wait until the hurdle is passed or dodged
+            bool hurdleDodged = false;
+            while (hurdle != null && hurdle.gameObject.activeInHierarchy && (hurdleY - SpiderY) > -0.6f)
+            {
+                if (IsTutorialAborted) yield break;
+                if (!hurdleDodged && Mathf.Abs(Mathf.DeltaAngle(hurdleAngle, pl.CurrentYaw)) >= 48f)
+                {
+                    hurdleDodged = true;
+                    // Player dodged enough! Disable hurdle colliders so no grazing collision can occur
+                    foreach (var col in hurdle.GetComponentsInChildren<Collider>()) col.enabled = false;
+                    pl.SetSteerAllowed(false);
+                    pl.SetJumpAllowed(false);
+                }
+                yield return null;
+            }
+            hintText.text = "";
+            pl.SetSteerAllowed(false);
+            pl.SetJumpAllowed(false);
+        }
+        else
+        {
+            IsTutorialFrozen = false;
+            yield return WaitWhilePausedOverlay();
+            if (!IsTutorialAborted) { Time.timeScale = 1.0f; currentTargetTimeScale = 1.0f; }
+            pl.SetSteerAllowed(true);
+            pl.SetJumpAllowed(true);
+        }
 
         // Complete the tutorial!
         TCSave.TutorialDone = true;
@@ -1013,7 +1331,7 @@ public class TCGameUI : MonoBehaviour
 
     public void ShowPause()
     {
-        if (!started || pl.GameOver || pausePanel.gameObject.activeSelf) return;
+        if (!started || pl == null || pl.GameOver || (gm != null && gm.runEnded) || pausePanel.gameObject.activeSelf) return;
         gm.Pause(true); TCUI.Show(this, pausePanel);
     }
     void HidePause()
@@ -1022,7 +1340,9 @@ public class TCGameUI : MonoBehaviour
         TCUI.Hide(this, pausePanel, () =>
         {
             gm.Pause(false);
-            Time.timeScale = currentTargetTimeScale;
+            if (pl != null && pl.GameOver) { Time.timeScale = 1f; return; }
+            bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
+            Time.timeScale = slowActive ? TCTimeDilation.SlowScale : currentTargetTimeScale;
         });
     }
 
@@ -1064,8 +1384,11 @@ public class TCGameUI : MonoBehaviour
     void StopReviveTimer() { if (reviveCo != null) { StopCoroutine(reviveCo); reviveCo = null; } }
     public void ShowGameOver(bool canRevive)
     {
+        IsTutorialFrozen = false;
+        if (pausePanel != null && pausePanel.gameObject.activeSelf) pausePanel.gameObject.SetActive(false);
+        if (gm != null && gm.IsPaused) gm.Pause(false);
         Time.timeScale = 1f;
-        if (pl) pl.SetSteerAllowed(true);
+        if (pl) { pl.ResetInputState(); pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); }
         // A death during the first-run tutorial left its overlay up over the results
         if (tutorialCo != null) { StopCoroutine(tutorialCo); tutorialCo = null; TCSave.TutorialDone = true; }
         if (startOverlay.alpha > 0) TCUI.Hide(this, startOverlay);

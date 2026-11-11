@@ -5,6 +5,8 @@ using UnityEngine;
 /// mouse drag works too.
 public class player : MonoBehaviour
 {
+    public static player Instance { get; private set; }
+
     public Transform p1;
     public Animator anim;
     public Camera maincam;
@@ -14,6 +16,28 @@ public class player : MonoBehaviour
     public bool steerAllowed = true;
     public bool IsRolling => boost; // Roll animation happens during chilli mode
     public float CurrentYaw => yaw;
+
+    bool IsDeadState => GameOver || (spider != null && spider.IsDead);
+    bool IsGamePaused =>
+        (gameManager.Instance != null && (gameManager.Instance.IsPaused || gameManager.Instance.runEnded))
+        || (TCGameUI.Instance != null && TCGameUI.Instance.IsPauseOpen)
+        || (Time.timeScale <= 0f && (TCGameUI.Instance == null || !TCGameUI.Instance.IsTutorialFrozen));
+
+    /// True whenever gameplay input (steer, drag, swipe, tap, keyboard) must be ignored.
+    public bool IsInputBlocked => IsDeadState || paused || IsGamePaused;
+
+    public void ResetInputState()
+    {
+        dragging = false;
+        lastTapTime = -1f;
+        targetYaw = yaw;
+        if (p1)
+        {
+            var e = p1.localEulerAngles;
+            e.y = yaw;
+            p1.localEulerAngles = e;
+        }
+    }
 
     public void SetSteerAllowed(bool allowed)
     {
@@ -43,6 +67,7 @@ public class player : MonoBehaviour
 
     void Awake()
     {
+        Instance = this;
         jumpAllowed = true;
         C = TCConfig.I;
         if (!p1) p1 = transform;
@@ -57,7 +82,11 @@ public class player : MonoBehaviour
 
     void Update()
     {
-        if (GameOver) return;
+        if (IsDeadState || IsGamePaused)
+        {
+            ResetInputState();
+            return;
+        }
         if (paused)
         {
             if (TCGameUI.Instance && !TCGameUI.Instance.Started)
@@ -68,7 +97,11 @@ public class player : MonoBehaviour
                     TCGameUI.Instance.StartRun();
                 }
             }
-            if (paused) return;
+            if (paused)
+            {
+                ResetInputState();
+                return;
+            }
         }
         float dt = Time.deltaTime;
         float baseSpeed = C.ClimbSpeedAtDistance(currentScore);
@@ -97,6 +130,11 @@ public class player : MonoBehaviour
 
     void HandleInput(float dt)
     {
+        if (IsInputBlocked)
+        {
+            ResetInputState();
+            return;
+        }
         float degPerPixel = C.dragDegreesPerScreenWidth / Mathf.Max(1, Screen.width) * TCSave.Sensitivity;
 
         // Keyboard (editor / desktop)
@@ -221,7 +259,7 @@ public class player : MonoBehaviour
 
     public void jump()
     {
-        if (paused || GameOver) return;
+        if (IsInputBlocked) return;
 
         // Calculate jump durations: nice, sustained hangtime for visibility, with gentle speed scaling at high climb speeds
         float speedRatio = Mathf.Clamp(calcSpeed / Mathf.Max(0.1f, C.startSpeed), 1f, 1.4f);
@@ -254,6 +292,7 @@ public class player : MonoBehaviour
 
     void OnDestroy()
     {
+        if (Instance == this) Instance = null;
         Time.timeScale = 1f;
     }
 }

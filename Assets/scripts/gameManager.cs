@@ -13,6 +13,7 @@ public class gameManager : MonoBehaviour
     public static gameManager Instance;
     public int coinsCollected;
     public bool revivedThisRun, runEnded;
+    public bool IsPaused { get; private set; }
     public int RunReward { get; private set; }
     public int RunGems { get; private set; }
     bool doubledClaimed;
@@ -100,13 +101,19 @@ public class gameManager : MonoBehaviour
     public void Pause(bool on)
     {
         if (runEnded) return;
+        IsPaused = on;
         Time.timeScale = on ? 0 : 1;
+        if (p) p.ResetInputState();
         if (music) { if (on) music.Pause(); else music.UnPause(); }
     }
 
     void OnApplicationPause(bool paused) { if (paused && p && !p.paused && !p.GameOver) TCGameUI.Instance?.ShowPause(); }
 
-    public void OnPlayerDied() { StartCoroutine(DeathRoutine()); }
+    public void OnPlayerDied()
+    {
+        TCTimeDilation.Instance?.CancelOnDeath();
+        StartCoroutine(DeathRoutine());
+    }
     IEnumerator DeathRoutine()
     {
         yield return new WaitForSeconds(1.2f);
@@ -117,8 +124,10 @@ public class gameManager : MonoBehaviour
     {
         if (revivedThisRun || runEnded || !p.GameOver) return; // guard: ad callback + timer race could revive twice / after results
         revivedThisRun = true;
+        IsPaused = false;
         p.GameOver = false;
         p.paused = true;
+        p.ResetInputState();
         spider.Revive();
         StartCoroutine(ReviveRoutine());
         TCServices.Log("player_revived");

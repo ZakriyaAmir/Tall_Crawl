@@ -34,6 +34,21 @@ public class TCFireEffects : MonoBehaviour
         BuildFireEffects();
     }
 
+    static void ConfigureParticleRenderer(ParticleSystemRenderer renderer, Material material, float minSize, float maxSize)
+    {
+        if (!renderer) return;
+        if (material) renderer.sharedMaterial = material;
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        renderer.alignment = ParticleSystemRenderSpace.View;
+        renderer.minParticleSize = minSize;
+        renderer.maxParticleSize = maxSize;
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        renderer.enableGPUInstancing = false;
+    }
+
     void BuildFireEffects()
     {
         fireRoot = new GameObject("Chilli_Fire_Effects");
@@ -41,14 +56,23 @@ public class TCFireEffects : MonoBehaviour
         fireRoot.transform.localPosition = Vector3.zero;
 
         // 1. Shaders & Materials
-        var partShader = Shader.Find("Mobile/Particles/Additive") ?? Shader.Find("Particles/Standard Unlit") ?? Shader.Find("Standard");
+        // Prefer Legacy Shaders/Particles/Additive (in AlwaysIncludedShaders and compiled on Android)
+        // and never fall back to opaque Standard, which renders particles as solid lit quads on mobile.
+        var partShader = Shader.Find("Legacy Shaders/Particles/Additive")
+            ?? Shader.Find("Mobile/Particles/Additive")
+            ?? Shader.Find("Particles/Standard Unlit")
+            ?? Shader.Find("Sprites/Default");
         var fireTex = Resources.Load<Texture2D>("TCUI/fire_particle");
         var energyTex = Resources.Load<Texture2D>("TCUI/fire_shield_energy");
 
-        var partMat = new Material(partShader);
-        if (fireTex) partMat.mainTexture = fireTex;
-        partMat.color = new Color(1f, 0.7f, 0.25f, 1f);
-        if (partMat.HasProperty("_TintColor")) partMat.SetColor("_TintColor", new Color(1f, 0.75f, 0.3f, 1f));
+        Material partMat = partShader ? new Material(partShader) : null;
+        if (partMat)
+        {
+            if (fireTex) partMat.mainTexture = fireTex;
+            partMat.color = new Color(1f, 0.7f, 0.25f, 1f);
+            // Legacy Particles/Additive multiplies by 2x _TintColor; halve it so brightness and alpha match Editor.
+            if (partMat.HasProperty("_TintColor")) partMat.SetColor("_TintColor", new Color(0.55f, 0.48f, 0.38f, 0.5f));
+        }
 
         // 2. High-Quality Convex Fire Shield ahead of spider
         shieldRoot = new GameObject("ConvexFireShield").transform;
@@ -59,7 +83,7 @@ public class TCFireEffects : MonoBehaviour
 
         if (!convexShieldMesh) convexShieldMesh = CreateConvexShieldMesh(12, 28, 0.58f, 0.28f);
 
-        var celShader = Shader.Find("TallCrawl/SpiderPreBaked") ?? Shader.Find("Standard") ?? Shader.Find("Diffuse");
+        var celShader = Shader.Find("TallCrawl/SpiderPreBaked") ?? Shader.Find("Standard") ?? Shader.Find("Mobile/Diffuse") ?? Shader.Find("Sprites/Default");
 
         // Outer blazing convex dome material
         outerDomeMat = new Material(celShader);
@@ -125,9 +149,12 @@ public class TCFireEffects : MonoBehaviour
         rimObj.transform.localRotation = Quaternion.Euler(90f, 0, 0);
         rimObj.transform.localScale = new Vector3(1.18f, 0.015f, 1.18f);
         var mrRim = rimObj.GetComponent<MeshRenderer>();
-        if (mrRim) mrRim.sharedMaterial = rimMat;
-        mrRim.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        mrRim.receiveShadows = false;
+        if (mrRim)
+        {
+            mrRim.sharedMaterial = rimMat;
+            mrRim.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mrRim.receiveShadows = false;
+        }
         shieldRimTransform = rimObj.transform;
 
         // 3. Dynamic Flame Rim Particles (Sweeps around the perimeter of the convex shield)
@@ -137,11 +164,7 @@ public class TCFireEffects : MonoBehaviour
 
         rimFireParticles = rimPsObj.AddComponent<ParticleSystem>();
         var rmr = rimPsObj.GetComponent<ParticleSystemRenderer>();
-        rmr.sharedMaterial = partMat;
-        rmr.renderMode = ParticleSystemRenderMode.Billboard;
-        rmr.alignment = ParticleSystemRenderSpace.View;
-        rmr.minParticleSize = 0.02f;
-        rmr.maxParticleSize = 1.0f;
+        ConfigureParticleRenderer(rmr, partMat, 0.02f, 1.0f);
 
         var rmain = rimFireParticles.main;
         rmain.loop = true;
@@ -187,11 +210,7 @@ public class TCFireEffects : MonoBehaviour
 
         sparkParticles = sparkObj.AddComponent<ParticleSystem>();
         var smr = sparkObj.GetComponent<ParticleSystemRenderer>();
-        smr.sharedMaterial = partMat;
-        smr.renderMode = ParticleSystemRenderMode.Billboard;
-        smr.alignment = ParticleSystemRenderSpace.View;
-        smr.minParticleSize = 0.01f;
-        smr.maxParticleSize = 0.8f;
+        ConfigureParticleRenderer(smr, partMat, 0.01f, 0.8f);
 
         var smain = sparkParticles.main;
         smain.loop = true;
@@ -223,18 +242,20 @@ public class TCFireEffects : MonoBehaviour
         if (active != wasActive)
         {
             wasActive = active;
-            fireRoot.SetActive(active);
+            if (!fireRoot) return;
 
             if (active)
             {
-                rimFireParticles.Play();
-                sparkParticles.Play();
+                fireRoot.SetActive(true);
+                if (rimFireParticles) { rimFireParticles.Clear(true); rimFireParticles.Play(true); }
+                if (sparkParticles) { sparkParticles.Clear(true); sparkParticles.Play(true); }
                 spinAngle = 0f;
             }
             else
             {
-                rimFireParticles.Stop();
-                sparkParticles.Stop();
+                if (rimFireParticles) rimFireParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                if (sparkParticles) sparkParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                fireRoot.SetActive(false);
             }
         }
 

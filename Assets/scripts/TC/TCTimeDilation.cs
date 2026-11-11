@@ -42,8 +42,23 @@ public class TCTimeDilation : MonoBehaviour
         }
     }
 
+    static bool IsPausedNow()
+    {
+        var gm = gameManager.Instance;
+        return (gm != null && gm.IsPaused) || (TCGameUI.Instance != null && TCGameUI.Instance.IsPauseOpen);
+    }
+
+    static bool IsDeadOrEnded()
+    {
+        var gm = gameManager.Instance;
+        var pl = player.Instance;
+        return (gm != null && gm.runEnded) || (pl != null && pl.GameOver);
+    }
+
     public static bool TriggerCooldown()
     {
+        if (IsPausedNow() || IsDeadOrEnded()) return false;
+        if (player.Instance != null && player.Instance.IsInputBlocked) return false;
         if (playerInteract.CooldownInventory <= 0) return false;
         playerInteract.CooldownInventory--;
 
@@ -56,45 +71,66 @@ public class TCTimeDilation : MonoBehaviour
 
     public void Activate()
     {
+        if (IsPausedNow() || IsDeadOrEnded()) return;
         TCSfx.Play("cooldown_activate", 0.9f);
         TCFx.Shake(0.15f);
         if (dilationRoutine != null) StopCoroutine(dilationRoutine);
         dilationRoutine = StartCoroutine(DilationSequence());
     }
 
+    public void CancelOnDeath()
+    {
+        if (dilationRoutine != null) { StopCoroutine(dilationRoutine); dilationRoutine = null; }
+        activeTimeRemaining = 0f;
+        if (!IsPausedNow()) Time.timeScale = 1.0f;
+    }
+
+    IEnumerator RampTimeScale(float fromScale, float toScale, float dur)
+    {
+        for (float t = 0; t < dur; )
+        {
+            if (IsDeadOrEnded()) { CancelOnDeath(); yield break; }
+            if (IsPausedNow()) { yield return null; continue; }
+            float dt = Time.unscaledDeltaTime;
+            t += dt;
+            float frac = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / dur));
+            Time.timeScale = Mathf.Lerp(fromScale, toScale, frac);
+            activeTimeRemaining -= dt;
+            yield return null;
+        }
+    }
+
     IEnumerator DilationSequence()
     {
         activeTimeRemaining = Duration;
 
-        // Ease in from current timeScale to 0.5x
-        float startScale = Time.timeScale;
-        for (float t = 0; t < EaseInDuration; t += Time.unscaledDeltaTime)
+        while (IsPausedNow())
         {
-            // Smooth hermite interpolation
-            float frac = Mathf.SmoothStep(0f, 1f, t / EaseInDuration);
-            Time.timeScale = Mathf.Lerp(startScale, SlowScale, frac);
-            activeTimeRemaining -= Time.unscaledDeltaTime;
+            if (IsDeadOrEnded()) { CancelOnDeath(); yield break; }
             yield return null;
         }
+
+        // Ease in from current timeScale to 0.5x
+        yield return RampTimeScale(Time.timeScale, SlowScale, EaseInDuration);
+        if (IsDeadOrEnded()) { CancelOnDeath(); yield break; }
+        while (IsPausedNow()) { if (IsDeadOrEnded()) { CancelOnDeath(); yield break; } yield return null; }
         Time.timeScale = SlowScale;
 
         // Hold at 0.5x for remainder of the 3-second duration
         while (activeTimeRemaining > EaseOutDuration)
         {
+            if (IsDeadOrEnded()) { CancelOnDeath(); yield break; }
+            if (IsPausedNow()) { yield return null; continue; }
             activeTimeRemaining -= Time.unscaledDeltaTime;
             yield return null;
         }
 
         // Smoothly ease / fade back to normal speed (1.0x)
-        float fromScale = Time.timeScale;
-        for (float t = 0; t < EaseOutDuration; t += Time.unscaledDeltaTime)
-        {
-            float frac = Mathf.SmoothStep(0f, 1f, t / EaseOutDuration);
-            Time.timeScale = Mathf.Lerp(fromScale, 1.0f, frac);
-            activeTimeRemaining -= Time.unscaledDeltaTime;
-            yield return null;
-        }
+        while (IsPausedNow()) { if (IsDeadOrEnded()) { CancelOnDeath(); yield break; } yield return null; }
+        yield return RampTimeScale(Time.timeScale, 1.0f, EaseOutDuration);
+        if (IsDeadOrEnded()) { CancelOnDeath(); yield break; }
 
+        while (IsPausedNow()) { if (IsDeadOrEnded()) { CancelOnDeath(); yield break; } yield return null; }
         Time.timeScale = 1.0f;
         activeTimeRemaining = 0f;
         dilationRoutine = null;
