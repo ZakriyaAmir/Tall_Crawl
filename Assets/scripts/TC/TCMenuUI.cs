@@ -712,10 +712,13 @@ public class TCMenuUI : MonoBehaviour
     {
         var root = TCUI.Rect("Slider", parent); TCUI.Place(root, new Vector2(0.5f, 0.5f), pos, new Vector2(700, 60));
         var bg = TCUI.Img("BG", root, TCUI.Grey); TCUI.Stretch(bg.rectTransform, 0, 0, 18, 18);
+        if (bg) bg.raycastTarget = true;
         var fillArea = TCUI.Rect("FillArea", root); TCUI.Stretch(fillArea, 0, 0, 18, 18);
         var fill = TCUI.Img("Fill", fillArea, TCUI.Mint); TCUI.Stretch(fill.rectTransform);
         var handleArea = TCUI.Rect("HandleArea", root); TCUI.Stretch(handleArea, 30, 30, 0, 0);
-        var handle = TCUI.Img("Handle", handleArea, TCUI.Peach, TCUI.Circle); if (TCUI.Fresh(handle)) { handle.rectTransform.sizeDelta = new Vector2(70, 70); handle.raycastTarget = true; }
+        var handle = TCUI.Img("Handle", handleArea, TCUI.Peach, TCUI.Circle);
+        if (TCUI.Fresh(handle)) handle.rectTransform.sizeDelta = new Vector2(70, 70);
+        if (handle) handle.raycastTarget = true;
         var s = TCUI.Add<Slider>(root.gameObject); s.fillRect = fill.rectTransform; s.handleRect = handle.rectTransform; s.targetGraphic = handle;
         return s;
     }

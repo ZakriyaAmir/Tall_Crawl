@@ -35,7 +35,7 @@ public class TCWebBonus : MonoBehaviour
 
     float graceLeft;
     float lastLetterMetres = -999f;
-    LineRenderer webLine;
+    LineRenderer webLine, webGlow;
     Transform webAnchor;
     Coroutine swingCo;
     GameObject letterProto;
@@ -49,16 +49,12 @@ public class TCWebBonus : MonoBehaviour
     readonly List<float> fadingLife = new List<float>();
     readonly List<Material> fadingMat = new List<Material>();
     const float TrunkRadius = 0.603f;
-    const float OrbitPerSwing = 108f; // degrees around the trunk; 10 swings = 3 full revolutions
+    const int SwingBeats = 18;
+    const float OrbitPerBeat = 720f / SwingBeats; // 18 swings * 40 deg = 720 deg (2 full swirls, lands at exact start facing)
 
-    LineRenderer webGlow, webOutline;
-    Transform silkCore, silkGlow, silkEdge;
-    Light swingRim;
-    Transform swingOutlineRoot;
-    float fovKick, dutchNow;
-    Vector3 camPosRest, camPosClose;
-    Quaternion camRotRest, camRotClose;
-    float fovRest;
+    Vector3 camPosRest, camWorldOffsetRest;
+    Quaternion camRotRest, camWorldRotRest;
+    float fovRest, camBaselineY;
     Camera swingCam;
     Animator camAnimRest;
     bool camAnimWasEnabled;
@@ -67,9 +63,9 @@ public class TCWebBonus : MonoBehaviour
     bool swingCamActive;
     Transform swingBody;
     Vector3 swingBodyRest;
-    readonly List<Renderer> spiderRenderers = new List<Renderer>();
-    readonly List<int> spiderQueues = new List<int>();
+    readonly List<(TrailRenderer tr, bool enabled, bool emitting)> pausedTrails = new List<(TrailRenderer, bool, bool)>();
     GameObject splatDecal;
+    float silkTaut = 1f;
 
     TextMeshProUGUI swingMeterLabel, swingPopLabel;
     RectTransform swingHudRt, swingPopRt;
@@ -94,7 +90,7 @@ public class TCWebBonus : MonoBehaviour
     {
         if (graceLeft > 0f) graceLeft = Mathf.Max(0f, graceLeft - Time.deltaTime);
         if (IsSwinging && silkLive)
-            DrawSilk(silkTip, silkAnchor, 0.85f, silkAge);
+            DrawSilk(silkTip, silkAnchor, silkTaut, silkAge);
         if (IsSwinging) silkAge += Time.deltaTime;
         TickFadingSilk();
         TickGhosts();
@@ -106,7 +102,7 @@ public class TCWebBonus : MonoBehaviour
         // Drive the cam after all motion so a screenshot at end-of-frame
         // cannot land between a transform write and the previous cam update.
         if (IsSwinging && swingCamActive)
-            DriveSwingCam(dutchNow);
+            DriveSwingCam(0f);
     }
 
     Transform ResolveSpider()
@@ -195,9 +191,7 @@ public class TCWebBonus : MonoBehaviour
         TCSfx.Play("celebrate", 0.85f);
 
         BindSwingBody(sp);
-        LiftSpiderSort(cute, true);
-        SetSpiderTrails(sp, false);
-        SetSpiderOutline(cute, true);
+        PauseExistingTrails(sp);
 
         var cam = Camera.main;
         swingCam = cam;
@@ -206,8 +200,6 @@ public class TCWebBonus : MonoBehaviour
         camRotRest = cam ? cam.transform.localRotation : Quaternion.identity;
         camScaleRest = cam ? cam.transform.localScale : Vector3.one;
         fovRest = cam ? cam.fieldOfView : 64f;
-        dutchNow = 0f;
-        fovKick = 0f;
 
         float mpu = TCConfig.I != null ? Mathf.Max(0.01f, TCConfig.I.metresPerUnit) : 20f;
         float worldUnits = DistanceBonusMetres / mpu;
@@ -217,178 +209,224 @@ public class TCWebBonus : MonoBehaviour
         float yEnd = y0 + worldUnits;
         float yaw = pl ? pl.CurrentYaw : (sp ? sp.eulerAngles.y : 0f);
 
-        // Dedicated world-space swing camera: unparent so p1 yaw no longer
-        // cancels the orbit (that was why every frame looked like the same straight-up view).
+        // Unparent Main Camera during the swing so p1's 360-degree trunk orbit does not
+        // spin the camera, while preserving the EXACT original camera angle, offset, and FOV.
         if (cam)
         {
-            Vector3 fromPos = cam.transform.position;
-            Quaternion fromRot = cam.transform.rotation;
             camAnimRest = cam.GetComponent<Animator>();
             camAnimWasEnabled = camAnimRest && camAnimRest.enabled;
             if (camAnimRest) camAnimRest.enabled = false;
+            camWorldRotRest = cam.transform.rotation;
+            camBaselineY = y0;
+            camWorldOffsetRest = cam.transform.position - new Vector3(axis.x, y0, axis.z);
             cam.transform.SetParent(null, true);
             swingCamActive = true;
-            ApplyPendulumRadius(HangRadius());
-            float z = 0f;
-            while (z < 0.32f)
-            {
-                z += Time.unscaledDeltaTime;
-                float k = Smooth(z / 0.32f);
-                DriveSwingCam(0f, k, fromPos, fromRot);
-                yield return null;
-            }
+            ApplyPendulumRadius(0f, 0f);
+            DriveSwingCam(0f);
         }
 
+        BindBodyTrail(sp);
+        if (bodyTrail) { bodyTrail.Clear(); bodyTrail.emitting = true; }
         var trail = EnsureWind(sp);
-        if (trail) { trail.Clear(); trail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); }
+        if (trail) { trail.Clear(); trail.Play(true); }
 
-        const int Shots = SwingCount;
-        float cycle = SwingSeconds / Shots;
+        const int Beats = SwingBeats;
+        float beatCycle = SwingSeconds / Beats;
         float yPrev = y0;
-        const float ThwipDur = 0.08f;
-        const float FlipDur = 0.22f;
+        float yaw0 = yaw;
+        float totalElapsed = 0f;
+        float totalDur = SwingSeconds;
 
-        for (int shot = 0; shot < Shots; shot++)
+        for (int beat = 0; beat < Beats; beat++)
         {
-            bool last = shot == Shots - 1;
-            currentThwip = shot + 1;
-            float yawStart = yaw;
-            float yawLand = yawStart + OrbitPerSwing;
-            float yStart = Mathf.Lerp(y0, yEnd, shot / (float)Shots);
-            float yLand = Mathf.Lerp(y0, yEnd, (shot + 1) / (float)Shots);
-            // Keep the attach point in the upper frame: a short strand (~1.2 wu)
-            // on the visible face of the trunk. A climb-tied 10 wu web put the
-            // splat off-screen and ran the chord through the camera.
-            // Anchor is relative to the spinnerets, not p1.y (the root sits ~0.85
-            // above the spider child, which previously put the splat off-screen).
-            Vector3 AnchorNow()
-            {
-                Vector3 tip = SpinneretWorld(cute, sp);
-                float yawNow = (pl ? pl.CurrentYaw : yaw) + 6f;
-                return OnTrunk(axis, yawNow, tip.y + 0.40f, TrunkRadius + 0.03f);
-            }
-            Vector3 anchorFixed = AnchorNow();
+            bool last = beat == Beats - 1;
+            currentThwip = Mathf.Clamp(Mathf.CeilToInt((beat + 1) * (SwingCount / (float)Beats)), 1, SwingCount);
+            float yawStart = yaw0 + beat * OrbitPerBeat;
+            float beatDur = last ? beatCycle * 1.15f : beatCycle * 0.98f;
+            float baseFrac0 = beat / (float)Beats;
+            float baseFrac1 = (beat + 1) / (float)Beats;
 
-            // --- 1. Thwip: visible flying arc, then taut ---
+            const float shootFrac = 0.14f;
+            const float releaseFrac = 0.56f;
+            float releaseCut = last ? 0.64f : releaseFrac;
+
+            // Pin the web splat genuinely in world space on the upper bark ahead of the spider.
+            // Because the world bark moves naturally past the camera at ~28 wu/s, the splat and
+            // taut web sweep realistically from top of screen past the spider before releasing.
+            float shootTargetYaw = yawStart + OrbitPerBeat * 0.62f + 16f;
+            Vector3 anchorWorld = OnTrunk(axis, shootTargetYaw, camBaselineY + 2.25f, TrunkRadius + 0.03f);
+            bool splatSpawned = false;
+            bool whooshPlayed = false;
+            bool released = false;
+            bool doCorkscrew = !last && (beat % 2 == 1);
+
             silkLive = true;
             silkAge = 0f;
-            PlayThwip(shot);
-            fovKick = 2f;
-            TCFx.Shake(0.12f);
-            if (cute) cute.SetSwingPose(-28f, 10f, 0f, 0.32f, -1f);
-            if (shot == 1 || shot == 6) TCSfx.PlayVoice(false, 0.62f, 1.04f + shot * 0.03f);
+            PlayThwip(beat);
+            if (beat == 2 || beat == 11) TCSfx.PlayVoice(false, 0.62f, 1.04f + (beat % 4) * 0.03f);
 
             float t = 0f;
-            while (t < ThwipDur)
+            while (t < beatDur)
             {
-                t += Time.deltaTime;
-                float ext = Mathf.Clamp01(t / ThwipDur);
-                ext = ext * ext * (3f - 2f * ext);
-                TickSwing(pl, yStart, yawStart, HangRadius(), dutchNow, ref yPrev);
-                silkTip = SpinneretWorld(cute, sp);
-                silkAnchor = Vector3.Lerp(silkTip, anchorFixed, ext);
-                if (webAnchor) webAnchor.position = silkAnchor;
-                DrawSilk(silkTip, silkAnchor, 0.15f + 0.2f * ext, silkAge);
-                yield return null;
-            }
-            silkAnchor = anchorFixed;
-            if (webAnchor) webAnchor.position = silkAnchor;
-            DrawSilk(silkTip, silkAnchor, 1f, silkAge);
-            SpawnAnchorBurst(anchorFixed, axis);
-            if (cute) cute.SetSwingPose(-22f, 8f, 0f, 0.38f, -0.85f);
-            TCFx.Shake(0.08f);
+                float dt = Time.deltaTime;
+                t += dt;
+                totalElapsed += dt;
+                float u = Mathf.Clamp01(t / beatDur);
+                float masterU = Mathf.Clamp01(totalElapsed / Mathf.Max(0.01f, totalDur));
 
-            // --- 2. Pendulum while orbiting the trunk ---
-            PlayWhoosh(shot);
-            float swingDur = Mathf.Max(0.32f, cycle - ThwipDur - (last ? 0.50f : FlipDur));
-            t = 0f;
-            while (t < swingDur)
-            {
-                t += Time.deltaTime;
-                float swingU = Mathf.Clamp01(t / swingDur);
-                float pend = 0.5f - 0.5f * Mathf.Cos(swingU * Mathf.PI);
-                yaw = yawStart + OrbitPerSwing * pend;
-                float dip = 0.55f * Mathf.Sin(swingU * Mathf.PI);
-                float y = Mathf.Lerp(yStart, yLand, Smooth(pend)) - dip;
-                float taut = 0.55f + 0.45f * Mathf.Abs(Mathf.Cos(swingU * Mathf.PI));
+                // Smoothly swing out from trunk at launch and land flush onto bark at 5000m.
+                float launchEnv = Smooth(Mathf.Clamp01(masterU / 0.055f));
+                float landEnv = last ? 1f - Smooth(Mathf.Clamp01((u - 0.66f) / 0.34f)) : 1f;
+                float radialEnv = launchEnv * landEnv;
 
+                // Continuous orbital swirl with a pendulum whip surge during web pull.
+                float whipSin = Mathf.Sin(2f * Mathf.PI * u);
+                float yawEase = u + 0.045f * whipSin;
+                yaw = yawStart + OrbitPerBeat * yawEase;
+                float relYaw = yaw - yaw0;
+
+                // Smooth climb baseline + organic pendulum arc dip under the taut web & soar on release.
+                float climbFrac = Mathf.Lerp(baseFrac0, baseFrac1, u);
+                camBaselineY = Mathf.Lerp(y0, yEnd, climbFrac);
+                float pullArc = -0.20f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(u / releaseCut));
+                float soarArc = 0.16f * Mathf.Sin(Mathf.PI * u);
+                float y = camBaselineY + (pullArc + soarArc) * radialEnv;
+                if (last && u >= 0.84f) y = Mathf.Lerp(y, yEnd, Smooth((u - 0.84f) / 0.16f));
+
+                // Keep a wide, dramatic distance around the tree trunk while staying cleanly framed.
+                float orbitExtraZ = SwingOrbitExtraZ(relYaw, u) * radialEnv;
+                float orbitExtraY = (0.26f + 0.10f * Mathf.Sin(Mathf.PI * u)) * radialEnv;
+
+                if (u >= shootFrac && !splatSpawned)
+                {
+                    splatSpawned = true;
+                    silkAnchor = anchorWorld;
+                    if (webAnchor) webAnchor.position = silkAnchor;
+                    SpawnAnchorBurst(anchorWorld, axis);
+                }
+                if (u >= shootFrac && !whooshPlayed)
+                {
+                    whooshPlayed = true;
+                    PlayWhoosh(beat);
+                }
+                if (u >= releaseCut && !released)
+                {
+                    released = true;
+                    LingerCurrentSilk();
+                    silkLive = false;
+                    SetSilkVisible(false);
+                    if (last)
+                    {
+                        TCSfx.Play("celebrate", 1f);
+                        TCSfx.PlayVoice(false, 0.7f, 1.12f);
+                    }
+                }
+
+                // Cohesive hero pose: reach up-left -> banked pull -> aerial corkscrew/glide.
+                // On __cute: -lean pitches head outward away from trunk; -twist aims head into +yaw swirl.
                 if (cute)
                 {
-                    float lean = -22f - 20f * Mathf.Sin(swingU * Mathf.PI);
-                    float roll = 26f * Mathf.Sin(swingU * Mathf.PI);
-                    float twist = 16f * pend;
-                    float squash = 0.08f - 0.16f * Mathf.Sin(swingU * Mathf.PI);
-                    cute.SetSwingPose(lean, roll, twist, squash, 0.95f);
+                    if (u < shootFrac)
+                    {
+                        float k = Smooth(u / shootFrac);
+                        cute.SetSwingPose(-24f, Mathf.Lerp(10f, -14f, k), -32f, 0.12f * k, -0.95f);
+                    }
+                    else if (u < releaseCut)
+                    {
+                        float su = (u - shootFrac) / Mathf.Max(0.01f, releaseCut - shootFrac);
+                        float arc = Mathf.Sin(Mathf.PI * su);
+                        float lean = -24f - 16f * arc;
+                        float roll = -14f - 24f * arc;
+                        float twist = -34f - 8f * arc;
+                        float squash = 0.06f - 0.15f * arc;
+                        cute.SetSwingPose(lean, roll, twist, squash, 0.85f);
+                    }
+                    else
+                    {
+                        float fu = (u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut);
+                        float sf = Smooth(fu);
+                        if (last)
+                        {
+                            float lean = Mathf.Lerp(-24f, 0f, sf);
+                            float roll = Mathf.Lerp(-16f, 0f, sf);
+                            float twist = Mathf.Lerp(-34f, -360f, sf);
+                            float tuck = Mathf.Lerp(-0.7f, 0f, sf);
+                            cute.SetSwingPose(lean, roll, twist, -0.10f * Mathf.Sin(fu * Mathf.PI), tuck);
+                        }
+                        else if (doCorkscrew)
+                        {
+                            float lean = Mathf.Lerp(-22f, -24f, fu);
+                            float roll = 18f * Mathf.Sin(fu * Mathf.PI);
+                            float twist = Mathf.Lerp(-34f, -394f, sf);
+                            cute.SetSwingPose(lean, roll, twist, -0.14f * Mathf.Sin(fu * Mathf.PI), -0.78f);
+                        }
+                        else
+                        {
+                            float lean = Mathf.Lerp(-24f, -24f, fu);
+                            float roll = Mathf.Lerp(-14f, 12f, Mathf.Sin(fu * Mathf.PI));
+                            float twist = Mathf.Lerp(-34f, -32f, sf);
+                            float tuck = Mathf.Lerp(0.45f, -0.90f, sf);
+                            cute.SetSwingPose(lean, roll, twist, -0.08f * Mathf.Sin(fu * Mathf.PI), tuck);
+                        }
+                    }
                 }
 
-                dutchNow = 8f * Mathf.Sin(swingU * Mathf.PI) * (shot % 2 == 0 ? 1f : -1f);
-                TickSwing(pl, y, yaw, PendulumExtra(swingU), dutchNow, ref yPrev);
+                TickSwing(pl, y, yaw, orbitExtraZ, orbitExtraY, ref yPrev);
 
-                silkTip = SpinneretWorld(cute, sp);
-                silkAnchor = AnchorNow();
-                anchorFixed = silkAnchor;
-                if (webAnchor) webAnchor.position = silkAnchor;
-                DrawSilk(silkTip, silkAnchor, taut, silkAge);
+                if (silkLive && u < releaseCut)
+                {
+                    silkTip = FrontWebOrigin(cute, sp);
+                    if (u < shootFrac)
+                    {
+                        float ext = Smooth(u / shootFrac);
+                        silkAnchor = Vector3.Lerp(silkTip, anchorWorld, ext);
+                        if (webAnchor) webAnchor.position = silkAnchor;
+                        DrawSilk(silkTip, silkAnchor, 0.35f + 0.35f * ext, silkAge);
+                    }
+                    else
+                    {
+                        silkAnchor = anchorWorld;
+                        if (webAnchor) webAnchor.position = silkAnchor;
+                        DrawSilk(silkTip, silkAnchor, 1f, silkAge);
+                    }
+                }
                 yield return null;
             }
-            yaw = yawLand;
 
-            // --- 3. Release: splay, stretch, full flip, then the next thwip ---
-            LingerCurrentSilk();
-            silkLive = false;
-            SetSilkVisible(false);
-
+            yaw = yaw0 + (beat + 1) * OrbitPerBeat;
             if (last)
             {
-                if (cute) cute.SetSwingPose(-10f, 12f, 0f, -0.18f, -0.9f);
-                TCSfx.Play("celebrate", 1f);
-                TCSfx.PlayVoice(false, 0.7f, 1.12f);
-                float flip = 0f;
-                float landY = yLand;
-                while (flip < 0.55f)
-                {
-                    flip += Time.deltaTime;
-                    float k = Mathf.Clamp01(flip / 0.55f);
-                    float y = landY + Mathf.Sin(k * Mathf.PI) * 0.14f;
-                    if (cute) cute.SetSwingPose(-8f, 16f, 360f * Smooth(k), -0.14f * Mathf.Sin(k * Mathf.PI), -0.7f + k * 0.4f);
-                    dutchNow = Mathf.Lerp(dutchNow, 0f, k);
-                    TickSwing(pl, y, yawLand, HangRadius(), dutchNow, ref yPrev);
-                    yield return null;
-                }
-                yaw = yawLand;
-                TickSwing(pl, landY, yaw, HangRadius(), 0f, ref yPrev);
-            }
-            else
-            {
-                if (cute) cute.SetSwingPose(-6f, 10f, 0f, -0.22f, -1f);
-                float flip = 0f;
-                while (flip < FlipDur)
-                {
-                    flip += Time.deltaTime;
-                    float k = Mathf.Clamp01(flip / FlipDur);
-                    float y = yLand + Mathf.Sin(k * Mathf.PI) * 0.12f;
-                    if (cute) cute.SetSwingPose(-10f, 18f, 360f * k, -0.16f * Mathf.Sin(k * Mathf.PI), -0.85f);
-                    dutchNow = Mathf.Lerp(dutchNow, 0f, k);
-                    TickSwing(pl, y, yawLand, HangRadius(), dutchNow, ref yPrev);
-                    yield return null;
-                }
+                camBaselineY = yEnd;
+                TickSwing(pl, yEnd, yaw, 0f, 0f, ref yPrev);
             }
         }
 
-        if (trail) trail.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+        if (trail)
+        {
+            trail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            Destroy(trail.gameObject);
+            windTrail = null;
+        }
+        if (bodyTrail)
+        {
+            bodyTrail.emitting = false;
+            bodyTrail.Clear();
+            Destroy(bodyTrail.gameObject);
+            bodyTrail = null;
+        }
         if (cute) { cute.ClearSwingPose(); cute.TriggerLandBounce(); }
         SpawnLandingBurst(sp ? sp.position : Vector3.zero);
         ShowFiveThousandPop();
         TCSfx.Play("chime", 0.9f, 1.05f);
         TCSfx.Play("celebrate", 1f);
 
-        // Hold the close camera so the landing pose and +5000m pop can be read.
+        // Brief settle while +5000m pop appears, keeping the exact default camera untouched.
         ShowcaseHold = true;
         float hold = 0f;
-        while (hold < 1.0f)
+        while (hold < 0.30f)
         {
             hold += Time.unscaledDeltaTime;
-            ApplyPendulumRadius(HangRadius());
+            ApplyPendulumRadius(0f, 0f);
             DriveSwingCam(0f);
             yield return null;
         }
@@ -398,9 +436,7 @@ public class TCWebBonus : MonoBehaviour
         SetSilkVisible(false);
 
         RestoreSwingBody();
-        LiftSpiderSort(cute, false);
-        SetSpiderTrails(sp, true);
-        SetSpiderOutline(cute, false);
+        RestorePausedTrails();
         if (splatDecal) { Destroy(splatDecal); splatDecal = null; }
 
         if (cam && swingCamActive)
@@ -409,19 +445,6 @@ public class TCWebBonus : MonoBehaviour
             cam.transform.localScale = camScaleRest;
             swingCamActive = false;
             if (camAnimRest) camAnimRest.enabled = camAnimWasEnabled;
-            float z = 0f;
-            var fromPos = cam.transform.localPosition;
-            var fromRot = cam.transform.localRotation;
-            float fromFov = cam.fieldOfView;
-            while (z < 0.42f)
-            {
-                z += Time.unscaledDeltaTime;
-                float k = Smooth(z / 0.42f);
-                cam.transform.localPosition = Vector3.Lerp(fromPos, camPosRest, k);
-                cam.transform.localRotation = Quaternion.Slerp(fromRot, camRotRest, k);
-                cam.fieldOfView = Mathf.Lerp(fromFov, fovRest, k);
-                yield return null;
-            }
             cam.transform.localPosition = camPosRest;
             cam.transform.localRotation = camRotRest;
             cam.fieldOfView = fovRest;
@@ -447,12 +470,11 @@ public class TCWebBonus : MonoBehaviour
         swingCo = null;
     }
 
-    float HangRadius() => 0.18f;
-
-    float PendulumExtra(float swingU)
+    float SwingOrbitExtraZ(float relYawDeg, float swingU)
     {
-        float mid = Mathf.Sin(Mathf.PI * Mathf.Clamp01(swingU));
-        return Mathf.Lerp(HangRadius(), 0.70f, mid);
+        float side = Mathf.Abs(Mathf.Sin(relYawDeg * Mathf.Deg2Rad));
+        float baseExtra = Mathf.Lerp(0.76f, 0.30f, Mathf.Pow(side, 1.35f));
+        return baseExtra + 0.09f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(swingU));
     }
 
     void BindSwingBody(Transform sp)
@@ -461,11 +483,12 @@ public class TCWebBonus : MonoBehaviour
         swingBodyRest = swingBody ? swingBody.localPosition : Vector3.zero;
     }
 
-    void ApplyPendulumRadius(float extraZ)
+    void ApplyPendulumRadius(float extraZ, float extraY = 0f)
     {
         if (!swingBody) return;
         var lp = swingBodyRest;
         lp.z += extraZ;
+        lp.y += extraY;
         swingBody.localPosition = lp;
     }
 
@@ -474,11 +497,10 @@ public class TCWebBonus : MonoBehaviour
         if (swingBody) swingBody.localPosition = swingBodyRest;
     }
 
-    void SetSpiderTrails(Transform sp, bool on)
+    void PauseExistingTrails(Transform sp)
     {
-        // The skin trail (and any leftover swing trail) reads as fat white bars
-        // once the spider starts moving quickly. Kill them for the showcase.
-        var roots = new System.Collections.Generic.List<Transform>();
+        pausedTrails.Clear();
+        var roots = new List<Transform>();
         if (sp) roots.Add(sp);
         var pl = player.Instance;
         if (pl)
@@ -494,124 +516,35 @@ public class TCWebBonus : MonoBehaviour
             if (!root) continue;
             foreach (var tr in root.GetComponentsInChildren<TrailRenderer>(true))
             {
-                if (!tr || !seen.Add(tr)) continue;
+                if (!tr || !seen.Add(tr) || tr == bodyTrail) continue;
+                pausedTrails.Add((tr, tr.enabled, tr.emitting));
                 tr.Clear();
-                tr.emitting = on;
-                tr.enabled = on;
+                tr.emitting = false;
+                tr.enabled = false;
             }
         }
+    }
+
+    void RestorePausedTrails()
+    {
+        for (int i = 0; i < pausedTrails.Count; i++)
+        {
+            var entry = pausedTrails[i];
+            if (!entry.tr) continue;
+            entry.tr.Clear();
+            entry.tr.enabled = entry.enabled;
+            entry.tr.emitting = entry.emitting;
+        }
+        pausedTrails.Clear();
     }
 
     void SetSilkVisible(bool on)
     {
-        if (webLine) webLine.enabled = false;
-        if (webGlow) webGlow.enabled = false;
-        if (webOutline) webOutline.enabled = false;
-        if (silkCore) silkCore.gameObject.SetActive(on);
-        if (silkGlow) silkGlow.gameObject.SetActive(on);
-        if (silkEdge) silkEdge.gameObject.SetActive(on);
+        if (webLine) webLine.enabled = on;
+        if (webGlow) webGlow.enabled = on;
     }
 
-    void SetSpiderOutline(TCCuteSpider cute, bool on)
-    {
-        if (!on)
-        {
-            if (swingRim)
-            {
-                Destroy(swingRim.gameObject);
-                swingRim = null;
-            }
-            if (swingOutlineRoot)
-            {
-                Destroy(swingOutlineRoot.gameObject);
-                swingOutlineRoot = null;
-            }
-            return;
-        }
-        var host = cute ? cute.transform : swingBody;
-        if (!host) return;
-        if (swingOutlineRoot) Destroy(swingOutlineRoot.gameObject);
-        swingOutlineRoot = new GameObject("SwingOutline").transform;
-        swingOutlineRoot.SetParent(host, false);
-        var dark = MakeSilkMat(new Color(0.07f, 0.06f, 0.10f, 1f), false, false);
-        dark.renderQueue = 1990;
-        if (dark.HasProperty("_ZWrite")) dark.SetInt("_ZWrite", 1);
-        if (dark.HasProperty("_Cull")) dark.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Front);
-        dark.SetInt("_CullMode", (int)UnityEngine.Rendering.CullMode.Front);
-        foreach (var mf in host.GetComponentsInChildren<MeshFilter>(true))
-        {
-            if (!mf || !mf.sharedMesh) continue;
-            if (mf.transform == swingOutlineRoot || mf.transform.IsChildOf(swingOutlineRoot)) continue;
-            var mr0 = mf.GetComponent<MeshRenderer>();
-            if (!mr0 || !mr0.enabled) continue;
-            AddOutlineHull(mf.transform, mf.sharedMesh, dark, 1.10f, "o");
-        }
-        if (!swingRim)
-        {
-            var lg = new GameObject("SwingRim");
-            swingRim = lg.AddComponent<Light>();
-            swingRim.type = LightType.Point;
-            swingRim.color = new Color(0.85f, 0.95f, 1f, 1f);
-            swingRim.intensity = 1.0f;
-            swingRim.range = 1.6f;
-            swingRim.shadows = LightShadows.None;
-        }
-    }
-
-    static void AddOutlineHull(Transform src, Mesh mesh, Material mat, float scale, string name)
-    {
-        var go = new GameObject(name);
-        go.transform.SetParent(src, false);
-        go.transform.localPosition = Vector3.zero;
-        go.transform.localRotation = Quaternion.identity;
-        go.transform.localScale = Vector3.one * scale;
-        var cmf = go.AddComponent<MeshFilter>();
-        cmf.sharedMesh = mesh;
-        var mr = go.AddComponent<MeshRenderer>();
-        mr.sharedMaterial = mat;
-        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        mr.receiveShadows = false;
-        mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-    }
-
-    void LiftSpiderSort(TCCuteSpider cute, bool lift)
-    {
-        if (lift)
-        {
-            spiderRenderers.Clear();
-            spiderQueues.Clear();
-            var host = cute ? cute.transform : swingBody;
-            if (!host) return;
-            foreach (var r in host.GetComponentsInChildren<Renderer>(true))
-            {
-                if (!r) continue;
-                spiderRenderers.Add(r);
-                int q = 2000;
-                var sm = r.sharedMaterial;
-                if (sm) q = sm.renderQueue;
-                spiderQueues.Add(q);
-                var mats = r.materials;
-                for (int i = 0; i < mats.Length; i++)
-                    if (mats[i]) mats[i].renderQueue = 3200;
-            }
-        }
-        else
-        {
-            for (int i = 0; i < spiderRenderers.Count; i++)
-            {
-                var r = spiderRenderers[i];
-                if (!r) continue;
-                int q = i < spiderQueues.Count ? spiderQueues[i] : 2000;
-                var mats = r.materials;
-                for (int j = 0; j < mats.Length; j++)
-                    if (mats[j]) mats[j].renderQueue = q;
-            }
-            spiderRenderers.Clear();
-            spiderQueues.Clear();
-        }
-    }
-
-    void TickSwing(player pl, float y, float yaw, float extraZ, float dutch, ref float yPrev)
+    void TickSwing(player pl, float y, float yaw, float extraZ, float extraY, ref float yPrev)
     {
         if (pl && pl.p1)
         {
@@ -621,8 +554,8 @@ public class TCWebBonus : MonoBehaviour
             ClimbSpeed = (y - yPrev) / dt;
             yPrev = y;
         }
-        ApplyPendulumRadius(extraZ);
-        DriveSwingCam(dutch);
+        ApplyPendulumRadius(extraZ, extraY);
+        DriveSwingCam(0f);
     }
 
     Vector3 VisualSpiderPos()
@@ -638,140 +571,15 @@ public class TCWebBonus : MonoBehaviour
     {
         var cam = swingCam ? swingCam : Camera.main;
         if (!cam || !swingCamActive) return;
-        fovKick = Mathf.MoveTowards(fovKick, 0f, Time.unscaledDeltaTime * 48f);
 
         var pl = player.Instance;
         Vector3 spiderPos = VisualSpiderPos();
         Vector3 axis = pl && pl.p1 ? pl.p1.position : spiderPos;
-        axis.y = spiderPos.y;
-        float yawRad = (pl ? pl.CurrentYaw : 0f) * Mathf.Deg2Rad;
-        Vector3 outward = new Vector3(Mathf.Sin(yawRad), 0f, Mathf.Cos(yawRad));
-        Vector3 tangent = Vector3.Cross(Vector3.up, outward);
 
-        // Bias the look toward the trunk so the spider stays on the bark side of
-        // the frame (never isolated against empty sky) and fully in view.
-        Vector3 trunkSide = axis + outward * (TrunkRadius + 0.10f);
-        trunkSide.y = spiderPos.y;
-        Vector3 lookAt = Vector3.Lerp(spiderPos, trunkSide, 0.22f) + Vector3.up * 0.08f;
-        Vector3 camPos = lookAt + outward * 0.68f + tangent * 1.20f + Vector3.up * 0.06f;
-        Vector3 fromAxis = camPos; fromAxis.x -= axis.x; fromAxis.z -= axis.z; fromAxis.y = 0f;
-        float radial = fromAxis.magnitude;
-        const float minRadial = TrunkRadius + 1.10f;
-        if (radial < minRadial)
-        {
-            Vector3 push = radial > 1e-4f ? fromAxis.normalized : (outward + tangent).normalized;
-            camPos += push * (minRadial - radial);
-        }
-        if (swingRim)
-        {
-            Vector3 back = (camPos - lookAt);
-            if (back.sqrMagnitude < 1e-6f) back = outward;
-            swingRim.transform.position = spiderPos - back.normalized * 0.30f + Vector3.up * 0.22f;
-        }
-
-        Vector3 lookDir = lookAt - camPos;
-        if (lookDir.sqrMagnitude < 1e-6f) lookDir = -outward;
-        Quaternion camRot = Quaternion.LookRotation(lookDir.normalized, Vector3.up)
-                          * Quaternion.AngleAxis(dutch, Vector3.forward);
-
-        if (blend < 0.999f)
-        {
-            cam.transform.position = Vector3.Lerp(fromPos, camPos, blend);
-            cam.transform.rotation = Quaternion.Slerp(fromRot, camRot, blend);
-        }
-        else
-        {
-            cam.transform.position = camPos;
-            cam.transform.rotation = camRot;
-        }
-        cam.fieldOfView = 42f + fovKick;
-        EnforceSpiderInFrame(cam, axis, dutch);
-        // Last-ditch snap: never ship a frame where the body is off-screen.
-        Vector3 mid = VisualSpiderPos();
-        var vp = cam.WorldToViewportPoint(mid);
-        if (vp.z <= 0.12f || vp.x < 0.16f || vp.x > 0.82f || vp.y < 0.18f || vp.y > 0.84f)
-        {
-            Vector3 snap = mid + outward * 0.62f + tangent * 1.08f + Vector3.up * 0.08f;
-            Vector3 xz = snap; xz.x -= axis.x; xz.z -= axis.z; xz.y = 0f;
-            float rad = xz.magnitude;
-            const float minR = TrunkRadius + 1.02f;
-            if (rad < minR && rad > 1e-4f) snap += xz.normalized * (minR - rad);
-            cam.transform.position = snap;
-            Vector3 look = mid - snap;
-            if (look.sqrMagnitude > 1e-6f)
-                cam.transform.rotation = Quaternion.LookRotation(look.normalized, Vector3.up)
-                                      * Quaternion.AngleAxis(dutch, Vector3.forward);
-        }
-    }
-
-    void EnforceSpiderInFrame(Camera cam, Vector3 axis, float dutch)
-    {
-        if (!cam) return;
-        // Use a stable world-radius sphere around the visual center. Mesh AABB
-        // corners explode during 360 flips and were panning the camera into empty sky.
-        Vector3 mid = VisualSpiderPos();
-        const float radius = 0.34f;
-        for (int pass = 0; pass < 4; pass++)
-        {
-            var vp = cam.WorldToViewportPoint(mid);
-            if (vp.z <= 0.08f)
-            {
-                cam.transform.position -= cam.transform.forward * 0.35f;
-            }
-            else
-            {
-                float dist = Mathf.Max(0.5f, Vector3.Distance(cam.transform.position, mid));
-                float halfH = dist * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
-                float halfW = halfH * cam.aspect;
-                float ur = radius / (2f * halfW);
-                float vr = radius / (2f * halfH);
-                float minX = vp.x - ur, maxX = vp.x + ur;
-                float minY = vp.y - vr, maxY = vp.y + vr;
-                Vector3 shift = Vector3.zero;
-                const float x0 = 0.14f, x1 = 0.80f, y0 = 0.18f, y1 = 0.84f;
-                if (minX < x0) shift -= cam.transform.right * Mathf.Min(0.45f, (x0 - minX) * 2f * halfW);
-                if (maxX > x1) shift += cam.transform.right * Mathf.Min(0.45f, (maxX - x1) * 2f * halfW);
-                if (minY < y0) shift -= cam.transform.up * Mathf.Min(0.45f, (y0 - minY) * 2f * halfH);
-                if (maxY > y1) shift += cam.transform.up * Mathf.Min(0.45f, (maxY - y1) * 2f * halfH);
-                if (shift.sqrMagnitude < 1e-8f) break;
-                cam.transform.position += shift;
-            }
-            Vector3 xz = cam.transform.position - axis; xz.y = 0f;
-            float radial = xz.magnitude;
-            const float minRadial = TrunkRadius + 1.02f;
-            if (radial < minRadial && radial > 1e-4f)
-                cam.transform.position += xz.normalized * (minRadial - radial);
-            // Re-aim at the spider so a pan can never leave us staring at empty sky.
-            Vector3 lookDir = mid - cam.transform.position;
-            if (lookDir.sqrMagnitude > 1e-6f)
-                cam.transform.rotation = Quaternion.LookRotation(lookDir.normalized, Vector3.up)
-                                      * Quaternion.AngleAxis(dutch, Vector3.forward);
-        }
-    }
-
-    Vector3[] VisualSpiderCorners()
-    {
-        var cute = ResolveCute(swingBody);
-        Transform host = cute ? cute.transform : swingBody;
-        if (!host) return System.Array.Empty<Vector3>();
-        bool init = false;
-        Bounds b = new Bounds();
-        foreach (var r in host.GetComponentsInChildren<MeshRenderer>())
-        {
-            if (!r || !r.enabled || !r.gameObject.activeInHierarchy) continue;
-            if (swingOutlineRoot && (r.transform == swingOutlineRoot || r.transform.IsChildOf(swingOutlineRoot))) continue;
-            if (!init) { b = r.bounds; init = true; }
-            else b.Encapsulate(r.bounds);
-        }
-        if (!init) return new[] { host.position };
-        var e = b.extents; var c = b.center;
-        return new[]
-        {
-            c + new Vector3( e.x,  e.y,  e.z), c + new Vector3( e.x,  e.y, -e.z),
-            c + new Vector3( e.x, -e.y,  e.z), c + new Vector3( e.x, -e.y, -e.z),
-            c + new Vector3(-e.x,  e.y,  e.z), c + new Vector3(-e.x,  e.y, -e.z),
-            c + new Vector3(-e.x, -e.y,  e.z), c + new Vector3(-e.x, -e.y, -e.z)
-        };
+        // Preserve the exact gameplay camera angle, offset from the trunk, and FOV.
+        cam.transform.position = new Vector3(axis.x, camBaselineY, axis.z) + camWorldOffsetRest;
+        cam.transform.rotation = camWorldRotRest;
+        cam.fieldOfView = fovRest;
     }
 
 
@@ -798,34 +606,32 @@ public class TCWebBonus : MonoBehaviour
 
     void LingerCurrentSilk()
     {
-        ClearFadingSilk();
-        if (!silkCore || !silkCore.gameObject.activeSelf) return;
-        StartCoroutine(FadeRibbonLinger(lingerTip, lingerAnchor, 14f, new Color(0.08f, 0.09f, 0.14f, 0.85f), false, 2990, 0.4f));
-        StartCoroutine(FadeRibbonLinger(lingerTip, lingerAnchor, 10f, new Color(0.98f, 0.99f, 1f, 0.85f), false, 3020, 0.4f));
-    }
+        if (!webLine || !webLine.enabled) return;
+        Vector3 dir = lingerAnchor - lingerTip;
+        if (dir.sqrMagnitude < 0.005f) return;
 
-    IEnumerator FadeRibbonLinger(Vector3 tip, Vector3 anchor, float pixels, Color color, bool additive, int queue, float life)
-    {
-        var ribbon = MakeRibbon("TCSilkFade", color, additive, queue);
-        var mr = ribbon.GetComponent<MeshRenderer>();
-        var mat = mr ? mr.material : null;
-        var baseCol = color;
-        float t = 0f;
-        while (t < life && ribbon)
-        {
-            t += Time.deltaTime;
-            PlaceRibbon(ribbon, tip, anchor, pixels);
-            float a = 1f - Smooth(t / life);
-            if (mat)
-            {
-                var c = baseCol; c.a = baseCol.a * a;
-                mat.color = c;
-                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", c);
-                if (mat.HasProperty("_Color")) mat.SetColor("_Color", c);
-            }
-            yield return null;
-        }
-        if (ribbon) Destroy(ribbon.gameObject);
+        var go = new GameObject("TCSilkLinger");
+        go.transform.SetParent(transform, false);
+        var lr = go.AddComponent<LineRenderer>();
+        lr.positionCount = 2;
+        lr.SetPosition(0, lingerTip);
+        lr.SetPosition(1, lingerAnchor);
+        lr.startWidth = 0.042f;
+        lr.endWidth = 0.026f;
+        lr.useWorldSpace = true;
+        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        lr.receiveShadows = false;
+        lr.numCapVertices = 3;
+        var mat = MakeSilkMat(new Color(0.92f, 0.97f, 1f, 0.65f), true, true);
+        if (silkShimmerTex) mat.mainTexture = silkShimmerTex;
+        lr.sharedMaterial = mat;
+        lr.startColor = new Color(0.94f, 0.98f, 1f, 0.65f);
+        lr.endColor = new Color(0.75f, 0.92f, 1f, 0.35f);
+
+        fadingSilk.Add(lr);
+        fadingAge.Add(0f);
+        fadingLife.Add(0.26f);
+        fadingMat.Add(mat);
     }
 
     void ClearFadingSilk()
@@ -849,9 +655,8 @@ public class TCWebBonus : MonoBehaviour
             var lr = fadingSilk[i];
             if (lr)
             {
-                var col = fadingMat[i] && fadingMat[i].HasProperty("_Color")
-                    ? fadingMat[i].color : new Color(0.94f, 0.97f, 1f, 0.55f);
-                if (fadingMat[i]) fadingMat[i].color = new Color(col.r, col.g, col.b, 0.55f * a);
+                if (fadingMat[i])
+                    SetMatColor(fadingMat[i], new Color(0.94f, 0.97f, 1f, 0.55f * a));
                 lr.startColor = new Color(0.94f, 0.97f, 1f, 0.55f * a);
                 lr.endColor = new Color(0.85f, 0.94f, 1f, 0.30f * a);
             }
@@ -884,135 +689,53 @@ public class TCWebBonus : MonoBehaviour
         return FindObjectOfType<TCCuteSpider>();
     }
 
-    static Vector3 SpinneretWorld(TCCuteSpider cute, Transform sp)
+    static Vector3 FrontWebOrigin(TCCuteSpider cute, Transform sp)
     {
-        if (cute) return cute.SpinneretTip();
-        if (sp) return sp.position + sp.up * 0.05f - sp.forward * 0.2f;
+        if (cute) return cute.WebOrigin();
+        if (sp) return sp.position + Vector3.up * 0.10f;
         return Vector3.zero;
     }
 
     void DrawSilk(Vector3 tip, Vector3 anchor, float taut, float age)
     {
-        EnsureSilkRibbons();
-        if (webLine) webLine.enabled = false;
-        if (webGlow) webGlow.enabled = false;
-        if (webOutline) webOutline.enabled = false;
-
+        EnsureWeb();
         Vector3 dir = anchor - tip;
-        float rawLen = dir.magnitude;
-        if (rawLen > 0.10f) tip = tip + dir / rawLen * 0.14f;
+        float len = dir.magnitude;
+        if (len < 0.04f)
+        {
+            SetSilkVisible(false);
+            return;
+        }
         lingerTip = tip;
         lingerAnchor = anchor;
-        // Camera-facing ribbons with a screen-space width cap. Mesh tubes (and
-        // LineRenderers) bloom into opaque bars when the strand comes near the
-        // lens; a view-facing card stays a thread and goes edge-on when aligned.
-        PlaceRibbon(silkEdge, tip, anchor, 14f);
-        PlaceRibbon(silkGlow, tip, anchor, 20f);
-        PlaceRibbon(silkCore, tip, anchor, 10f);
-        TickSplat(anchor);
-    }
+        silkTaut = taut;
 
-    void EnsureSilkRibbons()
-    {
-        if (silkCore) return;
-        silkEdge = MakeRibbon("TCSilkEdge", new Color(0.08f, 0.09f, 0.14f, 1f), false, 2990);
-        silkGlow = MakeRibbon("TCSilkGlow", new Color(0.40f, 0.82f, 1f, 0.28f), true, 3010);
-        silkCore = MakeRibbon("TCSilkCore", new Color(0.98f, 0.99f, 1f, 1f), false, 3020);
-    }
-
-    Transform MakeRibbon(string name, Color color, bool additive, int queue)
-    {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        var col = go.GetComponent<Collider>();
-        if (col) Destroy(col);
-        go.name = name;
-        go.transform.SetParent(transform, false);
-        var mr = go.GetComponent<MeshRenderer>();
-        var mat = MakeSilkMat(color, additive, true);
-        mat.renderQueue = queue;
-        if (mr)
-        {
-            mr.sharedMaterial = mat;
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-        }
-        go.SetActive(false);
-        return go.transform;
-    }
-
-    void PlaceRibbon(Transform t, Vector3 a, Vector3 b, float pixels)
-    {
-        if (!t) return;
+        // Subtle whip-wave while shooting out; snaps dead taut under swing tension.
         var cam = swingCam ? swingCam : Camera.main;
-        if (cam && !ClipAwayFromPoint(cam.transform.position, 1.20f, ref a, ref b))
-        {
-            t.gameObject.SetActive(false);
-            return;
-        }
-        Vector3 d = b - a;
-        float len = d.magnitude;
-        if (len < 0.06f || !cam)
-        {
-            t.gameObject.SetActive(false);
-            return;
-        }
-        Vector3 mid = (a + b) * 0.5f;
-        Vector3 toCam = cam.transform.position - mid;
-        if (toCam.sqrMagnitude < 1e-6f)
-        {
-            t.gameObject.SetActive(false);
-            return;
-        }
-        Vector3 view = toCam.normalized;
-        Vector3 dir = d / len;
-        // Hide when looking nearly along the strand (ribbon would be edge-on or unstable).
-        if (Mathf.Abs(Vector3.Dot(dir, view)) > 0.94f)
-        {
-            t.gameObject.SetActive(false);
-            return;
-        }
-        float dist = Mathf.Min(Vector3.Distance(cam.transform.position, a), Vector3.Distance(cam.transform.position, b));
-        dist = Mathf.Max(0.85f, dist);
-        float worldPerPx = 2f * dist * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1f, cam.pixelHeight);
-        float width = worldPerPx * pixels;
-        t.gameObject.SetActive(true);
-        t.position = mid;
-        t.rotation = Quaternion.LookRotation(view, dir);
-        t.localScale = new Vector3(width, len, 1f);
-    }
+        Vector3 camFwd = cam ? cam.transform.forward : Vector3.forward;
+        Vector3 side = Vector3.Cross(dir / len, camFwd);
+        if (side.sqrMagnitude < 1e-4f) side = Vector3.right;
+        side.Normalize();
+        float whipAmp = (1f - Mathf.Clamp01(taut)) * Mathf.Min(0.14f, len * 0.09f);
 
-    static bool ClipAwayFromPoint(Vector3 p, float r, ref Vector3 a, ref Vector3 b)
-    {
-        Vector3 ab = b - a;
-        float len = ab.magnitude;
-        if (len < 1e-5f) return false;
-        Vector3 n = ab / len;
-        Vector3 ap = a - p;
-        float B = 2f * Vector3.Dot(ap, n);
-        float C = ap.sqrMagnitude - r * r;
-        float disc = B * B - 4f * C;
-        if (disc < 0f)
-            return ap.sqrMagnitude >= r * r && (b - p).sqrMagnitude >= r * r;
-
-        float sqrt = Mathf.Sqrt(disc);
-        float tEnter = (-B - sqrt) * 0.5f;
-        float tExit = (-B + sqrt) * 0.5f;
-
-        float best0 = 0f, best1 = -1f;
-        void Consider(float u0, float u1)
+        const int Segs = 10;
+        if (webLine.positionCount != Segs) webLine.positionCount = Segs;
+        if (webGlow.positionCount != Segs) webGlow.positionCount = Segs;
+        for (int i = 0; i < Segs; i++)
         {
-            u0 = Mathf.Max(0f, u0);
-            u1 = Mathf.Min(len, u1);
-            if (u1 - u0 < 0.05f) return;
-            if (u1 > best1) { best0 = u0; best1 = u1; }
+            float s = i / (float)(Segs - 1);
+            Vector3 p = Vector3.Lerp(tip, anchor, s);
+            if (whipAmp > 1e-4f)
+                p += side * (Mathf.Sin(Mathf.PI * s) * Mathf.Sin(s * Mathf.PI * 2f - age * 42f) * whipAmp);
+            webLine.SetPosition(i, p);
+            webGlow.SetPosition(i, p);
         }
-        Consider(0f, tEnter);
-        Consider(tExit, len);
-        if (best1 < 0f) return false;
-        Vector3 orig = a;
-        a = orig + n * best0;
-        b = orig + n * best1;
-        return true;
+        if (webLine.material && silkShimmerTex)
+            webLine.material.mainTextureOffset = new Vector2(-age * 4.5f, 0f);
+
+        webLine.enabled = true;
+        webGlow.enabled = true;
+        TickSplat(anchor);
     }
 
     ParticleSystem EnsureWind(Transform sp)
@@ -1021,39 +744,38 @@ public class TCWebBonus : MonoBehaviour
         if (!sp) return null;
         var go = new GameObject("SwingWind");
         go.transform.SetParent(sp, false);
-        go.transform.localPosition = new Vector3(0f, 0.1f, -0.15f);
+        go.transform.localPosition = new Vector3(0f, -0.05f, 0f);
         windTrail = go.AddComponent<ParticleSystem>();
         var main = windTrail.main;
         main.loop = true;
         main.duration = 1f;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.28f, 0.5f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(3.2f, 5.5f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.11f);
-        main.startColor = new Color(0.92f, 0.97f, 1f, 0.8f);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.22f, 0.38f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(2.4f, 4.5f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.12f);
+        main.startColor = new Color(0.88f, 0.96f, 1f, 0.85f);
         main.simulationSpace = ParticleSystemSimulationSpace.World;
         var em = windTrail.emission;
-        em.rateOverTime = 90f;
+        em.rateOverTime = 55f;
         var sh = windTrail.shape;
-        sh.shapeType = ParticleSystemShapeType.Cone;
-        sh.angle = 18f;
-        sh.radius = 0.08f;
+        sh.shapeType = ParticleSystemShapeType.Sphere;
+        sh.radius = 0.12f;
         var col = windTrail.colorOverLifetime;
         col.enabled = true;
         var g = new Gradient();
         g.SetKeys(
-            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(0.7f, 0.85f, 1f), 1f) },
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(0.65f, 0.88f, 1f), 1f) },
             new[] { new GradientAlphaKey(0.85f, 0f), new GradientAlphaKey(0f, 1f) });
         col.color = g;
         var sol = windTrail.sizeOverLifetime;
         sol.enabled = true;
-        sol.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.2f));
+        sol.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.15f));
         var rend = go.GetComponent<ParticleSystemRenderer>();
         if (rend)
         {
             rend.renderMode = ParticleSystemRenderMode.Stretch;
-            rend.velocityScale = 0.08f;
-            rend.lengthScale = 3.2f;
-            rend.material = MakeSilkMat(new Color(0.95f, 0.98f, 1f, 0.8f), true, true);
+            rend.velocityScale = 0.06f;
+            rend.lengthScale = 2.6f;
+            rend.sharedMaterial = TCFxLib.Mat("Spark");
         }
         windTrail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         return windTrail;
@@ -1065,17 +787,21 @@ public class TCWebBonus : MonoBehaviour
         var host = sp;
         var cute = ResolveCute(sp);
         if (cute) host = cute.transform;
-        bodyTrail = host.gameObject.GetComponent<TrailRenderer>();
-        if (!bodyTrail) bodyTrail = host.gameObject.AddComponent<TrailRenderer>();
-        bodyTrail.time = 0.28f;
+        var go = new GameObject("TCSwingRibbon");
+        go.transform.SetParent(host, false);
+        go.transform.localPosition = Vector3.zero;
+        bodyTrail = go.AddComponent<TrailRenderer>();
+        bodyTrail.time = 0.34f;
         bodyTrail.minVertexDistance = 0.04f;
-        bodyTrail.startWidth = 0.22f;
-        bodyTrail.endWidth = 0.02f;
+        bodyTrail.startWidth = 0.18f;
+        bodyTrail.endWidth = 0.01f;
         bodyTrail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         bodyTrail.receiveShadows = false;
-        bodyTrail.material = MakeSilkMat(new Color(0.75f, 0.95f, 1f, 0.55f), true, true);
-        bodyTrail.startColor = new Color(0.9f, 0.98f, 1f, 0.7f);
-        bodyTrail.endColor = new Color(0.6f, 0.85f, 1f, 0f);
+        var tmat = MakeSilkMat(new Color(0.65f, 0.92f, 1f, 0.65f), true, true);
+        if (silkShimmerTex) tmat.mainTexture = silkShimmerTex;
+        bodyTrail.material = tmat;
+        bodyTrail.startColor = new Color(0.85f, 0.97f, 1f, 0.72f);
+        bodyTrail.endColor = new Color(0.45f, 0.82f, 1f, 0f);
         bodyTrail.emitting = false;
         bodyTrail.Clear();
     }
@@ -1196,17 +922,7 @@ public class TCWebBonus : MonoBehaviour
             t += Time.deltaTime;
             float a = 1f - Smooth(t / life);
             if (mat)
-            {
-                var c = mat.color;
-                c.a = 0.85f * a;
-                mat.color = c;
-                if (mat.HasProperty("_BaseColor"))
-                {
-                    var b = mat.GetColor("_BaseColor");
-                    b.a = c.a;
-                    mat.SetColor("_BaseColor", b);
-                }
-            }
+                SetMatColor(mat, new Color(0.95f, 0.97f, 1f, 0.85f * a));
             yield return null;
         }
         if (go) Destroy(go);
@@ -1415,55 +1131,45 @@ public class TCWebBonus : MonoBehaviour
         var go = new GameObject("TCWebStrand");
         go.transform.SetParent(transform, false);
         webLine = go.AddComponent<LineRenderer>();
-        webLine.positionCount = 2;
-        webLine.startWidth = 0.045f;
-        webLine.endWidth = 0.036f;
+        webLine.positionCount = 10;
+        webLine.startWidth = 0.048f;
+        webLine.endWidth = 0.032f;
         webLine.useWorldSpace = true;
         webLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         webLine.receiveShadows = false;
         webLine.numCapVertices = 4;
         webLine.numCornerVertices = 2;
         webLine.textureMode = LineTextureMode.Tile;
-        webLine.material = MakeSilkMat(new Color(0.95f, 0.97f, 1f, 0.70f), false, true);
+        webLine.material = MakeSilkMat(new Color(0.96f, 0.99f, 1f, 0.92f), false, true);
         if (webLine.material && silkShimmerTex)
         {
             webLine.material.mainTexture = silkShimmerTex;
             webLine.material.mainTextureScale = new Vector2(3f, 1f);
         }
-        webLine.startColor = new Color(0.96f, 0.98f, 1f, 0.70f);
-        webLine.endColor = new Color(0.88f, 0.95f, 1f, 0.50f);
+        webLine.startColor = new Color(0.98f, 0.99f, 1f, 0.95f);
+        webLine.endColor = new Color(0.85f, 0.95f, 1f, 0.78f);
         webLine.enabled = false;
 
         var glowGo = new GameObject("TCWebGlow");
         glowGo.transform.SetParent(transform, false);
         webGlow = glowGo.AddComponent<LineRenderer>();
-        webGlow.positionCount = 2;
-        webGlow.startWidth = 0.09f;
-        webGlow.endWidth = 0.07f;
+        webGlow.positionCount = 10;
+        webGlow.startWidth = 0.115f;
+        webGlow.endWidth = 0.075f;
         webGlow.useWorldSpace = true;
         webGlow.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         webGlow.receiveShadows = false;
         webGlow.numCapVertices = 4;
         webGlow.textureMode = LineTextureMode.Tile;
-        webGlow.material = MakeSilkMat(new Color(0.7f, 0.92f, 1f, 0.22f), true, true);
-        webGlow.startColor = new Color(0.7f, 0.92f, 1f, 0.16f);
-        webGlow.endColor = new Color(0.55f, 0.85f, 1f, 0.10f);
+        webGlow.material = MakeSilkMat(new Color(0.55f, 0.90f, 1f, 0.35f), true, true);
+        if (webGlow.material && silkShimmerTex)
+        {
+            webGlow.material.mainTexture = silkShimmerTex;
+            webGlow.material.mainTextureScale = new Vector2(2f, 1f);
+        }
+        webGlow.startColor = new Color(0.65f, 0.92f, 1f, 0.38f);
+        webGlow.endColor = new Color(0.45f, 0.85f, 1f, 0.16f);
         webGlow.enabled = false;
-
-        var outlineGo = new GameObject("TCWebOutline");
-        outlineGo.transform.SetParent(transform, false);
-        webOutline = outlineGo.AddComponent<LineRenderer>();
-        webOutline.positionCount = 2;
-        webOutline.startWidth = 0.082f;
-        webOutline.endWidth = 0.070f;
-        webOutline.useWorldSpace = true;
-        webOutline.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        webOutline.receiveShadows = false;
-        webOutline.numCapVertices = 0;
-        webOutline.material = MakeSilkMat(new Color(0.10f, 0.11f, 0.16f, 0.90f), false, true);
-        webOutline.startColor = new Color(0.10f, 0.11f, 0.16f, 0.90f);
-        webOutline.endColor = new Color(0.10f, 0.11f, 0.16f, 0.70f);
-        webOutline.enabled = false;
 
         var anchor = new GameObject("TCWebAnchor");
         webAnchor = anchor.transform;
@@ -1493,22 +1199,29 @@ public class TCWebBonus : MonoBehaviour
         return tex;
     }
 
+    static void SetMatColor(Material m, Color c)
+    {
+        if (!m) return;
+        if (m.HasProperty("_TintColor")) m.SetColor("_TintColor", c);
+        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+        if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+    }
+
     static Material MakeSilkMat(Color color, bool additive, bool transparent)
     {
-        Shader sh = null;
-        if (additive)
+        Shader sh = Shader.Find("TallCrawl/FX Particle");
+        if (!sh && additive)
             sh = Shader.Find("Mobile/Particles/Additive")
-              ?? Shader.Find("Legacy Shaders/Particles/Additive")
-              ?? Shader.Find("Universal Render Pipeline/Particles/Unlit")
-              ?? Shader.Find("Universal Render Pipeline/Unlit");
+              ?? Shader.Find("Legacy Shaders/Particles/Additive");
         if (!sh)
-            sh = Shader.Find("Universal Render Pipeline/Unlit")
-              ?? Shader.Find("Unlit/Color")
-              ?? Shader.Find("Sprites/Default");
-        var m = new Material(sh) { color = color, name = additive ? "TCSilkGlow" : "TCSilk" };
-        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
-        if (m.HasProperty("_Color")) m.SetColor("_Color", color);
-        if (m.HasProperty("_TintColor")) m.SetColor("_TintColor", color);
+            sh = Shader.Find("Mobile/Particles/Alpha Blended")
+              ?? Shader.Find("Sprites/Default")
+              ?? Shader.Find("Universal Render Pipeline/Unlit")
+              ?? Shader.Find("Unlit/Color");
+        var m = new Material(sh) { name = additive ? "TCSilkGlow" : "TCSilk" };
+        SetMatColor(m, color);
+        if (m.HasProperty("_Additive")) m.SetFloat("_Additive", additive ? 1f : 0f);
+        if (m.HasProperty("_Boost")) m.SetFloat("_Boost", additive ? 1.4f : 1.15f);
         if (transparent || additive)
         {
             if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);
@@ -1520,7 +1233,6 @@ public class TCWebBonus : MonoBehaviour
                     ? (int)UnityEngine.Rendering.BlendMode.One
                     : (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             if (m.HasProperty("_ZWrite")) m.SetInt("_ZWrite", 0);
-            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             m.renderQueue = additive ? 3100 : 3000;
         }
         return m;

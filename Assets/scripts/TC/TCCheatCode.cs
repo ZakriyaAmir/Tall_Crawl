@@ -12,8 +12,8 @@ using UnityEngine.UI;
 /// writes sensitivity.
 public class TCCheatCode
 {
-    public const float Timeout = 6f;
-    public const float ExtremeEps = 0.08f; // fraction of slider range (forgiving on a fat handle)
+    public const float Timeout = 12f;
+    public const float ExtremeEps = 0.12f; // fraction of slider range (forgiving on a fat handle / mobile swipe)
     public const float DuplicateWindow = 0.05f; // ignore duplicate feeds within 50 ms
 
     public enum Kind { Sound, Vibration, Music, SliderMin, SliderMax, SliderOther, Other }
@@ -67,6 +67,14 @@ public class TCCheatCode
         if (IsSliderStep(expect) && kind == Kind.SliderOther)
         {
             Debug.Log("[TCCheat] Feed " + kind + " progress " + Progress + " (mid-drag ignored)");
+            return false;
+        }
+        // When waiting for the initial slider extreme (SliderMin at progress 4), the slider
+        // handle may currently be parked at SliderMax (e.g. max sensitivity 2.2) or moving
+        // away from SliderMax. Ignore SliderMax while waiting for the first SliderMin.
+        if (Progress == 4 && kind == Kind.SliderMax)
+        {
+            Debug.Log("[TCCheat] Feed " + kind + " progress " + Progress + " (initial SliderMax ignored, waiting for SliderMin)");
             return false;
         }
         // Repeated events at the same extreme (Unity fires onValueChanged while the
@@ -147,31 +155,34 @@ public class TCCheatCode
         c = new TCCheatCode();
         Check(!c.Feed(Kind.Vibration, 0f) && c.Progress == 0, "Vibration first is ignored");
 
-        // Wrong slider extreme
+        // Initial slider position at SliderMax (e.g. knob parked at 2.2 / far right)
+        // when waiting for initial SliderMin is ignored and does not reset
         c = new TCCheatCode();
         c.Feed(Kind.Sound, 0f); c.Feed(Kind.Sound, 0.1f);
         c.Feed(Kind.Vibration, 0.2f); c.Feed(Kind.Vibration, 0.3f);
-        Check(!c.Feed(Kind.SliderMax, 0.4f) && c.Progress == 0, "far right when far left expected resets");
+        Check(!c.Feed(Kind.SliderMax, 0.4f) && c.Progress == 4, "far right when waiting for initial far left is ignored");
+        Check(!c.Feed(Kind.SliderOther, 0.5f) && c.Progress == 4, "mid-drag towards left ignored");
+        Check(!c.Feed(Kind.SliderMin, 0.6f) && c.Progress == 5, "reaching far left advances to 5");
 
         // Timeout
         c = new TCCheatCode();
         c.Feed(Kind.Sound, 0f); c.Feed(Kind.Sound, 0.1f);
         c.Feed(Kind.Vibration, 0.2f); c.Feed(Kind.Vibration, 0.3f);
-        Check(!c.Feed(Kind.SliderMin, 6.01f) && c.Progress == 0, "input after 6s timeout resets (does not advance)");
+        Check(!c.Feed(Kind.SliderMin, Timeout + 0.01f) && c.Progress == 0, "input after timeout resets (does not advance)");
 
         // Timeout is measured from the first tap, even if later taps are on time relative to each other
         c = new TCCheatCode();
         c.Feed(Kind.Sound, 1.0f); c.Feed(Kind.Sound, 1.2f);
         c.Feed(Kind.Vibration, 1.4f); c.Feed(Kind.Vibration, 1.6f);
         c.Feed(Kind.SliderMin, 1.8f); c.Feed(Kind.SliderMax, 2.0f); c.Feed(Kind.SliderMin, 2.2f);
-        Check(!c.Feed(Kind.SliderMax, 7.05f) && c.Progress == 0, "last extreme after 6s from first tap fails");
+        Check(!c.Feed(Kind.SliderMax, 1.0f + Timeout + 0.05f) && c.Progress == 0, "last extreme after timeout from first tap fails");
 
         // Completing just inside the window succeeds
         c = new TCCheatCode();
         c.Feed(Kind.Sound, 2.0f); c.Feed(Kind.Sound, 2.2f);
         c.Feed(Kind.Vibration, 3.0f); c.Feed(Kind.Vibration, 3.5f);
         c.Feed(Kind.SliderMin, 4.0f); c.Feed(Kind.SliderMax, 5.0f); c.Feed(Kind.SliderMin, 6.0f);
-        Check(c.Feed(Kind.SliderMax, 7.99f) && c.Progress == 0, "completes at 5.99s");
+        Check(c.Feed(Kind.SliderMax, 2.0f + Timeout - 0.01f) && c.Progress == 0, "completes just inside timeout window");
 
         // Other input (Done / Privacy) mid-sequence
         c = new TCCheatCode();
@@ -239,11 +250,22 @@ public class TCCheatCode
         Check(!c.Feed(Kind.Sound, 0.02f) && c.Progress == 1, "duplicate Sound within 50ms ignored");
         Check(!c.Feed(Kind.Sound, 0.10f) && c.Progress == 2, "second real Sound advances");
 
-        // ClassifySlider — 8% band at each end
+        // ONE continuous drag starting from far right (1.0f / SliderMax, like in MainMenu):
+        // Dragging right-to-left to hit min first must not reset and completes successfully.
+        c = new TCCheatCode();
+        c.Feed(Kind.Sound, 0f); c.Feed(Kind.Sound, 0.2f);
+        c.Feed(Kind.Vibration, 0.4f); c.Feed(Kind.Vibration, 0.6f);
+        t = 0.8f;
+        Check(Sweep(1.0f, 0f, false) && c.Progress == 5, "continuous from far-right: first left end");
+        Check(Sweep(0f, 1f, false) && c.Progress == 6, "first right end");
+        Check(Sweep(1f, 0f, false) && c.Progress == 7, "second left end");
+        Check(Sweep(0f, 1f, true) && c.Progress == 0, "second right end completes (one drag from far-right start)");
+
+        // ClassifySlider — ExtremeEps band at each end
         Check(ClassifySlider(0.4f, 0.4f, 2.2f) == Kind.SliderMin, "classify min");
-        Check(ClassifySlider(0.4f + 0.08f * 1.8f, 0.4f, 2.2f) == Kind.SliderMin, "classify min at 8%");
+        Check(ClassifySlider(0.4f + ExtremeEps * 1.8f, 0.4f, 2.2f) == Kind.SliderMin, "classify min at extreme eps");
         Check(ClassifySlider(2.2f, 0.4f, 2.2f) == Kind.SliderMax, "classify max");
-        Check(ClassifySlider(2.2f - 0.08f * 1.8f, 0.4f, 2.2f) == Kind.SliderMax, "classify max at 8%");
+        Check(ClassifySlider(2.2f - ExtremeEps * 1.8f, 0.4f, 2.2f) == Kind.SliderMax, "classify max at extreme eps");
         Check(ClassifySlider(1.3f, 0.4f, 2.2f) == Kind.SliderOther, "classify mid");
 
         return fails;

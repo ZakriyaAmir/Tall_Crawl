@@ -34,6 +34,7 @@ public class TCTrack : MonoBehaviour
     // is guaranteed to respawn at another spot after 8–12 s (no extra roll).
     public const float LetterCheckInterval = HeartCheckInterval * 2f;
     public const float LetterCheckChance = 0.25f;
+    public float CurrentLetterCheckChance => (gameManager.Instance != null) ? gameManager.Instance.webPickupSpawnProbability : LetterCheckChance;
     public const float LetterMissRetryMin = 8f;
     public const float LetterMissRetryMax = 12f;
     int rowIndex; bool lastWasBee; player pl;
@@ -171,7 +172,7 @@ public class TCTrack : MonoBehaviour
         Debug.Log(string.Format(
             "[TCTrack] Health pickup: every {0:0}s at {1:0}% (expected 1 per {2:0}s). WEB letters: every {3:0}s at {4:0}% (expected 1 per {5:0}s), missed letters retry in {6:0}–{7:0}s, once per run. letterPool={8}",
             HeartCheckInterval, HeartCheckChance * 100f, HeartCheckInterval / HeartCheckChance,
-            LetterCheckInterval, LetterCheckChance * 100f, LetterCheckInterval / LetterCheckChance,
+            LetterCheckInterval, CurrentLetterCheckChance * 100f, LetterCheckInterval / Mathf.Max(0.01f, CurrentLetterCheckChance),
             LetterMissRetryMin, LetterMissRetryMax,
             letterPool != null ? "ready" : "MISSING"));
 
@@ -261,7 +262,7 @@ public class TCTrack : MonoBehaviour
             }
             else
             {
-                letterEligible = letterEligible || (Random.value < LetterCheckChance);
+                letterEligible = letterEligible || (Random.value < CurrentLetterCheckChance);
             }
         }
 

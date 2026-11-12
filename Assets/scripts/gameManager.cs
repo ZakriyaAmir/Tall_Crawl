@@ -10,6 +10,11 @@ public class gameManager : MonoBehaviour
     public Camera camera;
     public GameObject Sun;
 
+    [Header("WEB Letter Pickups")]
+    [Range(0.1f, 1.0f)]
+    [Tooltip("Spawn probability for W E B letter pickups (0.1 - 1.0)")]
+    public float webPickupSpawnProbability = 0.25f;
+
     public static gameManager Instance;
     public int coinsCollected;
     public bool revivedThisRun, runEnded;

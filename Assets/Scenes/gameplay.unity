@@ -16175,6 +16175,7 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 3dbd22ee621b53340ac1805ed119577c, type: 3}
   camera: {fileID: 206422001}
   Sun: {fileID: 705507993}
+  webPickupSpawnProbability: 1
   coinsCollected: 0
   revivedThisRun: 0
   runEnded: 0

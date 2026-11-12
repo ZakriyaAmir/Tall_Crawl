@@ -502,6 +502,14 @@ public partial class TCCuteSpider : MonoBehaviour
         return transform.position;
     }
 
+    /// World position of the front claws/face where forward swing silk shoots cleanly without intersecting the body.
+    public Vector3 WebOrigin()
+    {
+        if (head) return head.TransformPoint(new Vector3(0f, 0.18f, 0.55f));
+        if (body) return body.TransformPoint(new Vector3(0f, 0.24f, 0.72f));
+        return transform.position;
+    }
+
     public void SetSwingPose(float lean, float roll, float twist, float squash, float tuck = 0f)
     {
         swingLean = lean; swingRoll = roll; swingTwist = twist; swingSquash = squash; swingTuck = tuck;

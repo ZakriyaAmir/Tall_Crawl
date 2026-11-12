@@ -187,7 +187,7 @@ public class TCPickupFX : MonoBehaviour
                 var s = TCFxLib.PS(fx, "Snowflakes", "Snow", new Vector3(0, 0, -0.08f), 14);
                 var m = s.main; m.startLifetime = new ParticleSystem.MinMaxCurve(1.4f, 2.0f); m.startSize = new ParticleSystem.MinMaxCurve(size * 0.18f, size * 0.32f); m.startColor = new ParticleSystem.MinMaxGradient(Color.white, c1);
                 var em = s.emission; em.rateOverTime = 4.5f; TCFxLib.Sphere(s, size * 1.0f, 0.15f); TCFxLib.SpinRandom(s, 60);
-                var v = s.velocityOverLifetime; v.enabled = true; v.space = ParticleSystemSimulationSpace.Local; v.orbitalZ = new ParticleSystem.MinMaxCurve(0.9f, 1.3f); v.y = new ParticleSystem.MinMaxCurve(-0.08f, -0.03f); v.x = new ParticleSystem.MinMaxCurve(0, 0); v.z = new ParticleSystem.MinMaxCurve(0, 0);
+                var v = s.velocityOverLifetime; v.enabled = true; v.space = ParticleSystemSimulationSpace.Local; v.orbitalX = new ParticleSystem.MinMaxCurve(0, 0); v.orbitalY = new ParticleSystem.MinMaxCurve(0, 0); v.orbitalZ = new ParticleSystem.MinMaxCurve(0.9f, 1.3f); v.y = new ParticleSystem.MinMaxCurve(-0.08f, -0.03f); v.x = new ParticleSystem.MinMaxCurve(0, 0); v.z = new ParticleSystem.MinMaxCurve(0, 0);
                 TCFxLib.ColorLife(s, TCFxLib.Fade(Color.white, c2, 0.15f, 0.65f)); TCFxLib.SizeLife(s, 0, 0.3f, 0.2f, 1, 1, 0.7f);
                 var mist = TCFxLib.PS(fx, "FrostMist", "GlowSoft", new Vector3(0, 0, 0.02f), 8);
                 var mm = mist.main; mm.startLifetime = 1.8f; mm.startSize = new ParticleSystem.MinMaxCurve(size * 1.2f, size * 1.8f); mm.startColor = new Color(c2.r, c2.g, c2.b, 0.35f);
@@ -199,7 +199,7 @@ public class TCPickupFX : MonoBehaviour
                 var c = TCFxLib.PS(fx, "CoinsIn", "Coin", new Vector3(0, 0, -0.08f), 14);
                 var m = c.main; m.startLifetime = 0.9f; m.startSize = new ParticleSystem.MinMaxCurve(size * 0.2f, size * 0.3f); m.startColor = Color.white;
                 var em = c.emission; em.rateOverTime = 5; TCFxLib.Sphere(c, size * 1.5f, 0f);
-                var v = c.velocityOverLifetime; v.enabled = true; v.space = ParticleSystemSimulationSpace.Local; v.radial = new ParticleSystem.MinMaxCurve(-1.4f, -1.1f); v.orbitalZ = new ParticleSystem.MinMaxCurve(1.5f, 2.0f); v.x = new ParticleSystem.MinMaxCurve(0, 0); v.y = new ParticleSystem.MinMaxCurve(0, 0); v.z = new ParticleSystem.MinMaxCurve(0, 0);
+                var v = c.velocityOverLifetime; v.enabled = true; v.space = ParticleSystemSimulationSpace.Local; v.radial = new ParticleSystem.MinMaxCurve(-1.4f, -1.1f); v.orbitalX = new ParticleSystem.MinMaxCurve(0, 0); v.orbitalY = new ParticleSystem.MinMaxCurve(0, 0); v.orbitalZ = new ParticleSystem.MinMaxCurve(1.5f, 2.0f); v.x = new ParticleSystem.MinMaxCurve(0, 0); v.y = new ParticleSystem.MinMaxCurve(0, 0); v.z = new ParticleSystem.MinMaxCurve(0, 0);
                 TCFxLib.SizeLife(c, 0, 0.6f, 0.2f, 1, 0.8f, 0.8f, 1, 0); TCFxLib.ColorLife(c, TCFxLib.Fade(Color.white, Color.white, 0.15f, 0.8f));
                 var b = TCFxLib.PS(fx, "Bolts", "Bolt", new Vector3(0, 0, -0.08f), 6);
                 var mb = b.main; mb.startLifetime = new ParticleSystem.MinMaxCurve(0.12f, 0.2f); mb.startSize = new ParticleSystem.MinMaxCurve(size * 0.4f, size * 0.6f); mb.startColor = new ParticleSystem.MinMaxGradient(c2, TCFxLib.Hex("#7FD8FF"));
