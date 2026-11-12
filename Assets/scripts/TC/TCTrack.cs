@@ -20,6 +20,7 @@ public class TCTrack : MonoBehaviour
     float nextHeartEligibleTime;
     float nextLetterEligibleTime;
     bool letterEligible;
+    bool letterMissRetry;
     float runActiveTimer;
     float clearUntilY = -999f;
     TCPool letterPool;
@@ -28,10 +29,13 @@ public class TCTrack : MonoBehaviour
     // Every 10 s a 20% roll may place a heart on the next bonus slot (expected 1 / 50 s).
     public const float HeartCheckInterval = 10f;
     public const float HeartCheckChance = 0.20f;
-    // WEB letters spawn at half that frequency: same 20% chance, twice the interval
-    // (expected 1 / 100 s), and only until the single WEB swing of the run is earned.
+    // WEB letters: 25% chance every 20 s (1.25x the previous 20%/20s rate, expected 1 / 80 s)
+    // until the single WEB swing of the run is earned. A letter that scrolls past uncollected
+    // is guaranteed to respawn at another spot after 8–12 s (no extra roll).
     public const float LetterCheckInterval = HeartCheckInterval * 2f;
-    public const float LetterCheckChance = HeartCheckChance;
+    public const float LetterCheckChance = 0.25f;
+    public const float LetterMissRetryMin = 8f;
+    public const float LetterMissRetryMax = 12f;
     int rowIndex; bool lastWasBee; player pl;
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
@@ -162,11 +166,13 @@ public class TCTrack : MonoBehaviour
         nextHeartEligibleTime = Time.time + HeartCheckInterval;
         nextLetterEligibleTime = Time.time + LetterCheckInterval;
         letterEligible = false;
+        letterMissRetry = false;
         EnsureLetterPool();
         Debug.Log(string.Format(
-            "[TCTrack] Health pickup: every {0:0}s at {1:0}% (expected 1 per {2:0}s). WEB letters: every {3:0}s at {4:0}% (expected 1 per {5:0}s), once per run. letterPool={6}",
+            "[TCTrack] Health pickup: every {0:0}s at {1:0}% (expected 1 per {2:0}s). WEB letters: every {3:0}s at {4:0}% (expected 1 per {5:0}s), missed letters retry in {6:0}–{7:0}s, once per run. letterPool={8}",
             HeartCheckInterval, HeartCheckChance * 100f, HeartCheckInterval / HeartCheckChance,
             LetterCheckInterval, LetterCheckChance * 100f, LetterCheckInterval / LetterCheckChance,
+            LetterMissRetryMin, LetterMissRetryMax,
             letterPool != null ? "ready" : "MISSING"));
 
         // Spawn High Score Milestone Tag & Ribbon on trunk if previous high score exists
@@ -215,7 +221,12 @@ public class TCTrack : MonoBehaviour
             if (!p) { live.RemoveAt(i); continue; }
             // collected / smashed items are hidden by gameplay: return them to their pool (was leaking)
             if (!p.gameObject.activeSelf) { p.Release(); live.RemoveAt(i); continue; }
-            if (p.y < cut) { p.Release(); live.RemoveAt(i); }
+            if (p.y < cut)
+            {
+                if (p.kind == "webletter") NoteMissedLetter(p);
+                p.Release();
+                live.RemoveAt(i);
+            }
         }
     }
 
@@ -242,7 +253,16 @@ public class TCTrack : MonoBehaviour
         if (Time.time >= nextLetterEligibleTime)
         {
             nextLetterEligibleTime = Time.time + LetterCheckInterval;
-            letterEligible = letterEligible || (Random.value < LetterCheckChance);
+            if (letterMissRetry)
+            {
+                // Guaranteed retry of the same uncollected letter, no extra roll.
+                letterEligible = true;
+                letterMissRetry = false;
+            }
+            else
+            {
+                letterEligible = letterEligible || (Random.value < LetterCheckChance);
+            }
         }
 
         if (breather)
@@ -816,6 +836,12 @@ public class TCTrack : MonoBehaviour
         return Spawn(cooldownPool, "cooldown", y, angle);
     }
 
+    /// Capture helper: place a health pickup at a world Y / yaw so it can sit next to a letter.
+    public TCPooled SpawnHeartNow(float y, float angle)
+    {
+        return Spawn(heartPool, "heart", y, angle);
+    }
+
     void EnsureLetterPool()
     {
         if (letterPool != null) return;
@@ -832,6 +858,21 @@ public class TCTrack : MonoBehaviour
         }
         letterProto.SetActive(false);
         letterPool = new TCPool(letterProto, bonusParent, 4);
+    }
+
+    /// A letter scrolled past the player uncollected. Respawn the same letter
+    /// (NextLetterToSpawn is unchanged until it is collected) after 8–12 s, guaranteed.
+    void NoteMissedLetter(TCPooled p)
+    {
+        var web = TCWebBonus.Instance;
+        if (web == null || !web.CanSpawnLetter(0f)) return;
+        var letter = p ? p.GetComponentInChildren<TCWebLetter>(true) : null;
+        if (letter && web.HasLetter(letter.letter)) return;
+        letterMissRetry = true;
+        letterEligible = false;
+        nextLetterEligibleTime = Time.time + Random.Range(LetterMissRetryMin, LetterMissRetryMax);
+        Debug.Log("[TCTrack] Missed WEB letter " + (letter ? letter.letter.ToString() : "?") +
+                  " — retry in " + (nextLetterEligibleTime - Time.time).ToString("0.0") + "s");
     }
 
     bool TrySpawnLetter(float y, float angle, float metres)
@@ -876,14 +917,21 @@ public class TCTrack : MonoBehaviour
     {
         if (!player) return;
         float py = player.position.y;
-        float cut = py + worldDist;
+        ClearHazardsInRange(py - 8f, py + worldDist);
+    }
+
+    /// Release every live non-trunk item in [yMin, yMax] (world Y).
+    public void ClearHazardsInRange(float yMin, float yMax)
+    {
         for (int i = live.Count - 1; i >= 0; i--)
         {
             var item = live[i];
             if (!item) { live.RemoveAt(i); continue; }
             if (item.kind == "trunk") continue;
-            if (item.y >= py - 0.5f && item.y <= cut)
+            if (item.y >= yMin && item.y <= yMax)
             {
+                if (item.kind == "webletter" && player && item.y < player.position.y)
+                    NoteMissedLetter(item);
                 item.Release();
                 live.RemoveAt(i);
             }

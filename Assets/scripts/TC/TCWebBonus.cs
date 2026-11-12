@@ -16,7 +16,7 @@ public class TCWebBonus : MonoBehaviour
     public const int SwingCount = 10;
     public const float SwingSeconds = 9f; // 0.9 s per thwip-and-swing cycle
     public const float GraceSeconds = 1.8f;
-    // Letter cadence lives in TCTrack (half the health-pickup frequency).
+    // Letter cadence lives in TCTrack (25% every 20s, missed letters retry in 8–12s).
     // The WEB swing is earned at most once per run; after that no more letters spawn.
 
     public bool HasW { get; private set; }
@@ -57,6 +57,17 @@ public class TCWebBonus : MonoBehaviour
     Quaternion camRotRest, camRotClose;
     float fovRest;
     Camera swingCam;
+    Animator camAnimRest;
+    bool camAnimWasEnabled;
+    Transform camParentRest;
+    Vector3 camScaleRest;
+    bool swingCamActive;
+    Transform swingBody;
+    Vector3 swingBodyRest;
+    readonly List<Renderer> spiderRenderers = new List<Renderer>();
+    readonly List<int> spiderQueues = new List<int>();
+    GameObject splatDecal;
+
     TextMeshProUGUI swingMeterLabel, swingPopLabel;
     RectTransform swingHudRt, swingPopRt;
     CanvasGroup swingHudCg, swingPopCg;
@@ -129,6 +140,7 @@ public class TCWebBonus : MonoBehaviour
         if (!changed) return;
         TCSfx.Play("coin", 0.9f);
         TCFx.Shake(0.08f);
+        TCPickupFX.Burst(TCPickupKind.Letter, pos);
         OnLettersChanged?.Invoke();
         if (AllCollected && !IsSwinging) BeginSwing();
     }
@@ -161,44 +173,29 @@ public class TCWebBonus : MonoBehaviour
         if (pl) pl.ResetInputState();
         metresAtSwingStart = pl ? pl.currentScore : 0f;
 
-        TCTrack.Instance?.ClearHazardsAhead(80f);
-        TCTrack.Instance?.ReserveClearRun(DistanceBonusMetres);
+        float mpuEarly = TCConfig.I != null ? Mathf.Max(0.01f, TCConfig.I.metresPerUnit) : 20f;
+        float clearWorld = DistanceBonusMetres / mpuEarly + 40f;
+        TCTrack.Instance?.ClearHazardsAhead(clearWorld);
+        TCTrack.Instance?.ReserveClearRun(DistanceBonusMetres + 600f);
 
         EnsureWeb();
         EnsureSwingHud();
         TCFx.Shake(0.18f);
         TCSfx.Play("celebrate", 0.85f);
 
+        BindSwingBody(sp);
+        LiftSpiderSort(cute, true);
+        SetSpiderTrails(sp, false);
+
         var cam = Camera.main;
         swingCam = cam;
+        camParentRest = cam ? cam.transform.parent : null;
         camPosRest = cam ? cam.transform.localPosition : Vector3.zero;
         camRotRest = cam ? cam.transform.localRotation : Quaternion.identity;
+        camScaleRest = cam ? cam.transform.localScale : Vector3.one;
         fovRest = cam ? cam.fieldOfView : 64f;
-        // Pull IN along the same line of sight so the spider reads 2–3× larger,
-        // with the same look-up-the-trunk framing.
-        Vector3 look = new Vector3(0f, -0.78f, 0.66f);
-        Vector3 outDir = camPosRest - look;
-        camPosClose = look + outDir * (1f / 2.15f);
-        // Pitch down so the spider sits mid-low in the frame, with room under it,
-        // and the silk running up the trunk is visible above.
-        camRotClose = camRotRest;
         dutchNow = 0f;
         fovKick = 0f;
-
-        if (cam)
-        {
-            float z = 0f;
-            while (z < 0.28f)
-            {
-                z += Time.unscaledDeltaTime;
-                float k = Smooth(z / 0.28f);
-                cam.transform.localPosition = Vector3.Lerp(camPosRest, camPosClose, k);
-                cam.transform.localRotation = Quaternion.Slerp(camRotRest, camRotClose, k);
-                cam.fieldOfView = Mathf.Lerp(fovRest, fovRest - 4f, k);
-                yield return null;
-            }
-            ApplySwingCam(0f, 0f);
-        }
 
         float mpu = TCConfig.I != null ? Mathf.Max(0.01f, TCConfig.I.metresPerUnit) : 20f;
         float worldUnits = DistanceBonusMetres / mpu;
@@ -208,8 +205,30 @@ public class TCWebBonus : MonoBehaviour
         float yEnd = y0 + worldUnits;
         float yaw = pl ? pl.CurrentYaw : (sp ? sp.eulerAngles.y : 0f);
 
+        // Dedicated world-space swing camera: unparent so p1 yaw no longer
+        // cancels the orbit (that was why every frame looked like the same straight-up view).
+        if (cam)
+        {
+            Vector3 fromPos = cam.transform.position;
+            Quaternion fromRot = cam.transform.rotation;
+            camAnimRest = cam.GetComponent<Animator>();
+            camAnimWasEnabled = camAnimRest && camAnimRest.enabled;
+            if (camAnimRest) camAnimRest.enabled = false;
+            cam.transform.SetParent(null, true);
+            swingCamActive = true;
+            ApplyPendulumRadius(HangRadius());
+            float z = 0f;
+            while (z < 0.32f)
+            {
+                z += Time.unscaledDeltaTime;
+                float k = Smooth(z / 0.32f);
+                DriveSwingCam(0f, k, fromPos, fromRot);
+                yield return null;
+            }
+        }
+
         var trail = EnsureWind(sp);
-        if (trail) { trail.Clear(); trail.Play(); }
+        if (trail) { trail.Clear(); trail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); }
 
         const int Shots = SwingCount;
         float cycle = SwingSeconds / Shots;
@@ -233,11 +252,11 @@ public class TCWebBonus : MonoBehaviour
             silkLive = true;
             silkAge = 0f;
             if (webLine) webLine.enabled = true;
-            if (webGlow) webGlow.enabled = true;
+            if (webGlow) webGlow.enabled = false;
             PlayThwip(shot);
-            fovKick = 18f;
+            fovKick = 6f;
             TCFx.Shake(0.12f);
-            if (cute) cute.SetSwingPose(-28f, 10f, 0f, 0.32f, -1f); // splay + squash on the shot
+            if (cute) cute.SetSwingPose(-28f, 10f, 0f, 0.32f, -1f);
             if (shot == 1 || shot == 6) TCSfx.PlayVoice(false, 0.62f, 1.04f + shot * 0.03f);
 
             float t = 0f;
@@ -246,24 +265,18 @@ public class TCWebBonus : MonoBehaviour
                 t += Time.deltaTime;
                 float ext = Mathf.Clamp01(t / ThwipDur);
                 ext = ext * ext * (3f - 2f * ext);
+                TickSwing(pl, yStart, yawStart, HangRadius(), dutchNow, ref yPrev);
                 silkTip = SpinneretWorld(cute, sp);
                 silkAnchor = Vector3.Lerp(silkTip, anchorFixed, ext);
                 if (webAnchor) webAnchor.position = silkAnchor;
-                DrawSilk(silkTip, silkAnchor, 0.15f + 0.2f * ext, silkAge); // loose flying arc
-                if (pl && pl.p1)
-                {
-                    var pos = pl.p1.position; pos.y = yStart;
-                    pl.ApplySwingTransform(pos, yawStart);
-                    yPrev = yStart;
-                }
-                ApplySwingCam(dutchNow, fovKick);
+                DrawSilk(silkTip, silkAnchor, 0.15f + 0.2f * ext, silkAge);
                 yield return null;
             }
             silkAnchor = anchorFixed;
             if (webAnchor) webAnchor.position = silkAnchor;
             DrawSilk(silkTip, silkAnchor, 1f, silkAge);
             SpawnAnchorBurst(anchorFixed, axis);
-            if (cute) cute.SetSwingPose(-22f, 8f, 0f, 0.38f, -0.85f); // catch squash
+            if (cute) cute.SetSwingPose(-22f, 8f, 0f, 0.38f, -0.85f);
             TCFx.Shake(0.08f);
 
             // --- 2. Pendulum while orbiting the trunk ---
@@ -280,31 +293,22 @@ public class TCWebBonus : MonoBehaviour
                 float y = Mathf.Lerp(yStart, yLand, Smooth(pend)) - dip;
                 float taut = 0.55f + 0.45f * Mathf.Abs(Mathf.Cos(swingU * Mathf.PI));
 
-                silkTip = SpinneretWorld(cute, sp);
-                silkAnchor = anchorFixed;
-                if (webAnchor) webAnchor.position = silkAnchor;
-                DrawSilk(silkTip, silkAnchor, taut, silkAge);
-
                 if (cute)
                 {
                     float lean = -22f - 20f * Mathf.Sin(swingU * Mathf.PI);
                     float roll = 26f * Mathf.Sin(swingU * Mathf.PI);
                     float twist = 16f * pend;
-                    // Mid-swing: legs tucked. Stretch slightly through the bottom.
                     float squash = 0.08f - 0.16f * Mathf.Sin(swingU * Mathf.PI);
                     cute.SetSwingPose(lean, roll, twist, squash, 0.95f);
                 }
 
-                dutchNow = 11f * Mathf.Sin(swingU * Mathf.PI) * (shot % 2 == 0 ? 1f : -1f);
-                if (pl && pl.p1)
-                {
-                    var pos = pl.p1.position; pos.y = y;
-                    pl.ApplySwingTransform(pos, yaw);
-                    float dt = Mathf.Max(Time.deltaTime, 1e-4f);
-                    ClimbSpeed = (y - yPrev) / dt;
-                    yPrev = y;
-                }
-                ApplySwingCam(dutchNow, fovKick);
+                dutchNow = 8f * Mathf.Sin(swingU * Mathf.PI) * (shot % 2 == 0 ? 1f : -1f);
+                TickSwing(pl, y, yaw, PendulumExtra(swingU), dutchNow, ref yPrev);
+
+                silkTip = SpinneretWorld(cute, sp);
+                silkAnchor = anchorFixed;
+                if (webAnchor) webAnchor.position = silkAnchor;
+                DrawSilk(silkTip, silkAnchor, taut, silkAge);
                 yield return null;
             }
             yaw = yawLand;
@@ -328,27 +332,16 @@ public class TCWebBonus : MonoBehaviour
                     float k = Mathf.Clamp01(flip / 0.55f);
                     float y = landY + Mathf.Sin(k * Mathf.PI) * 0.28f;
                     if (cute) cute.SetSwingPose(-8f, 16f, 360f * Smooth(k), -0.14f * Mathf.Sin(k * Mathf.PI), -0.7f + k * 0.4f);
-                    if (pl && pl.p1)
-                    {
-                        var pos = pl.p1.position; pos.y = y;
-                        pl.ApplySwingTransform(pos, yawLand);
-                        ClimbSpeed = (y - yPrev) / Mathf.Max(Time.deltaTime, 1e-4f);
-                        yPrev = y;
-                    }
                     dutchNow = Mathf.Lerp(dutchNow, 0f, k);
-                    ApplySwingCam(dutchNow, fovKick);
-                        yield return null;
+                    TickSwing(pl, y, yawLand, HangRadius(), dutchNow, ref yPrev);
+                    yield return null;
                 }
                 yaw = yawLand;
-                if (pl && pl.p1)
-                {
-                    var pos = pl.p1.position; pos.y = landY;
-                    pl.ApplySwingTransform(pos, yaw);
-                }
+                TickSwing(pl, landY, yaw, HangRadius(), 0f, ref yPrev);
             }
             else
             {
-                if (cute) cute.SetSwingPose(-6f, 10f, 0f, -0.22f, -1f); // stretch + splay on release
+                if (cute) cute.SetSwingPose(-6f, 10f, 0f, -0.22f, -1f);
                 float flip = 0f;
                 while (flip < FlipDur)
                 {
@@ -356,22 +349,14 @@ public class TCWebBonus : MonoBehaviour
                     float k = Mathf.Clamp01(flip / FlipDur);
                     float y = yLand + Mathf.Sin(k * Mathf.PI) * 0.22f;
                     if (cute) cute.SetSwingPose(-10f, 18f, 360f * k, -0.16f * Mathf.Sin(k * Mathf.PI), -0.85f);
-                    if (pl && pl.p1)
-                    {
-                        var pos = pl.p1.position; pos.y = y;
-                        pl.ApplySwingTransform(pos, yawLand);
-                        ClimbSpeed = (y - yPrev) / Mathf.Max(Time.deltaTime, 1e-4f);
-                        yPrev = y;
-                    }
                     dutchNow = Mathf.Lerp(dutchNow, 0f, k);
-                    ApplySwingCam(dutchNow, fovKick);
-                        yield return null;
+                    TickSwing(pl, y, yawLand, HangRadius(), dutchNow, ref yPrev);
+                    yield return null;
                 }
             }
         }
 
         if (trail) trail.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-        // Keep the last strand visible through the landing hold, then fade it.
         if (cute) { cute.ClearSwingPose(); cute.TriggerLandBounce(); }
         SpawnLandingBurst(sp ? sp.position : Vector3.zero);
         ShowFiveThousandPop();
@@ -384,7 +369,8 @@ public class TCWebBonus : MonoBehaviour
         while (hold < 1.0f)
         {
             hold += Time.unscaledDeltaTime;
-            if (cam) ApplySwingCam(0f, 0f);
+            ApplyPendulumRadius(HangRadius());
+            DriveSwingCam(0f);
             yield return null;
         }
         ShowcaseHold = false;
@@ -393,8 +379,17 @@ public class TCWebBonus : MonoBehaviour
         if (webLine) webLine.enabled = false;
         if (webGlow) webGlow.enabled = false;
 
-        if (cam)
+        RestoreSwingBody();
+        LiftSpiderSort(cute, false);
+        SetSpiderTrails(sp, true);
+        if (splatDecal) { Destroy(splatDecal); splatDecal = null; }
+
+        if (cam && swingCamActive)
         {
+            cam.transform.SetParent(camParentRest, true);
+            cam.transform.localScale = camScaleRest;
+            swingCamActive = false;
+            if (camAnimRest) camAnimRest.enabled = camAnimWasEnabled;
             float z = 0f;
             var fromPos = cam.transform.localPosition;
             var fromRot = cam.transform.localRotation;
@@ -411,7 +406,9 @@ public class TCWebBonus : MonoBehaviour
             cam.transform.localPosition = camPosRest;
             cam.transform.localRotation = camRotRest;
             cam.fieldOfView = fovRest;
+            cam.transform.localScale = camScaleRest;
         }
+
         HideSwingHud();
 
         ClimbSpeed = 0f;
@@ -431,15 +428,161 @@ public class TCWebBonus : MonoBehaviour
         swingCo = null;
     }
 
-    void ApplySwingCam(float dutch, float kick)
+    float HangRadius() => 0.18f;
+
+    float PendulumExtra(float swingU)
+    {
+        float mid = Mathf.Sin(Mathf.PI * Mathf.Clamp01(swingU));
+        return Mathf.Lerp(HangRadius(), 1.15f, mid);
+    }
+
+    void BindSwingBody(Transform sp)
+    {
+        swingBody = sp;
+        swingBodyRest = swingBody ? swingBody.localPosition : Vector3.zero;
+    }
+
+    void ApplyPendulumRadius(float extraZ)
+    {
+        if (!swingBody) return;
+        var lp = swingBodyRest;
+        lp.z += extraZ;
+        swingBody.localPosition = lp;
+    }
+
+    void RestoreSwingBody()
+    {
+        if (swingBody) swingBody.localPosition = swingBodyRest;
+    }
+
+    void SetSpiderTrails(Transform sp, bool on)
+    {
+        // The skin trail (and any leftover swing trail) reads as fat white bars
+        // once the spider starts moving quickly. Kill them for the showcase.
+        var roots = new System.Collections.Generic.List<Transform>();
+        if (sp) roots.Add(sp);
+        var pl = player.Instance;
+        if (pl)
+        {
+            if (pl.p1) roots.Add(pl.p1);
+            roots.Add(pl.transform);
+        }
+        var cute = ResolveCute(sp);
+        if (cute) roots.Add(cute.transform);
+        var seen = new HashSet<TrailRenderer>();
+        foreach (var root in roots)
+        {
+            if (!root) continue;
+            foreach (var tr in root.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                if (!tr || !seen.Add(tr)) continue;
+                tr.Clear();
+                tr.emitting = on;
+                tr.enabled = on;
+            }
+        }
+    }
+
+    void LiftSpiderSort(TCCuteSpider cute, bool lift)
+    {
+        if (lift)
+        {
+            spiderRenderers.Clear();
+            spiderQueues.Clear();
+            var host = cute ? cute.transform : swingBody;
+            if (!host) return;
+            foreach (var r in host.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!r) continue;
+                spiderRenderers.Add(r);
+                int q = 2000;
+                var sm = r.sharedMaterial;
+                if (sm) q = sm.renderQueue;
+                spiderQueues.Add(q);
+                var mats = r.materials;
+                for (int i = 0; i < mats.Length; i++)
+                    if (mats[i]) mats[i].renderQueue = 3200;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < spiderRenderers.Count; i++)
+            {
+                var r = spiderRenderers[i];
+                if (!r) continue;
+                int q = i < spiderQueues.Count ? spiderQueues[i] : 2000;
+                var mats = r.materials;
+                for (int j = 0; j < mats.Length; j++)
+                    if (mats[j]) mats[j].renderQueue = q;
+            }
+            spiderRenderers.Clear();
+            spiderQueues.Clear();
+        }
+    }
+
+    void TickSwing(player pl, float y, float yaw, float extraZ, float dutch, ref float yPrev)
+    {
+        if (pl && pl.p1)
+        {
+            var pos = pl.p1.position; pos.y = y;
+            pl.ApplySwingTransform(pos, yaw);
+            float dt = Mathf.Max(Time.deltaTime, 1e-4f);
+            ClimbSpeed = (y - yPrev) / dt;
+            yPrev = y;
+        }
+        ApplyPendulumRadius(extraZ);
+        DriveSwingCam(dutch);
+    }
+
+    void DriveSwingCam(float dutch, float blend = 1f, Vector3 fromPos = default, Quaternion fromRot = default)
     {
         var cam = swingCam ? swingCam : Camera.main;
-        if (!cam) return;
+        if (!cam || !swingCamActive) return;
         fovKick = Mathf.MoveTowards(fovKick, 0f, Time.unscaledDeltaTime * 48f);
-        cam.transform.localPosition = camPosClose;
-        cam.transform.localRotation = camRotClose * Quaternion.AngleAxis(dutch, Vector3.forward);
-        cam.fieldOfView = (fovRest - 4f) + fovKick;
+
+        var pl = player.Instance;
+        Vector3 spiderPos = swingBody ? swingBody.position : (ResolveSpider() ? ResolveSpider().position : Vector3.zero);
+        var cute = ResolveCute(swingBody);
+        if (cute) spiderPos = cute.transform.position;
+        Vector3 axis = pl && pl.p1 ? pl.p1.position : spiderPos;
+        axis.y = spiderPos.y;
+        // Yaw is the stable "outward" basis — don't derive it from a bounds center,
+        // which can flip and put the camera in the bark or out in the sky.
+        float yawRad = (pl ? pl.CurrentYaw : 0f) * Mathf.Deg2Rad;
+        Vector3 outward = new Vector3(Mathf.Sin(yawRad), 0f, Mathf.Cos(yawRad));
+        Vector3 tangent = Vector3.Cross(Vector3.up, outward);
+
+        // Side-exterior 3/4: well outside the trunk, looking back at the spider
+        // with the bark behind it. Pendulum offset stays readable.
+        Vector3 lookAt = spiderPos + Vector3.up * 0.05f;
+        Vector3 camPos = lookAt + outward * 0.95f + tangent * 1.35f + Vector3.up * 0.40f;
+        Vector3 fromAxis = camPos; fromAxis.x -= axis.x; fromAxis.z -= axis.z; fromAxis.y = 0f;
+        float radial = fromAxis.magnitude;
+        const float minRadial = TrunkRadius + 1.2f;
+        if (radial < minRadial)
+        {
+            Vector3 push = radial > 1e-4f ? fromAxis.normalized : (outward + tangent).normalized;
+            camPos += push * (minRadial - radial);
+        }
+
+        Vector3 lookDir = lookAt - camPos;
+        if (lookDir.sqrMagnitude < 1e-6f) lookDir = -outward;
+        Quaternion camRot = Quaternion.LookRotation(lookDir.normalized, Vector3.up)
+                          * Quaternion.AngleAxis(dutch, Vector3.forward);
+
+        if (blend < 0.999f)
+        {
+            cam.transform.position = Vector3.Lerp(fromPos, camPos, blend);
+            cam.transform.rotation = Quaternion.Slerp(fromRot, camRot, blend);
+        }
+        else
+        {
+            cam.transform.position = camPos;
+            cam.transform.rotation = camRot;
+        }
+        cam.fieldOfView = 48f + fovKick;
     }
+
 
     static Vector3 OnTrunk(Vector3 axis, float yawDeg, float y, float radius)
     {
@@ -462,31 +605,39 @@ public class TCWebBonus : MonoBehaviour
 
     void LingerCurrentSilk()
     {
-        if (!webLine || webLine.positionCount < 2) return;
-        void Copy(LineRenderer src, float widthMul, Color col, bool glow)
-        {
-            var go = new GameObject(glow ? "TCWebFadeGlow" : "TCWebFade");
-            var lr = go.AddComponent<LineRenderer>();
-            lr.positionCount = src.positionCount;
-            var pts = new Vector3[src.positionCount];
-            src.GetPositions(pts);
-            lr.SetPositions(pts);
-            lr.startWidth = src.startWidth * widthMul;
-            lr.endWidth = src.endWidth * widthMul;
-            lr.useWorldSpace = true;
-            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            lr.receiveShadows = false;
-            lr.textureMode = LineTextureMode.Stretch;
-            var mat = glow ? MakeSilkMat(col, true, true) : MakeSilkMat(col, false, false);
-            lr.material = mat;
-            lr.startColor = col;
-            lr.endColor = new Color(col.r, col.g, col.b, col.a * 0.55f);
-            fadingSilk.Add(lr);
-            fadingAge.Add(0f);
-            fadingLife.Add(glow ? 0.55f : 0.70f);
-            fadingMat.Add(mat);
-        }
-        Copy(webLine, 0.85f, new Color(0.9f, 0.97f, 1f, 0.8f), false);
+        ClearFadingSilk();
+        if (!webLine || !webLine.enabled || webLine.positionCount < 2) return;
+        var go = new GameObject("TCWebFade");
+        var lr = go.AddComponent<LineRenderer>();
+        lr.useWorldSpace = true;
+        lr.positionCount = 2;
+        lr.SetPosition(0, webLine.GetPosition(0));
+        lr.SetPosition(1, webLine.GetPosition(webLine.positionCount - 1));
+        lr.widthMultiplier = 1f;
+        lr.startWidth = 0.030f;
+        lr.endWidth = 0.024f;
+        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        lr.receiveShadows = false;
+        lr.numCapVertices = 0;
+        var col = new Color(0.94f, 0.97f, 1f, 0.40f);
+        var mat = MakeSilkMat(col, false, true);
+        lr.material = mat;
+        lr.startColor = col;
+        lr.endColor = new Color(col.r, col.g, col.b, 0.22f);
+        fadingSilk.Add(lr);
+        fadingAge.Add(0f);
+        fadingLife.Add(0.4f);
+        fadingMat.Add(mat);
+    }
+
+    void ClearFadingSilk()
+    {
+        for (int i = 0; i < fadingSilk.Count; i++)
+            if (fadingSilk[i]) Destroy(fadingSilk[i].gameObject);
+        fadingSilk.Clear();
+        fadingAge.Clear();
+        fadingLife.Clear();
+        fadingMat.Clear();
     }
 
     void TickFadingSilk()
@@ -500,18 +651,11 @@ public class TCWebBonus : MonoBehaviour
             var lr = fadingSilk[i];
             if (lr)
             {
-                // Linger, then a quick thickness snap (no retract, which read as white shards).
-                float snap = u > 0.6f ? Smooth((u - 0.6f) / 0.4f) : 0f;
-                if (snap > 0f)
-                {
-                    lr.startWidth = 0.05f * (1f - snap);
-                    lr.endWidth = 0.04f * (1f - snap);
-                }
                 var col = fadingMat[i] && fadingMat[i].HasProperty("_Color")
-                    ? fadingMat[i].color : new Color(1f, 1f, 1f, 1f);
-                if (fadingMat[i]) fadingMat[i].color = new Color(col.r, col.g, col.b, 0.9f * a);
-                lr.startColor = new Color(1f, 1f, 1f, 0.95f * a);
-                lr.endColor = new Color(0.85f, 0.95f, 1f, 0.5f * a);
+                    ? fadingMat[i].color : new Color(0.94f, 0.97f, 1f, 0.55f);
+                if (fadingMat[i]) fadingMat[i].color = new Color(col.r, col.g, col.b, 0.55f * a);
+                lr.startColor = new Color(0.94f, 0.97f, 1f, 0.55f * a);
+                lr.endColor = new Color(0.85f, 0.94f, 1f, 0.30f * a);
             }
             if (fadingAge[i] >= fadingLife[i])
             {
@@ -552,50 +696,44 @@ public class TCWebBonus : MonoBehaviour
     void DrawSilk(Vector3 tip, Vector3 anchor, float taut, float age)
     {
         if (!webLine) return;
+        // A single thin 2–5 point strand. A dense billboarded polyline is what
+        // turned into the opaque white shards in earlier takes.
+        if (webGlow) webGlow.enabled = false;
         Vector3 dir = anchor - tip;
         float rawLen = dir.magnitude;
-        if (rawLen > 0.12f) tip = tip + dir / rawLen * 0.22f; // start ahead of the body so it does not bloom in the lens
-        const int N = 22;
-        webLine.positionCount = N;
-        if (webGlow) webGlow.positionCount = N;
-        float len = Vector3.Distance(tip, anchor);
-        float sag = Mathf.Lerp(0.28f, 0.04f, Mathf.Clamp01(taut)) * Mathf.Max(0.4f, len);
+        if (rawLen > 0.12f) tip = tip + dir / rawLen * 0.28f;
+        taut = Mathf.Clamp01(taut);
+        int n = taut > 0.65f ? 2 : 5;
+        webLine.positionCount = n;
+        webLine.useWorldSpace = true;
+        webLine.transform.localScale = Vector3.one;
         Vector3 side = Vector3.Cross(anchor - tip, Vector3.up);
         if (side.sqrMagnitude < 1e-6f) side = Vector3.right;
         side.Normalize();
-        for (int i = 0; i < N; i++)
+        float len = Vector3.Distance(tip, anchor);
+        float sag = Mathf.Lerp(0.12f, 0.02f, taut) * Mathf.Max(0.3f, len);
+        for (int i = 0; i < n; i++)
         {
-            float u = i / (N - 1f);
+            float u = n == 1 ? 0f : i / (n - 1f);
             Vector3 p = Vector3.Lerp(tip, anchor, u);
-            float bow = 4f * u * (1f - u);
-            float wob = Mathf.Sin(age * 18f + u * 10f) * 0.04f * (1.1f - taut);
-            p += Vector3.down * (sag * bow) + side * (wob * bow);
+            if (n > 2)
+            {
+                float bow = 4f * u * (1f - u);
+                p += Vector3.down * (sag * bow);
+            }
             webLine.SetPosition(i, p);
-            if (webGlow) webGlow.SetPosition(i, p);
         }
-        // Thick, bright core + a wider additive glow shell. Pulse a shimmer along the length.
-        float pulse = 1f + 0.08f * Mathf.Sin(age * 22f);
-        webLine.widthMultiplier = pulse;
-        webLine.widthCurve = new AnimationCurve(
-            new Keyframe(0f, 0.028f),
-            new Keyframe(0.18f, 0.070f),
-            new Keyframe(1f, 0.060f));
-        webLine.startColor = Color.white;
-        webLine.endColor = new Color(0.85f, 0.95f, 1f, 1f);
+        // startWidth/endWidth write the width curve in world units — never set
+        // a 0–1 multiplier curve or the strand becomes ~1 wu wide white bars.
+        webLine.widthMultiplier = 1f;
+        webLine.startWidth = 0.034f;
+        webLine.endWidth = 0.028f;
+        webLine.startColor = new Color(0.95f, 0.97f, 1f, 0.58f);
+        webLine.endColor = new Color(0.88f, 0.94f, 1f, 0.38f);
+        webLine.numCapVertices = 0;
+        webLine.numCornerVertices = 0;
         if (webLine.material && silkShimmerTex)
             webLine.material.mainTextureOffset = new Vector2(-age * 1.8f, 0f);
-        if (webGlow)
-        {
-            webGlow.widthMultiplier = pulse;
-            webGlow.widthCurve = new AnimationCurve(
-                new Keyframe(0f, 0.06f),
-                new Keyframe(0.18f, 0.15f),
-                new Keyframe(1f, 0.12f));
-            webGlow.startColor = new Color(0.7f, 0.92f, 1f, 0.32f);
-            webGlow.endColor = new Color(0.55f, 0.85f, 1f, 0.22f);
-            if (webGlow.material)
-                webGlow.material.mainTextureOffset = new Vector2(-age * 1.8f, 0f);
-        }
     }
 
     ParticleSystem EnsureWind(Transform sp)
@@ -728,37 +866,95 @@ public class TCWebBonus : MonoBehaviour
 
     void SpawnAnchorBurst(Vector3 pos, Vector3 axis)
     {
-        // Short silk splat on the bark: radial strands that fade quickly.
-        Vector3 normal = (pos - new Vector3(axis.x, pos.y, axis.z));
+        // Small radial web decal + a few soft particles. No LineRenderer bars.
+        Vector3 normal = pos - new Vector3(axis.x, pos.y, axis.z);
         if (normal.sqrMagnitude < 1e-6f) normal = Vector3.forward;
         normal.Normalize();
-        for (int i = 0; i < 7; i++)
+        if (splatDecal) Destroy(splatDecal);
+        splatDecal = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        var col = splatDecal.GetComponent<Collider>();
+        if (col) Destroy(col);
+        splatDecal.name = "WebSplat";
+        splatDecal.transform.position = pos + normal * 0.02f;
+        splatDecal.transform.rotation = Quaternion.LookRotation(normal);
+        splatDecal.transform.localScale = Vector3.one * 0.22f;
+        var mr = splatDecal.GetComponent<MeshRenderer>();
+        if (mr)
         {
-            float ang = i / 7f * Mathf.PI * 2f + Random.Range(-0.2f, 0.2f);
-            Vector3 tangent = Vector3.Cross(normal, Vector3.up);
-            if (tangent.sqrMagnitude < 1e-6f) tangent = Vector3.right;
-            tangent.Normalize();
-            Vector3 bitan = Vector3.Cross(normal, tangent);
-            Vector3 dir = (tangent * Mathf.Cos(ang) + bitan * Mathf.Sin(ang) + normal * 0.15f).normalized;
-            float len = Random.Range(0.18f, 0.38f);
-            var go = new GameObject("AnchorSplat");
-            var lr = go.AddComponent<LineRenderer>();
-            lr.positionCount = 2;
-            lr.SetPosition(0, pos);
-            lr.SetPosition(1, pos + dir * len);
-            lr.startWidth = 0.028f;
-            lr.endWidth = 0.008f;
-            lr.useWorldSpace = true;
-            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            lr.receiveShadows = false;
-            var mat = MakeSilkMat(new Color(1f, 1f, 1f, 0.95f), false, false);
-            lr.material = mat;
-            fadingSilk.Add(lr);
-            fadingAge.Add(0f);
-            fadingLife.Add(0.35f);
-            fadingMat.Add(mat);
+            var mat = MakeSilkMat(new Color(0.95f, 0.97f, 1f, 0.85f), false, true);
+            mat.mainTexture = MakeWebDecalTex();
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", mat.mainTexture);
+            if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", mat.mainTexture);
+            mat.renderQueue = 2450;
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
         }
+        StartCoroutine(FadeSplat(splatDecal, 0.45f));
         BurstParticles(pos, normal, false);
+    }
+
+    IEnumerator FadeSplat(GameObject go, float life)
+    {
+        if (!go) yield break;
+        var mr = go.GetComponent<MeshRenderer>();
+        var mat = mr ? mr.material : null;
+        float t = 0f;
+        while (t < life && go)
+        {
+            t += Time.deltaTime;
+            float a = 1f - Smooth(t / life);
+            if (mat)
+            {
+                var c = mat.color;
+                c.a = 0.85f * a;
+                mat.color = c;
+                if (mat.HasProperty("_BaseColor"))
+                {
+                    var b = mat.GetColor("_BaseColor");
+                    b.a = c.a;
+                    mat.SetColor("_BaseColor", b);
+                }
+            }
+            yield return null;
+        }
+        if (go) Destroy(go);
+        if (splatDecal == go) splatDecal = null;
+    }
+
+    static Texture2D MakeWebDecalTex()
+    {
+        const int N = 64;
+        var tex = new Texture2D(N, N, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        var px = new Color[N * N];
+        float cx = (N - 1) * 0.5f, cy = (N - 1) * 0.5f;
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+        {
+            float dx = x - cx, dy = y - cy;
+            float r = Mathf.Sqrt(dx * dx + dy * dy) / (N * 0.5f);
+            float ang = Mathf.Atan2(dy, dx);
+            float a = 0f;
+            // a few radial threads
+            for (int i = 0; i < 8; i++)
+            {
+                float t = i * Mathf.PI / 4f;
+                float ad = Mathf.Abs(Mathf.Sin(ang - t));
+                a = Mathf.Max(a, Mathf.Clamp01(1f - ad * 28f) * Mathf.Clamp01(1.05f - r) * 0.85f);
+            }
+            // two rings
+            a = Mathf.Max(a, Mathf.Clamp01(1f - Mathf.Abs(r - 0.38f) * 22f) * 0.7f);
+            a = Mathf.Max(a, Mathf.Clamp01(1f - Mathf.Abs(r - 0.68f) * 22f) * 0.55f);
+            a *= Mathf.Clamp01(1.05f - r);
+            px[y * N + x] = new Color(0.95f, 0.97f, 1f, a);
+        }
+        tex.SetPixels(px);
+        tex.Apply(false, false);
+        return tex;
     }
 
     void SpawnLandingBurst(Vector3 pos)
@@ -777,13 +973,13 @@ public class TCWebBonus : MonoBehaviour
         main.playOnAwake = false;
         main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f);
         main.startSpeed = new ParticleSystem.MinMaxCurve(celebrate ? 1.6f : 0.8f, celebrate ? 4.2f : 2.2f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.03f, celebrate ? 0.06f : 0.05f);
-        main.startColor = celebrate ? new Color(1f, 0.85f, 0.25f, 1f) : new Color(0.85f, 1f, 0.7f, 1f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.02f, celebrate ? 0.06f : 0.035f);
+        main.startColor = celebrate ? new Color(1f, 0.85f, 0.25f, 1f) : new Color(0.92f, 0.97f, 1f, 0.8f);
         main.simulationSpace = ParticleSystemSimulationSpace.World;
         main.gravityModifier = celebrate ? 0.35f : 0.8f;
         var em = ps.emission;
         em.rateOverTime = 0f;
-        em.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)(celebrate ? 48 : 22)) });
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)(celebrate ? 48 : 10)) });
         var sh = ps.shape;
         sh.shapeType = ParticleSystemShapeType.Cone;
         sh.angle = celebrate ? 50f : 35f;
@@ -929,38 +1125,38 @@ public class TCWebBonus : MonoBehaviour
         go.transform.SetParent(transform, false);
         webLine = go.AddComponent<LineRenderer>();
         webLine.positionCount = 2;
-        webLine.startWidth = 0.085f;
-        webLine.endWidth = 0.055f;
+        webLine.startWidth = 0.045f;
+        webLine.endWidth = 0.036f;
         webLine.useWorldSpace = true;
         webLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         webLine.receiveShadows = false;
         webLine.numCapVertices = 4;
         webLine.numCornerVertices = 2;
         webLine.textureMode = LineTextureMode.Tile;
-        webLine.material = MakeSilkMat(Color.white, false, false);
+        webLine.material = MakeSilkMat(new Color(0.95f, 0.97f, 1f, 0.70f), false, true);
         if (webLine.material && silkShimmerTex)
         {
             webLine.material.mainTexture = silkShimmerTex;
             webLine.material.mainTextureScale = new Vector2(3f, 1f);
         }
-        webLine.startColor = Color.white;
-        webLine.endColor = new Color(0.85f, 0.95f, 1f, 1f);
+        webLine.startColor = new Color(0.96f, 0.98f, 1f, 0.70f);
+        webLine.endColor = new Color(0.88f, 0.95f, 1f, 0.50f);
         webLine.enabled = false;
 
         var glowGo = new GameObject("TCWebGlow");
         glowGo.transform.SetParent(transform, false);
         webGlow = glowGo.AddComponent<LineRenderer>();
         webGlow.positionCount = 2;
-        webGlow.startWidth = 0.20f;
-        webGlow.endWidth = 0.12f;
+        webGlow.startWidth = 0.09f;
+        webGlow.endWidth = 0.07f;
         webGlow.useWorldSpace = true;
         webGlow.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         webGlow.receiveShadows = false;
         webGlow.numCapVertices = 4;
         webGlow.textureMode = LineTextureMode.Tile;
-        webGlow.material = MakeSilkMat(new Color(0.7f, 0.92f, 1f, 0.65f), true, true);
-        webGlow.startColor = new Color(0.7f, 0.92f, 1f, 0.42f);
-        webGlow.endColor = new Color(0.55f, 0.85f, 1f, 0.28f);
+        webGlow.material = MakeSilkMat(new Color(0.7f, 0.92f, 1f, 0.22f), true, true);
+        webGlow.startColor = new Color(0.7f, 0.92f, 1f, 0.16f);
+        webGlow.endColor = new Color(0.55f, 0.85f, 1f, 0.10f);
         webGlow.enabled = false;
 
         var anchor = new GameObject("TCWebAnchor");
@@ -1025,7 +1221,9 @@ public class TCWebBonus : MonoBehaviour
     }
 
 
-    /// Procedural W/E/B pickup. Parent is the track bonus root; caller pools or destroys after collect.
+    /// Procedural W/E/B pickup. Matches power-up visual size (~0.28) and FX
+    /// (halo, rays, ripple ring, twinkles, bob/sway) with a white glow theme.
+    /// The glyph is a compact 3D-looking letter — no flat gold card.
     public static GameObject CreateLetterPrefab(Transform parent, char letter)
     {
         letter = char.ToUpperInvariant(letter);
@@ -1039,55 +1237,51 @@ public class TCWebBonus : MonoBehaviour
         item.transform.localPosition = new Vector3(0f, 0f, 0.72f);
         var col = item.AddComponent<SphereCollider>();
         col.isTrigger = true;
-        col.radius = 0.55f;
+        col.radius = 0.22f;
         var letterComp = item.AddComponent<TCWebLetter>();
         letterComp.letter = letter;
 
-        // Billboard letter card — large, brightly colored, easy to read on the trunk
-        var card = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        Object.DestroyImmediate(card.GetComponent<Collider>());
-        card.name = "Glyph";
-        card.transform.SetParent(item.transform, false);
-        card.transform.localScale = Vector3.one * 1.05f;
-        var mr = card.GetComponent<MeshRenderer>();
-        mr.sharedMaterial = LetterMaterial(letter);
-        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        mr.receiveShadows = false;
+        var face = new GameObject("Face");
+        face.transform.SetParent(item.transform, false);
+        var visual = new GameObject("Visual");
+        visual.transform.SetParent(face.transform, false);
 
-        var glow = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        Object.DestroyImmediate(glow.GetComponent<Collider>());
-        glow.name = "Glow";
-        glow.transform.SetParent(item.transform, false);
-        glow.transform.localPosition = new Vector3(0, 0, 0.03f);
-        glow.transform.localScale = Vector3.one * 1.75f;
-        var gr = glow.GetComponent<MeshRenderer>();
-        gr.sharedMaterial = LetterGlowMaterial(letter);
-        gr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        gr.receiveShadows = false;
-
-        var halo = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        Object.DestroyImmediate(halo.GetComponent<Collider>());
-        halo.name = "Halo";
-        halo.transform.SetParent(item.transform, false);
-        halo.transform.localPosition = new Vector3(0, 0, 0.05f);
-        halo.transform.localScale = Vector3.one * 2.35f;
-        var hr = halo.GetComponent<MeshRenderer>();
-        hr.sharedMaterial = LetterGlowMaterial(letter);
-        hr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        hr.receiveShadows = false;
+        var faceMat = LetterMaterial(letter);
+        var shadeMat = LetterShadeMaterial(letter);
+        const float glyphSize = 0.28f;
+        for (int i = 6; i >= 1; i--)
+            LetterQuad(visual.transform, "Extrude" + i, shadeMat, glyphSize, new Vector3(0f, 0f, 0.011f * i));
+        LetterQuad(visual.transform, "Glyph", faceMat, glyphSize, Vector3.zero);
 
         var bill = item.AddComponent<TCWebLetterBillboard>();
-        bill.visual = item.transform;
+        bill.face = face.transform;
+        bill.visual = visual.transform;
+
+        TCPickupFX.Build(root, TCPickupKind.Letter, item.transform, visual.transform, item.transform.localPosition, glyphSize);
         ApplyLetterVisual(root, letter);
         return root;
     }
 
+    static MeshRenderer LetterQuad(Transform parent, string name, Material mat, float size, Vector3 localPos)
+    {
+        var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        var c = q.GetComponent<Collider>();
+        if (c) Object.DestroyImmediate(c);
+        q.name = name;
+        q.transform.SetParent(parent, false);
+        q.transform.localPosition = localPos;
+        q.transform.localScale = Vector3.one * size;
+        var mr = q.GetComponent<MeshRenderer>();
+        mr.sharedMaterial = mat;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        return mr;
+    }
+
     public static Color LetterColor(char letter)
     {
-        letter = char.ToUpperInvariant(letter);
-        if (letter == 'W') return new Color(1f, 0.78f, 0.12f, 1f);       // gold
-        if (letter == 'E') return new Color(0.12f, 0.95f, 0.48f, 1f);     // emerald
-        return new Color(0.28f, 0.52f, 1f, 1f);                           // azure B
+        // Shared white theme for every letter — identity is the glyph, not a tinted card.
+        return new Color(0.96f, 0.97f, 1f, 1f);
     }
 
     public static void ApplyLetterVisual(GameObject root, char letter)
@@ -1095,36 +1289,47 @@ public class TCWebBonus : MonoBehaviour
         if (!root) return;
         letter = char.ToUpperInvariant(letter);
         var glyph = LetterMaterial(letter);
-        var glow = LetterGlowMaterial(letter);
+        var shade = LetterShadeMaterial(letter);
         foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
         {
             if (!r) continue;
             if (r.name == "Glyph") r.sharedMaterial = glyph;
-            else if (r.name == "Glow" || r.name == "Halo") r.sharedMaterial = glow;
+            else if (r.name.StartsWith("Extrude")) r.sharedMaterial = shade;
+        }
+        var letterComp = root.GetComponentInChildren<TCWebLetter>(true);
+        if (letterComp) letterComp.letter = letter;
+        var fx = root.GetComponent<TCPickupFX>();
+        if (fx)
+        {
+            fx.kind = TCPickupKind.Letter;
+            TCPickupFX.Palette(TCPickupKind.Letter, out var c1, out var c2);
+            fx.color = c1; fx.color2 = c2;
         }
         var bill = root.GetComponentInChildren<TCWebLetterBillboard>(true);
         if (bill) bill.PlayPop();
     }
 
     static readonly Dictionary<char, Material> letterMats = new Dictionary<char, Material>();
-    static readonly Dictionary<char, Material> glowMats = new Dictionary<char, Material>();
+    static readonly Dictionary<char, Material> shadeMats = new Dictionary<char, Material>();
     public static Material LetterMaterial(char letter)
     {
         letter = char.ToUpperInvariant(letter);
         if (letterMats.TryGetValue(letter, out var m) && m) return m;
         var tex = LetterTexture(letter);
         m = MakeLetterUnlit("WEB_" + letter, tex, Color.white, true);
+        m.renderQueue = 3002;
         letterMats[letter] = m;
         return m;
     }
 
-    public static Material LetterGlowMaterial(char letter)
+    public static Material LetterShadeMaterial(char letter)
     {
         letter = char.ToUpperInvariant(letter);
-        if (glowMats.TryGetValue(letter, out var m) && m) return m;
-        var c = LetterColor(letter);
-        m = MakeLetterUnlit("WEBGlow_" + letter, null, new Color(c.r, c.g, c.b, 0.42f), true);
-        glowMats[letter] = m;
+        if (shadeMats.TryGetValue(letter, out var m) && m) return m;
+        var tex = LetterTexture(letter);
+        m = MakeLetterUnlit("WEBShade_" + letter, tex, new Color(0.42f, 0.46f, 0.55f, 1f), true);
+        m.renderQueue = 3001;
+        shadeMats[letter] = m;
         return m;
     }
 
@@ -1158,59 +1363,42 @@ public class TCWebBonus : MonoBehaviour
         return m;
     }
 
+    static readonly Dictionary<char, Texture2D> letterTex = new Dictionary<char, Texture2D>();
     static Texture2D LetterTexture(char letter)
     {
+        letter = char.ToUpperInvariant(letter);
+        if (letterTex.TryGetValue(letter, out var cached) && cached) return cached;
         const int N = 256;
-        var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
-        var px = new Color[N * N];
-        var col = LetterColor(letter);
-        var card = Color.Lerp(col, Color.white, 0.22f);
-        var rim = Color.Lerp(col, Color.white, 0.7f);
-        for (int y = 0; y < N; y++)
-            for (int x = 0; x < N; x++)
-            {
-                float u = (x + 0.5f) / N * 2 - 1, v = (y + 0.5f) / N * 2 - 1;
-                float ax = Mathf.Abs(u) - 0.70f, ay = Mathf.Abs(v) - 0.70f;
-                float d = Mathf.Min(Mathf.Max(ax, ay), 0) + new Vector2(Mathf.Max(ax, 0), Mathf.Max(ay, 0)).magnitude - 0.20f;
-                float a = Mathf.Clamp01(-d * 36f);
-                float edge = Mathf.Clamp01(1f - Mathf.Abs(d) * 18f);
-                var fill = Color.Lerp(card, rim, edge * 0.85f);
-                fill.a = a;
-                px[y * N + x] = fill;
-            }
-        tex.SetPixels(px);
-        StampLetter(tex, letter);
+        var tex = new Texture2D(N, N, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        tex.SetPixels(new Color[N * N]); // transparent, no card
+        // Dark outline, offset shade for a beveled 3D read, cream face, top-left highlight.
+        StampLetter(tex, letter, new Color(0.10f, 0.12f, 0.18f, 1f), 8.4f, 0f, 0f);
+        StampLetter(tex, letter, new Color(0.36f, 0.40f, 0.50f, 1f), 6.6f, 3.2f, -3.2f);
+        StampLetter(tex, letter, new Color(0.95f, 0.96f, 1f, 1f), 6.1f, 0f, 0f);
+        StampLetter(tex, letter, new Color(1f, 1f, 1f, 1f), 3.4f, -1.8f, 1.8f);
         tex.Apply(false, false);
+        letterTex[letter] = tex;
         return tex;
     }
 
-    static void StampLetter(Texture2D tex, char letter)
+    static void StampLetter(Texture2D tex, char letter, Color ink, float radius, float ox, float oy)
     {
         int N = tex.width;
-        // Very small bitmap-ish strokes for W, E, B so we don't depend on a font at runtime.
         void Ink(int x, int y, float a = 1)
         {
             if ((uint)x >= (uint)N || (uint)y >= (uint)N) return;
             var c = tex.GetPixel(x, y);
-            var ink = new Color(0.08f, 0.07f, 0.12f, 1);
             c = Color.Lerp(c, ink, a * 0.95f);
-            c.a = Mathf.Max(c.a, a);
+            c.a = Mathf.Max(c.a, a * ink.a);
             tex.SetPixel(x, y, c);
-        }
-        void Disc(float cx, float cy, float r)
-        {
-            int x0 = Mathf.FloorToInt(cx - r - 1), x1 = Mathf.CeilToInt(cx + r + 1);
-            int y0 = Mathf.FloorToInt(cy - r - 1), y1 = Mathf.CeilToInt(cy + r + 1);
-            for (int y = y0; y <= y1; y++)
-                for (int x = x0; x <= x1; x++)
-                {
-                    float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(cx, cy));
-                    float a = Mathf.Clamp01(r - d + 0.5f);
-                    if (a > 0) Ink(x, y, a);
-                }
         }
         void Capsule(float x0, float y0, float x1, float y1, float r)
         {
+            x0 += ox; x1 += ox; y0 += oy; y1 += oy;
             Vector2 a = new Vector2(x0, y0), b = new Vector2(x1, y1);
             int minx = Mathf.FloorToInt(Mathf.Min(x0, x1) - r - 1), maxx = Mathf.CeilToInt(Mathf.Max(x0, x1) + r + 1);
             int miny = Mathf.FloorToInt(Mathf.Min(y0, y1) - r - 1), maxy = Mathf.CeilToInt(Mathf.Max(y0, y1) + r + 1);
@@ -1227,7 +1415,7 @@ public class TCWebBonus : MonoBehaviour
         }
         float s = N / 128f;
         float C(float v) => v * s;
-        float r = 5.2f * s;
+        float r = radius * s;
         if (letter == 'W')
         {
             Capsule(C(36), C(96), C(46), C(36), r);
@@ -1254,6 +1442,7 @@ public class TCWebBonus : MonoBehaviour
             Capsule(C(90), C(50), C(78), C(34), r);
         }
     }
+
 }
 
 /// Trigger volume on a W/E/B pickup.
@@ -1277,42 +1466,22 @@ public class TCWebLetter : MonoBehaviour
     }
 }
 
-/// Keeps the letter card facing the camera and gives it a gentle bob.
+/// Faces the letter glyph toward the camera. Bob, sway and FX live on TCPickupFX.
 public class TCWebLetterBillboard : MonoBehaviour
 {
+    public Transform face;
     public Transform visual;
-    Vector3 basePos;
-    float pop = 1f;
-    float age;
 
-    void OnEnable()
-    {
-        if (visual) basePos = visual.localPosition;
-        PlayPop();
-    }
-
-    public void PlayPop()
-    {
-        pop = 0f;
-        age = 0f;
-        if (visual) visual.localScale = Vector3.zero;
-    }
+    public void PlayPop() { }
 
     void LateUpdate()
     {
-        if (!visual) return;
-        age += Time.deltaTime;
-        pop = Mathf.MoveTowards(pop, 1f, Time.deltaTime * 5.5f);
-        // Short overshoot pop-in, then a lively bob + pulse.
-        float over = 1f + Mathf.Sin(Mathf.Clamp01(pop) * Mathf.PI) * 0.22f * (1f - pop);
-        float s = Mathf.SmoothStep(0f, 1f, pop) * over;
-        visual.localScale = Vector3.one * s;
+        var t = face ? face : (visual ? visual : null);
+        if (!t) return;
         var cam = Camera.main;
-        if (cam) visual.rotation = Quaternion.LookRotation(visual.position - cam.transform.position, Vector3.up);
-        visual.localPosition = basePos + Vector3.up * (Mathf.Sin(age * 3.6f) * 0.11f);
-        var glow = visual.Find("Glow");
-        if (glow) glow.localScale = Vector3.one * (1.75f * (1f + 0.08f * Mathf.Sin(age * 5f)));
-        var halo = visual.Find("Halo");
-        if (halo) halo.localScale = Vector3.one * (2.35f * (1f + 0.10f * Mathf.Sin(age * 4.2f + 1f)));
+        if (!cam) return;
+        Vector3 toCam = t.position - cam.transform.position;
+        if (toCam.sqrMagnitude < 1e-8f) return;
+        t.rotation = Quaternion.LookRotation(toCam, Vector3.up);
     }
 }

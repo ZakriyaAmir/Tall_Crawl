@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum TCPickupKind { Chilli, Health, SlowMo, Magnet, Coin, BoostStart }
+public enum TCPickupKind { Chilli, Health, SlowMo, Magnet, Coin, BoostStart, Letter }
 
 /// Power-up pickup juice (polish2): bob + swing/spin of the model, camera-facing halo and rotating rays,
 /// sonar ping, twinkles and a themed particle layer per type (flames, hearts, snowflakes, coins + bolts).
@@ -67,8 +67,8 @@ public class TCPickupFX : MonoBehaviour
     void ApplyTint()
     {
         if (mpb == null) mpb = new MaterialPropertyBlock();
-        float haloA = kind == TCPickupKind.Magnet ? 0.32f : 1f;
-        float rayA = kind == TCPickupKind.Magnet ? 0.45f : 0.75f;
+        float haloA = kind == TCPickupKind.Magnet ? 0.32f : kind == TCPickupKind.Letter ? 0.42f : 1f;
+        float rayA = kind == TCPickupKind.Magnet ? 0.45f : kind == TCPickupKind.Letter ? 0.40f : 0.75f;
         if (halo) { halo.GetPropertyBlock(mpb); mpb.SetColor("_TintColor", new Color(color.r, color.g, color.b, haloA)); halo.SetPropertyBlock(mpb); }
         if (rays) { rays.GetPropertyBlock(mpb); mpb.SetColor("_TintColor", new Color(color2.r, color2.g, color2.b, rayA)); rays.SetPropertyBlock(mpb); }
     }
@@ -122,6 +122,7 @@ public class TCPickupFX : MonoBehaviour
             case TCPickupKind.SlowMo: c1 = TCFxLib.Hex("#47C6FF"); c2 = TCFxLib.Hex("#E4FAFF"); break;
             case TCPickupKind.Magnet: c1 = TCFxLib.Hex("#FFD23F"); c2 = TCFxLib.Hex("#FFF4B0"); break;
             case TCPickupKind.BoostStart: c1 = TCFxLib.Hex("#FF6A1A"); c2 = TCFxLib.Hex("#FFE066"); break;
+            case TCPickupKind.Letter: c1 = TCFxLib.Hex("#F4F7FF"); c2 = TCFxLib.Hex("#D7EEFF"); break;
             default: c1 = TCFxLib.Hex("#FFD54F"); c2 = Color.white; break;
         }
     }
@@ -134,8 +135,8 @@ public class TCPickupFX : MonoBehaviour
         var fx = new GameObject("PickupFX").transform;
         fx.SetParent(root.transform, false); fx.localPosition = centreLocal;
 
-        float haloMul = k == TCPickupKind.Magnet ? 2.15f : 3.4f;
-        float raysMul = k == TCPickupKind.Magnet ? 2.6f : 3.9f;
+        float haloMul = k == TCPickupKind.Magnet ? 2.15f : k == TCPickupKind.Letter ? 2.6f : 3.4f;
+        float raysMul = k == TCPickupKind.Magnet ? 2.6f : k == TCPickupKind.Letter ? 3.1f : 3.9f;
         var halo = Quad(fx, "Halo", "Halo", size * haloMul, 0.02f);
         var rays = Quad(fx, "Rays", "Rays", size * raysMul, 0.03f);
 
@@ -206,12 +207,24 @@ public class TCPickupFX : MonoBehaviour
                 var eb = b.emission; eb.rateOverTime = 5; TCFxLib.Sphere(b, size * 0.85f, 0f);
                 break;
             }
+            case TCPickupKind.Letter:
+            {
+                var motes = TCFxLib.PS(fx, "Motes", "Star", new Vector3(0, 0, -0.06f), 12);
+                var m = motes.main; m.startLifetime = new ParticleSystem.MinMaxCurve(0.7f, 1.2f);
+                m.startSize = new ParticleSystem.MinMaxCurve(size * 0.18f, size * 0.34f);
+                m.startColor = new ParticleSystem.MinMaxGradient(Color.white, c2);
+                var em = motes.emission; em.rateOverTime = 6;
+                TCFxLib.Sphere(motes, size * 0.8f, 0.4f);
+                TCFxLib.SizeLife(motes, 0, 0, 0.3f, 1, 0.6f, 0.4f, 1, 0);
+                TCFxLib.SpinRandom(motes, 80);
+                break;
+            }
         }
 
         var comp = root.GetComponent<TCPickupFX>(); if (!comp) comp = root.AddComponent<TCPickupFX>();
         comp.kind = k; comp.item = item; comp.visual = visual; comp.fxRoot = fx; comp.color = c1; comp.color2 = c2;
         comp.halo = halo; comp.rays = rays;
-        comp.swing = k == TCPickupKind.Chilli ? 26f : 34f;
+        comp.swing = k == TCPickupKind.Chilli ? 26f : k == TCPickupKind.Letter ? 18f : 34f;
         return comp;
     }
 
@@ -269,7 +282,7 @@ public class TCPickupFX : MonoBehaviour
           TCFxLib.SizeLife(stars, 0, 1, 1, 0); TCFxLib.SpinRandom(stars, 200); }
         if (coin) return root;
 
-        string theme = k == TCPickupKind.Health ? "Heart" : k == TCPickupKind.SlowMo ? "Snow" : k == TCPickupKind.Magnet ? "Coin" : "Flame";
+        string theme = k == TCPickupKind.Health ? "Heart" : k == TCPickupKind.SlowMo ? "Snow" : k == TCPickupKind.Magnet ? "Coin" : k == TCPickupKind.Letter ? "Star" : "Flame";
         var th = TCFxLib.PS(root.transform, "Theme", theme, Vector3.zero, 24);
         { TCFxLib.OneShot(th, 0.55f, 0.85f); var m = th.main; m.startSpeed = new ParticleSystem.MinMaxCurve(0.9f * S, 2.0f * S); m.startSize = new ParticleSystem.MinMaxCurve(0.22f * S, 0.4f * S);
           m.startColor = k == TCPickupKind.Health ? new ParticleSystem.MinMaxGradient(c2, TCFxLib.Hex("#FF4F7B")) : k == TCPickupKind.SlowMo ? new ParticleSystem.MinMaxGradient(Color.white, c1) : new ParticleSystem.MinMaxGradient(Color.white);

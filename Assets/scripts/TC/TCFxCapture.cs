@@ -310,25 +310,31 @@ public class TCFxCapture : MonoBehaviour
         var ui = FindObjectOfType<TCGameUI>(); if (ui) ui.StartRun();
         var pl = FindObjectOfType<player>();
         var sp = FindObjectOfType<playerInteract>();
-        var track = FindObjectOfType<TCTrack>();
         yield return W(0.8f);
         if (pl) pl.paused = false;
         if (sp) sp.GrantGrace(90f);
-        // Climb far enough for the usual mid-run framing, then freeze and place a letter.
         float prevScale = Time.timeScale;
         Time.timeScale = 4f;
         yield return W(2.2f);
         Time.timeScale = prevScale <= 0f ? 1f : prevScale;
         if (pl) pl.paused = true;
-        // A natural spawn can land a long way up the trunk (and in a lane
-        // the camera isn't facing). For a readable still, place one via the
-        // real pool, 1.7 wu ahead in the player's current lane.
+        yield return LetterVsPowerupShot();
+    }
+
+    IEnumerator LetterVsPowerupShot()
+    {
+        var track = FindObjectOfType<TCTrack>();
+        var pl = FindObjectOfType<player>();
+        var cam = Camera.main;
+        if (pl) pl.paused = true;
+
         foreach (var L in Object.FindObjectsOfType<TCWebLetter>())
         {
             var pooled = L.GetComponentInParent<TCPooled>();
             if (pooled) pooled.Release();
-            else if (L) L.gameObject.SetActive(false);
+            else L.gameObject.SetActive(false);
         }
+
         Transform letterT = null;
         if (track != null)
         {
@@ -336,13 +342,126 @@ public class TCFxCapture : MonoBehaviour
             foreach (var L in Object.FindObjectsOfType<TCWebLetter>())
                 if (L && L.gameObject.activeInHierarchy) { letterT = L.transform; break; }
         }
-        yield return W(0.55f);
-        yield return Shot("web_letter_run");
-        Debug.Log("[TCFxCapture] letter-only shot: " + (letterT ? letterT.root.name : "NONE") +
-                  " at " + (pl ? pl.currentScore.ToString("0") : "?") + " m pos=" +
-                  (letterT ? letterT.position.ToString("F2") : "-"));
+
+        GameObject letterGo = null;
+        if (letterT)
+        {
+            var pooled = letterT.GetComponentInParent<TCPooled>();
+            letterGo = pooled ? pooled.gameObject : letterT.gameObject;
+        }
+        float y = letterGo ? letterGo.transform.position.y
+            : (pl && pl.p1 ? pl.p1.position.y + 1.7f : 0f);
+        float ang = pl ? pl.CurrentYaw : 0f;
+        TCPooled heart = track ? track.SpawnHeartNow(y, ang + 28f) : null;
+
+        yield return null;
+        Bounds letterBounds = EncapsulateRenderers(letterGo);
+        Bounds heartBounds = EncapsulateRenderers(heart ? heart.gameObject : null);
+        if (heart && letterBounds.size.sqrMagnitude > 1e-6f && heartBounds.size.sqrMagnitude > 1e-6f)
+        {
+            float dy = letterBounds.center.y - heartBounds.center.y;
+            heart.transform.position += Vector3.up * dy;
+            heart.y += dy;
+            heartBounds = EncapsulateRenderers(heart.gameObject);
+        }
+
+        yield return W(0.6f);
+        letterBounds = EncapsulateRenderers(letterGo);
+        heartBounds = EncapsulateRenderers(heart ? heart.gameObject : null);
+        Bounds b = letterBounds;
+        if (heartBounds.size.sqrMagnitude > 1e-6f)
+        {
+            if (b.size.sqrMagnitude > 1e-6f) b.Encapsulate(heartBounds);
+            else b = heartBounds;
+        }
+        Vector3 mid = b.size.sqrMagnitude > 1e-6f ? b.center
+            : (letterT ? letterT.position : Vector3.zero);
+
+        var uiGo = GameObject.Find("TC_GameUI");
+        bool uiWas = uiGo && uiGo.activeSelf;
+        if (uiGo) uiGo.SetActive(false);
+
+        Transform parent = null;
+        Vector3 localPos = Vector3.zero;
+        Quaternion localRot = Quaternion.identity;
+        Vector3 localScale = Vector3.one;
+        float fov = 64f;
+        Animator camAnim = null;
+        bool camAnimWas = false;
+        if (cam)
+        {
+            parent = cam.transform.parent;
+            localPos = cam.transform.localPosition;
+            localRot = cam.transform.localRotation;
+            localScale = cam.transform.localScale;
+            fov = cam.fieldOfView;
+            camAnim = cam.GetComponent<Animator>();
+            camAnimWas = camAnim && camAnim.enabled;
+            if (camAnim) camAnim.enabled = false;
+            cam.transform.SetParent(null, true);
+
+            Vector3 axis = mid;
+            if (pl && pl.p1) { axis = pl.p1.position; axis.y = mid.y; }
+            else { axis.x = 0f; axis.z = 0f; }
+            Vector3 outward = mid - axis; outward.y = 0f;
+            if (outward.sqrMagnitude < 1e-6f)
+            {
+                float a = (ang + 14f) * Mathf.Deg2Rad;
+                outward = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
+            }
+            else outward.Normalize();
+
+            float radius = Mathf.Max(0.35f, b.extents.magnitude);
+            radius = Mathf.Min(radius, 0.85f); // never pull back for a whole-scene bounds mistake
+            float dist = Mathf.Max(1.15f, radius / Mathf.Tan(20f * Mathf.Deg2Rad) * 1.2f);
+            cam.transform.position = mid + outward * dist + Vector3.up * 0.06f;
+            Vector3 look = mid - cam.transform.position;
+            if (look.sqrMagnitude > 1e-8f)
+                cam.transform.rotation = Quaternion.LookRotation(look.normalized, Vector3.up);
+            cam.fieldOfView = 40f;
+        }
+
+        yield return Shot("letter_vs_powerup");
+        Debug.Log("[TCFxCapture] letter vs power-up: letter=" +
+                  (letterGo ? letterGo.name : "NONE") +
+                  " heart=" + (heart ? heart.name : "NONE") +
+                  " mid=" + mid.ToString("F2") + " extents=" + b.extents.ToString("F2"));
+
+        if (cam)
+        {
+            cam.transform.SetParent(parent, true);
+            cam.transform.localPosition = localPos;
+            cam.transform.localRotation = localRot;
+            cam.transform.localScale = localScale;
+            cam.fieldOfView = fov;
+            if (camAnim) camAnim.enabled = camAnimWas;
+        }
+        if (uiGo) uiGo.SetActive(uiWas);
+
+        if (heart) heart.Release();
+        foreach (var L in Object.FindObjectsOfType<TCWebLetter>())
+        {
+            var pooled = L.GetComponentInParent<TCPooled>();
+            if (pooled) pooled.Release();
+            else L.gameObject.SetActive(false);
+        }
     }
 
+    static Bounds EncapsulateRenderers(GameObject go)
+    {
+        var b = new Bounds();
+        bool init = false;
+        if (!go) return b;
+        foreach (var r in go.GetComponentsInChildren<Renderer>())
+        {
+            if (!r || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+            // Ignore giant particle clouds so the camera stays tight on the models.
+            if (r is ParticleSystemRenderer) continue;
+            if (!init) { b = r.bounds; init = true; }
+            else b.Encapsulate(r.bounds);
+        }
+        return b;
+    }
 
     IEnumerator SwingOnlyShot()
     {
@@ -360,6 +479,9 @@ public class TCFxCapture : MonoBehaviour
         Time.timeScale = 4f;
         yield return W(1.6f);
         Time.timeScale = prev <= 0f ? 1f : prev;
+        if (pl) pl.paused = true;
+        yield return LetterVsPowerupShot();
+        if (pl) pl.paused = false;
         var web = TCWebBonus.Instance;
         if (web == null)
         {
