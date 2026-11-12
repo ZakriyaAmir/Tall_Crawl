@@ -201,6 +201,7 @@ public class playerInteract : MonoBehaviour
 
         // Collect coins/powerups if they overlap the main hit collider
         if (HandlePickup(other)) return;
+        if (TCWebBonus.Instance && TCWebBonus.Instance.IsInvincible) return;
 
         var pooled = other.GetComponentInParent<TCPooled>();
         var enemy = other.GetComponentInParent<TCEnemy>();

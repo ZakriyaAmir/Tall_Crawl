@@ -318,8 +318,10 @@ public class TCTrack : MonoBehaviour
             return;
         }
 
-        // Bee swarms only spawn after crossing 2000 metres
-        if (!lastWasBee && metres >= 2000f && Random.value < C.beeChance * d + 0.02f)
+        bool webSwinging = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
+
+        // Bee swarms only spawn after crossing 2000 metres (never during WEB boost)
+        if (!webSwinging && !lastWasBee && metres >= 2000f && Random.value < C.beeChance * d + 0.02f)
         {
             // Bee swarm row: full 360 jump ring hazard. Spawns an arching coin string over the bees!
             float beeY = y + gap * 0.4f;
@@ -380,7 +382,7 @@ public class TCTrack : MonoBehaviour
         // - First 2000 meters: only wasps and branches
         // - After 2000 meters: bee swarms can spawn (handled above)
         // - After 3000 meters: squirrels can spawn
-        if (metres >= 3000f && Random.value < 0.32f)
+        if (!webSwinging && metres >= 3000f && Random.value < 0.32f)
         {
             float squirrelY = y + gap * 0.52f;
             float squirrelAngle = newSafe + (Random.value < 0.5f ? -35f : 35f);
@@ -388,7 +390,7 @@ public class TCTrack : MonoBehaviour
         }
 
         // Wasps spawn from the beginning (alongside branches)
-        if (metres > 30f && Random.value < 0.22f)
+        if (!webSwinging && metres > 30f && Random.value < 0.22f)
         {
             float waspY = y + gap * 0.72f;
             float waspAngle = newSafe + (Random.value < 0.5f ? -42f : 42f);
@@ -919,6 +921,25 @@ public class TCTrack : MonoBehaviour
         if (!player) return;
         float py = player.position.y;
         ClearHazardsInRange(py - 8f, py + worldDist);
+    }
+
+    /// Release any live enemies (wasps, bees, squirrels) ahead while keeping branches & coins intact.
+    public void ClearEnemiesAhead(float worldDist)
+    {
+        if (!player) return;
+        float yMin = player.position.y - 4f;
+        float yMax = player.position.y + worldDist;
+        for (int i = live.Count - 1; i >= 0; i--)
+        {
+            var item = live[i];
+            if (!item) { live.RemoveAt(i); continue; }
+            if (item.y < yMin || item.y > yMax) continue;
+            if (item.kind == "bees" || item.kind == "wasp" || item.kind == "squirrel")
+            {
+                item.Release();
+                live.RemoveAt(i);
+            }
+        }
     }
 
     /// Release every live non-trunk item in [yMin, yMax] (world Y).

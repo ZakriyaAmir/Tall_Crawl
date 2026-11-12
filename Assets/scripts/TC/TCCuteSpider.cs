@@ -18,6 +18,8 @@ public partial class TCCuteSpider : MonoBehaviour
     float gaitPhase, gaitOmega, lastYaw;
     float landBounce, wasJumpBlend;
     float swingLean, swingRoll, swingTwist, swingSquash, swingTuck;
+    bool hasSwingWorldRot;
+    Quaternion swingWorldRot = Quaternion.identity;
     Quaternion abdomenRest = Quaternion.identity;
     bool hasAbdomenRest;
 
@@ -512,10 +514,26 @@ public partial class TCCuteSpider : MonoBehaviour
 
     public void SetSwingPose(float lean, float roll, float twist, float squash, float tuck = 0f)
     {
+        hasSwingWorldRot = false;
         swingLean = lean; swingRoll = roll; swingTwist = twist; swingSquash = squash; swingTuck = tuck;
     }
 
-    public void ClearSwingPose() { swingLean = swingRoll = swingTwist = swingSquash = swingTuck = 0f; }
+    /// Drives the spider's world rotation directly (e.g. hanging upside down below a web string).
+    public void SetSwingWorldOrientation(Quaternion worldRot, float squash, float tuck)
+    {
+        hasSwingWorldRot = true;
+        swingWorldRot = worldRot;
+        swingSquash = squash;
+        swingTuck = tuck;
+        if (body) body.rotation = worldRot;
+    }
+
+    public void ClearSwingPose()
+    {
+        hasSwingWorldRot = false;
+        swingWorldRot = Quaternion.identity;
+        swingLean = swingRoll = swingTwist = swingSquash = swingTuck = 0f;
+    }
 
     public void TriggerLandBounce() { landBounce = 1f; }
 
@@ -526,7 +544,7 @@ public partial class TCCuteSpider : MonoBehaviour
         t += dt;
         var st = transform;
         // Follow the rig's root motion (jump hop etc.) but keep our own clean orientation.
-        Vector3 rigOff = bone ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
+        Vector3 rigOff = (!hasSwingWorldRot && bone) ? st.InverseTransformPoint(bone.position) - boneRest : Vector3.zero;
         if (rigOff.magnitude > 5f) rigOff = Vector3.zero;
 
         // Is the spider actively moving/climbing, jumping, rolling, or idle?
@@ -695,16 +713,23 @@ public partial class TCCuteSpider : MonoBehaviour
             }
             if (swingTuck > 0.001f)
             {
-                // Mid-air web swing: legs tucked in close
-                Quaternion webTuck = legRest[i] * Quaternion.Euler(isLeft ? 40f : -40f, 0, 60f);
-                targetLegPose = Quaternion.Slerp(targetLegPose, webTuck, Mathf.Clamp01(swingTuck));
+                // Action web-swing pose: rear legs reach up along the silk line while front/mid legs flare into the wind.
+                float k = Mathf.Clamp01(swingTuck);
+                Quaternion webLeg;
+                if (legIdx == 0)
+                    webLeg = legRest[i] * Quaternion.Euler(-24f, isLeft ? -26f : 26f, isLeft ? -16f : 16f);
+                else if (legIdx == 1)
+                    webLeg = legRest[i] * Quaternion.Euler(4f, isLeft ? -14f : 14f, isLeft ? 18f : -18f);
+                else
+                    webLeg = legRest[i] * Quaternion.Euler(46f, isLeft ? 20f : -20f, isLeft ? 28f : -28f);
+                targetLegPose = Quaternion.Slerp(targetLegPose, webLeg, k);
             }
             else if (swingTuck < -0.001f)
             {
                 // Thwip: legs reach out toward the shot
                 float reach = Mathf.Clamp01(-swingTuck);
-                float pitch = legIdx == 0 ? -42f : 12f;
-                Quaternion webReach = legRest[i] * Quaternion.Euler(pitch, (isLeft ? -1f : 1f) * 18f, -8f);
+                float pitch = legIdx == 0 ? -48f : 14f;
+                Quaternion webReach = legRest[i] * Quaternion.Euler(pitch, (isLeft ? -1f : 1f) * 20f, -8f);
                 targetLegPose = Quaternion.Slerp(targetLegPose, webReach, reach);
             }
             legs[i].localRotation = targetLegPose;
@@ -737,6 +762,10 @@ public partial class TCCuteSpider : MonoBehaviour
         {
             body.localRotation = Quaternion.Slerp(Quaternion.Euler(flipPitch, 0, 0), Quaternion.Euler(rollSpinAngle, 0, 0), rollBlend);
             body.localScale = Vector3.Lerp(new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f), new Vector3(0.85f, 0.85f, 0.85f), rollBlend);
+        }
+        else if (hasSwingWorldRot)
+        {
+            body.rotation = swingWorldRot;
         }
         else
         {
