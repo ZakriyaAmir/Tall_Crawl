@@ -355,6 +355,7 @@ public static class TCUI
         if (!Fresh(rt))
         {
             var bb = Add<Button>(rt.gameObject);
+            bb.onClick.RemoveAllListeners();
             bb.onClick.AddListener(() => { TCAudio.Click(); onClick?.Invoke(); });
             var faceImg = rt.GetComponent<Image>();
             if (faceImg) ApplyReadable(rt, faceImg.color);

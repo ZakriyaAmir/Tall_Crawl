@@ -15,6 +15,8 @@ public class TCMenuUI : MonoBehaviour
     GameObject previewSpider; RenderTexture rt; [SerializeField] Camera previewCam; RawImage previewImg, skinPreviewImg; int previewSkin = -1;
     readonly List<System.Action> refreshers = new List<System.Action>();
     readonly TCCheatCode cheat = new TCCheatCode();
+    public bool CheatActivated { get; private set; }
+    TextMeshProUGUI cheatHint;
 
     void Start()
     {
@@ -682,11 +684,26 @@ public class TCMenuUI : MonoBehaviour
         TCGameUI.Toggle(card, "Vibration", 160, () => TCSave.Vibration, v => { TCSave.Vibration = v; if (FeedCheat(TCCheatCode.Kind.Vibration)) ActivateCheat(); }, 700);
         var sl = TCUI.Label("SensL", card, "Control sensitivity", 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Place(sl.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 50), new Vector2(700, 70));
         var slider = BuildSlider(card, new Vector2(0, -30)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity;
-        slider.onValueChanged.AddListener(v =>
+        slider.onValueChanged.RemoveAllListeners();
+        System.Action<float> feedSlider = v =>
         {
             TCSave.Sensitivity = v;
             if (FeedCheat(TCCheatCode.ClassifySlider(v, slider.minValue, slider.maxValue))) ActivateCheat();
-        });
+        };
+        slider.onValueChanged.AddListener(v => feedSlider(v));
+        // Seed the current extreme on finger-down so a continuous sweep counts
+        // even if the knob was already parked at an end (no onValueChanged yet).
+        var hook = slider.GetComponent<TCCheatSliderHook>() ?? slider.gameObject.AddComponent<TCCheatSliderHook>();
+        hook.Bind(slider, feedSlider);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!card.Find("CheatHint"))
+        {
+            cheatHint = TCUI.Label("CheatHint", card, "", 22, new Color(0.3f, 0.25f, 0.28f, 0.45f));
+            TCUI.Place(cheatHint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, -90), new Vector2(700, 32));
+            cheatHint.raycastTarget = false;
+        }
+        else cheatHint = card.Find("CheatHint").GetComponent<TextMeshProUGUI>();
+#endif
         TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => { FeedCheat(TCCheatCode.Kind.Other); Application.OpenURL(TCAssets.I.privacyUrl); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -170), new Vector2(620, 110));
         TCUI.Place((RectTransform)TCUI.Btn("Tutorial", card, "REPLAY TUTORIAL", TCUI.Blush, () => { FeedCheat(TCCheatCode.Kind.Other); StartTutorialGame(); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -310), new Vector2(620, 110));
         TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => { FeedCheat(TCCheatCode.Kind.Other); TCUI.Hide(this, settingsPanel); }, 50).transform, new Vector2(0.5f, 0), new Vector2(0, 110), new Vector2(420, 120));
@@ -795,15 +812,34 @@ public class TCMenuUI : MonoBehaviour
         toastText.color = Color.white;
     }
 
-    bool FeedCheat(TCCheatCode.Kind kind) => cheat.Feed(kind, Time.unscaledTime);
+    bool FeedCheat(TCCheatCode.Kind kind)
+    {
+        bool done = cheat.Feed(kind, Time.unscaledTime);
+        UpdateCheatHint();
+        return done;
+    }
+
+    void UpdateCheatHint()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (!cheatHint) return;
+        if (cheat.Progress <= 0) { cheatHint.text = ""; return; }
+        // Subtle dots only — never shown in release builds.
+        cheatHint.text = new string('·', cheat.Progress);
+#endif
+    }
 
     public void ActivateCheat()
     {
+        CheatActivated = true;
         TCCheatCode.Grant();
         Refresh();
         RefreshSkinGrid();
         Toast("Cheat code activated!", true);
     }
+
+    /// Used by the real-event playthrough to run a second case on the same menu.
+    public void ClearCheatActivated() { CheatActivated = false; }
 
     void HookPreviewTap(RawImage img)
     {

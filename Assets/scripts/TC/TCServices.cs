@@ -17,58 +17,62 @@ public static class TCServices
 #endif
     }
 
-    /// Shows a rewarded ad; reward is granted on completion.
-    /// When ads are removed (IAP or cheat) the reward is granted directly, no ad.
-    /// In the Editor, or when the Mobile Ads SDK cannot show, a visible placeholder
-    /// overlay stands in so the flow is testable. Official Google test unit IDs are
-    /// used on device.
+    /// Rewarded ads always play, even when NoAds is on (NoAds only hides banner + interstitial).
+    /// On device this shows the official Google AdMob test rewarded unit full-screen and grants
+    /// the reward only from AdmobManager's OnUserEarnedReward callback. In the Editor there is
+    /// no visible panel: we log and grant so revive / x2 stay testable.
     public static void Rewarded(Action onReward, string placement)
     {
         Log("rewarded_request", "placement_" + placement, 1);
-        if (TCSave.NoAds)
+        if (Application.isEditor)
         {
+            Debug.Log("[TCServices] Rewarded '" + placement + "' — editor: grant (no ad panel). NoAds=" + TCSave.NoAds);
             onReward?.Invoke();
             return;
         }
         try
         {
-            if (!Application.isEditor && AdsManager.Instance != null && AdsManager.Instance.RunRewardedAd(onReward))
+            if (AdsManager.Instance != null && AdsManager.Instance.RunRewardedAd(onReward))
+            {
+                Debug.Log("[TCServices] Rewarded '" + placement + "' — showing AdMob test rewarded ad");
                 return;
+            }
         }
-        catch (Exception e) { Debug.LogWarning(e.Message); }
-        TCAdOverlay.ShowRewarded(onReward, placement);
+        catch (Exception e) { Debug.LogWarning("[TCServices] Rewarded show failed: " + e.Message); }
+        // Do not fall back to a custom overlay, and do not grant if the ad did not play.
+        Debug.LogWarning("[TCServices] Rewarded '" + placement + "' not ready — reward not granted");
     }
 
     public static void Interstitial()
     {
         if (TCSave.NoAds) return;
+        if (Application.isEditor)
+        {
+            Debug.Log("[TCServices] Interstitial — editor: skip (no ad panel)");
+            return;
+        }
         try
         {
-            if (!Application.isEditor && AdsManager.Instance != null)
-            {
+            if (AdsManager.Instance != null)
                 AdsManager.Instance.RunInterstitialAd();
-                return;
-            }
         }
-        catch (Exception) { }
-        TCAdOverlay.ShowInterstitial();
+        catch (Exception e) { Debug.LogWarning("[TCServices] Interstitial failed: " + e.Message); }
     }
 
     public static void Banner(bool show)
     {
         if (TCSave.NoAds) show = false;
         TCSafeArea.BannerVisible = show;
+        if (Application.isEditor) return;
         try
         {
-            if (!Application.isEditor && AdsManager.Instance != null)
+            if (AdsManager.Instance != null)
             {
                 if (show) AdsManager.Instance.RunBannerAd();
                 else AdsManager.Instance.HideBanner();
-                return;
             }
         }
-        catch (Exception) { }
-        TCAdOverlay.ShowBanner(show);
+        catch (Exception e) { Debug.LogWarning("[TCServices] Banner failed: " + e.Message); }
     }
 
     /// productIndex maps to UnityIAP.kProductIDs (dummy IDs, see README).

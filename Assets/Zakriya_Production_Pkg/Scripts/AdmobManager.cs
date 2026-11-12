@@ -215,6 +215,7 @@ public class AdmobManager : MonoBehaviour
             _rewardedAd.Destroy();
             _rewardedAd = null;
         }
+        isRewardedAdReady = false;
 
         Debug.Log("Loading the rewarded ad.");
 
@@ -237,34 +238,33 @@ public class AdmobManager : MonoBehaviour
                           + ad.GetResponseInfo());
 
                 _rewardedAd = ad;
+                isRewardedAdReady = true;
+                RegisterReloadHandler(ad);
             });
     }
 
     public bool ShowRewardedAd(Action rewardCallback)
     {
-        bool available = false;
-        if (_rewardedAd != null)
+        bool ready = _rewardedAd != null && _rewardedAd.CanShowAd();
+        if (!ready)
         {
-            available = true;
-            _rewardedAd.Show((Reward reward) =>
-            {
-                _rewardedAd.Destroy();
-                LoadRewardedAd();
-                rewardCallback();
-                // TODO: Reward the user.
-                //Debug.Log(String.Format(rewardMsg, reward.Type, reward.Amount));
-
-                // send ad event
-                LogFirebaseEvent("Admob" + "_Rewarded" + "_success");
-            });
-        }
-        else
-        {
-            available = false;
-            // send ad event
+            isRewardedAdReady = false;
             LogFirebaseEvent("Admob" + "_Rewarded" + "_failed");
+            Debug.LogWarning("[AdmobManager] Rewarded ad not ready — preloading");
+            LoadRewardedAd();
+            return false;
         }
-        return available;
+
+        isRewardedAdReady = false;
+        var ad = _rewardedAd;
+        // Show()'s callback is Google Mobile Ads' OnUserEarnedReward: grant only then.
+        ad.Show((Reward reward) =>
+        {
+            Debug.Log("[AdmobManager] OnUserEarnedReward type=" + reward.Type + " amount=" + reward.Amount);
+            rewardCallback?.Invoke();
+            LogFirebaseEvent("Admob" + "_Rewarded" + "_success");
+        });
+        return true;
     }
 
     private void RegisterReloadHandler(RewardedAd ad)

@@ -53,8 +53,9 @@ public class TCSpeedLines : MonoBehaviour
         bool running = !pl.paused && !pl.GameOver && Time.timeScale > 0.05f;
         bool slow = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
         bool boost = pl.boost;
+        bool webSwing = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
         float mult = C ? C.SpeedMultiplierAtDistance(pl.currentScore) : 1f;
-        float target = !running || slow ? 0f : boost ? 1f : Mathf.Clamp01((mult - 1.15f) / 1.2f) * 0.3f;
+        float target = webSwing ? 0.95f : !running || slow ? 0f : boost ? 1f : Mathf.Clamp01((mult - 1.15f) / 1.2f) * 0.3f;
         level = Mathf.MoveTowards(level, target, Time.unscaledDeltaTime * (target > level ? 4f : 2f));
 
         var em = lines.emission; em.rateOverTime = level * 95f;

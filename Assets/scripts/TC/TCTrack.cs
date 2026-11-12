@@ -18,9 +18,20 @@ public class TCTrack : MonoBehaviour
     float nextTrunkY, nextRowY, safeAngle, lastCoinY = -999f;
     float lastHazardY = -999f, lastBonusY = -999f;
     float nextHeartEligibleTime;
+    float nextLetterEligibleTime;
+    bool letterEligible;
     float runActiveTimer;
     float clearUntilY = -999f;
     TCPool letterPool;
+
+    // Actual health-pickup cadence in GenerateRow (TCConfig.heartChance is unused).
+    // Every 10 s a 20% roll may place a heart on the next bonus slot (expected 1 / 50 s).
+    public const float HeartCheckInterval = 10f;
+    public const float HeartCheckChance = 0.20f;
+    // WEB letters spawn at half that frequency: same 20% chance, twice the interval
+    // (expected 1 / 100 s), and only until the single WEB swing of the run is earned.
+    public const float LetterCheckInterval = HeartCheckInterval * 2f;
+    public const float LetterCheckChance = HeartCheckChance;
     int rowIndex; bool lastWasBee; player pl;
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
@@ -148,7 +159,15 @@ public class TCTrack : MonoBehaviour
         lastHazardY = -999f;
         lastBonusY = -999f;
         runActiveTimer = 0f;
-        nextHeartEligibleTime = Time.time + 10f; // heart check every 10 seconds
+        nextHeartEligibleTime = Time.time + HeartCheckInterval;
+        nextLetterEligibleTime = Time.time + LetterCheckInterval;
+        letterEligible = false;
+        EnsureLetterPool();
+        Debug.Log(string.Format(
+            "[TCTrack] Health pickup: every {0:0}s at {1:0}% (expected 1 per {2:0}s). WEB letters: every {3:0}s at {4:0}% (expected 1 per {5:0}s), once per run. letterPool={6}",
+            HeartCheckInterval, HeartCheckChance * 100f, HeartCheckInterval / HeartCheckChance,
+            LetterCheckInterval, LetterCheckChance * 100f, LetterCheckInterval / LetterCheckChance,
+            letterPool != null ? "ready" : "MISSING"));
 
         // Spawn High Score Milestone Tag & Ribbon on trunk if previous high score exists
         if (TCSave.Best >= 10 && player != null)
@@ -213,12 +232,17 @@ public class TCTrack : MonoBehaviour
         if (y < clearUntilY)
             breather = true;
 
-        // Check 10-second timer for heart eligibility (2 out of 10 probability, i.e. 0.20)
+        // Heart check: every HeartCheckInterval seconds, HeartCheckChance probability.
         bool heartEligible = false;
         if (Time.time >= nextHeartEligibleTime)
         {
-            nextHeartEligibleTime = Time.time + 10f;
-            heartEligible = (Random.value < 0.20f);
+            nextHeartEligibleTime = Time.time + HeartCheckInterval;
+            heartEligible = (Random.value < HeartCheckChance);
+        }
+        if (Time.time >= nextLetterEligibleTime)
+        {
+            nextLetterEligibleTime = Time.time + LetterCheckInterval;
+            letterEligible = letterEligible || (Random.value < LetterCheckChance);
         }
 
         if (breather)
@@ -241,6 +265,11 @@ public class TCTrack : MonoBehaviour
                 lastBonusY = bonusY;
                 heartEligible = false; // consumed
             }
+            else if (canSpawnBreatherBonus && letterEligible && TrySpawnLetter(bonusY, safeAngle, metres))
+            {
+                lastBonusY = bonusY;
+                letterEligible = false;
+            }
             else if (canSpawnBreatherBonus && CanSpawnChilli && Random.value < C.boostChance * 2f)
             {
                 Spawn(boostPool, "boost", bonusY, safeAngle);
@@ -254,10 +283,6 @@ public class TCTrack : MonoBehaviour
             else if (canSpawnBreatherBonus && canSpawnMagnet && Random.value < C.magnetChance * 2f)
             {
                 Spawn(magnetPool, "magnet", bonusY, safeAngle);
-                lastBonusY = bonusY;
-            }
-            else if (canSpawnBreatherBonus && TrySpawnLetter(bonusY, safeAngle, metres))
-            {
                 lastBonusY = bonusY;
             }
             else
@@ -363,6 +388,11 @@ public class TCTrack : MonoBehaviour
             lastBonusY = bonusYPos;
             heartEligible = false; // consumed
         }
+        else if (canSpawnBonus && letterEligible && TrySpawnLetter(bonusYPos, newSafe, metres))
+        {
+            lastBonusY = bonusYPos;
+            letterEligible = false;
+        }
         else if (canSpawnBonus && CanSpawnChilli && Random.value < C.boostChance)
         {
             Spawn(boostPool, "boost", bonusYPos, newSafe);
@@ -376,10 +406,6 @@ public class TCTrack : MonoBehaviour
         else if (canSpawnBonus && canSpawnMagnetGap && Random.value < C.magnetChance)
         {
             Spawn(magnetPool, "magnet", bonusYPos, newSafe);
-            lastBonusY = bonusYPos;
-        }
-        else if (canSpawnBonus && TrySpawnLetter(bonusYPos, newSafe, metres))
-        {
             lastBonusY = bonusYPos;
         }
         else if (Random.value < C.coinTrailChance)
@@ -705,6 +731,11 @@ public class TCTrack : MonoBehaviour
                 ch.localPosition = new Vector3(0f, 0f, 0.603f);
                 ch.localRotation = Quaternion.Euler(0f, 0f, 90f);
             }
+            else if (kind == "webletter")
+            {
+                ch.localPosition = new Vector3(0f, 0f, 0.72f);
+                ch.localRotation = Quaternion.identity;
+            }
             else if (kind == "heart")
             {
                 if (ch.CompareTag("health") || ch.name.IndexOf("Heart", System.StringComparison.OrdinalIgnoreCase) >= 0)
@@ -785,12 +816,30 @@ public class TCTrack : MonoBehaviour
         return Spawn(cooldownPool, "cooldown", y, angle);
     }
 
+    void EnsureLetterPool()
+    {
+        if (letterPool != null) return;
+        if (!FindObjectOfType<TCWebBonus>())
+        {
+            var wb = new GameObject("TCWebBonus");
+            wb.AddComponent<TCWebBonus>();
+        }
+        var letterProto = TCWebBonus.CreateLetterPrefab(bonusParent, 'W');
+        if (!letterProto)
+        {
+            Debug.LogWarning("[TCTrack] WEB letter prefab failed to build — letters will not spawn");
+            return;
+        }
+        letterProto.SetActive(false);
+        letterPool = new TCPool(letterProto, bonusParent, 4);
+    }
+
     bool TrySpawnLetter(float y, float angle, float metres)
     {
         var web = TCWebBonus.Instance;
+        EnsureLetterPool();
         if (web == null || letterPool == null) return false;
         if (!web.CanSpawnLetter(metres)) return false;
-        if (Random.value > TCWebBonus.LetterChance) return false;
         char L = web.NextLetterToSpawn();
         var p = Spawn(letterPool, "webletter", y, angle);
         if (!p) return false;
@@ -800,11 +849,27 @@ public class TCTrack : MonoBehaviour
             letter.letter = L;
             letter.gameObject.name = "LetterItem";
         }
-        foreach (var r in p.GetComponentsInChildren<MeshRenderer>(true))
-            if (r.name == "Glyph") r.sharedMaterial = TCWebBonus.LetterMaterial(L);
+        TCWebBonus.ApplyLetterVisual(p.gameObject, L);
         p.gameObject.name = "WebLetter_" + L;
         web.MarkLetterSpawned(metres);
+        Debug.Log("[TCTrack] Spawned WEB letter " + L + " at " + metres.ToString("0") + " m");
         return true;
+    }
+
+    /// Capture/debug: place a letter on the upcoming path using the real pool and prefab.
+    public bool SpawnLetterNow()
+    {
+        if (!player || C == null) return false;
+        // Place the letter on the upcoming stretch, in the player's current
+        // facing lane, close enough to read in a normal-run screenshot.
+        float ahead = 1.7f;
+        float y = player.position.y + ahead;
+        float metres = (pl ? pl.currentScore : 0f) + ahead * C.metresPerUnit;
+        float ang = pl ? pl.CurrentYaw : TCPlayerAngle();
+        letterEligible = true;
+        bool ok = TrySpawnLetter(y, ang, metres);
+        if (ok) { lastBonusY = y; letterEligible = false; }
+        return ok;
     }
 
     public void ClearHazardsAhead(float worldDist)

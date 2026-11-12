@@ -14,6 +14,12 @@ public partial class TCCuteSpider : MonoBehaviour
     Vector3 bodyRest, bodyScale; float flip, t, blink = 2.5f;
     float rollTimer, rollDuration, rollSpinAngle;
     Transform head; Vector3 headRest; readonly List<Transform> eyes = new List<Transform>(); readonly List<Vector3> eyeRest = new List<Vector3>();
+    Transform abdomen; readonly List<Transform> spinnerets = new List<Transform>();
+    float gaitPhase, gaitOmega, lastYaw;
+    float landBounce, wasJumpBlend;
+    float swingLean, swingRoll, swingTwist, swingSquash, swingTuck;
+    Quaternion abdomenRest = Quaternion.identity;
+    bool hasAbdomenRest;
 
     static readonly Dictionary<string, Material> mats = new Dictionary<string, Material>();
     static Mesh cone;
@@ -53,7 +59,7 @@ public partial class TCCuteSpider : MonoBehaviour
         var root = new GameObject(RootName).transform; root.SetParent(st, false);
         root.localPosition = cs.hasRestRoot ? cs.restRoot : (center - up * Vector3.Dot(center, up) + up * Mathf.Min(Vector3.Dot(center, up), R * 0.2f));
         root.localRotation = Quaternion.LookRotation(fwd, up);
-        cs.legs.Clear(); cs.legRest.Clear(); cs.eyeRest.Clear();
+        cs.legs.Clear(); cs.legRest.Clear(); cs.eyeRest.Clear(); cs.spinnerets.Clear();
 
         var bodyMat = Resources.Load<Material>("Skins/Skin_" + skin);
         if (!bodyMat) bodyMat = Flat(def.body * 0.85f, null, 0, def.metallic, def.gloss);
@@ -152,7 +158,11 @@ public partial class TCCuteSpider : MonoBehaviour
             var spin = Part(PrimitiveType.Sphere, bodyT, new Vector3(0.08f * sgn * R, 0.56f * R - pivotY, rearZ), new Vector3(0.12f, 0.10f, 0.14f) * R, spinMat).transform;
             spin.localRotation = Quaternion.Euler(14, 10 * sgn, 0);
             spin.name = "spinneret";
+            cs.spinnerets.Add(spin);
         }
+        cs.abdomen = abdObj.transform;
+        cs.abdomenRest = abdObj.transform.localRotation;
+        cs.hasAbdomenRest = true;
 
         // Eyes: stylish, expressive, beautiful arachnid gaze with distinct skin-colored pupils
         Vector3 HS(Vector3 dir, float lift) { dir.Normalize(); return headT.localPosition + Vector3.Scale(dir, new Vector3(0.68f, 0.58f, 0.62f) * hr * R) + dir * lift * R; }
@@ -470,6 +480,30 @@ public partial class TCCuteSpider : MonoBehaviour
         rollTimer = duration;
     }
 
+    /// World position of the spinnerets (abdomen tip / rear of the body) for silk.
+    public Vector3 SpinneretTip()
+    {
+        if (spinnerets != null && spinnerets.Count > 0)
+        {
+            Vector3 acc = Vector3.zero; int n = 0;
+            for (int i = 0; i < spinnerets.Count; i++)
+                if (spinnerets[i]) { acc += spinnerets[i].position; n++; }
+            if (n > 0) return acc / n;
+        }
+        if (abdomen) return abdomen.TransformPoint(new Vector3(0f, -0.02f, -0.55f));
+        if (body) return body.TransformPoint(new Vector3(0f, 0.15f, -0.7f));
+        return transform.position;
+    }
+
+    public void SetSwingPose(float lean, float roll, float twist, float squash, float tuck = 0f)
+    {
+        swingLean = lean; swingRoll = roll; swingTwist = twist; swingSquash = squash; swingTuck = tuck;
+    }
+
+    public void ClearSwingPose() { swingLean = swingRoll = swingTwist = swingSquash = swingTuck = 0f; }
+
+    public void TriggerLandBounce() { landBounce = 1f; }
+
     void LateUpdate()
     {
         if (!root) return;
@@ -490,7 +524,8 @@ public partial class TCCuteSpider : MonoBehaviour
 
         bool isIntroWalking = anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("spiderIntro");
         bool isJumping = (pi && pi.IsJumping) || (anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("SpiderJump")) || backflipTimer > 0;
-        bool isMoving = (playerComp != null && !playerComp.paused && !playerComp.GameOver && !isJumping) || isIntroWalking;
+        bool swingingNow = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
+        bool isMoving = ((playerComp != null && !playerComp.paused && !playerComp.GameOver && !isJumping) || isIntroWalking) && !swingingNow;
 
         // Smooth jump/landing blend transition (prevents sudden snapping into or out of jump pose)
         float targetJumpBlend = isJumping ? 1f : 0f;
@@ -537,23 +572,55 @@ public partial class TCCuteSpider : MonoBehaviour
 
         float hop = Mathf.Clamp01(currentAirHeight * 3.5f);
 
-        // Cadence scales with climb speed: a weighty, readable gait rather than a frantic blur.
-        float startSp = (TCConfig.I != null) ? Mathf.Max(0.1f, TCConfig.I.startSpeed) : 1.6f;
-        float speedRatio = (playerComp && playerComp.calcSpeed > 0f)
-            ? Mathf.Clamp(playerComp.calcSpeed / startSp, 1f, 2.5f) : 1f;
-        float gaitFreq = Mathf.Lerp(6.4f, 11.2f, Mathf.InverseLerp(1f, 2.5f, speedRatio));
-        if (isIntroWalking && (playerComp == null || playerComp.paused)) gaitFreq = 7.4f;
+        // Stride × cadence ≈ climb speed so feet don't slide, including 2.5x cap and chilli boost
+        // (calcSpeed already includes boost). Phase is accumulated so frequency changes stay smooth.
+        const float StrideLength = 0.36f; // world units per step cycle
+        float climb = (playerComp && isMoving) ? Mathf.Max(0f, playerComp.calcSpeed) : 0f;
+        float yawNow = playerComp ? playerComp.CurrentYaw : lastYaw;
+        float yawRate = Mathf.Abs(Mathf.DeltaAngle(lastYaw, yawNow)) / Mathf.Max(dt, 1e-4f);
+        lastYaw = yawNow;
+        float steps = climb > 0.04f ? climb / StrideLength : 0f;
+        if (isIntroWalking && steps < 1f) steps = 5f;
+        // A little quicker when circling the trunk so steering doesn't look sluggish.
+        if (yawRate > 25f) steps = Mathf.Max(steps, 4.5f) * 1.08f;
+        float targetOmega = steps * (Mathf.PI * 2f);
+        gaitOmega = Mathf.Lerp(gaitOmega, targetOmega, 1f - Mathf.Exp(-10f * dt));
+        if (isMoving && gaitOmega > 0.1f) gaitPhase += gaitOmega * dt;
+        float phWalk = gaitPhase;
+        // Keep amplitude readable at high cadence (boost at 2.5x) without jitter.
+        float stepRate = gaitOmega / (Mathf.PI * 2f);
+        float amp = Mathf.Lerp(1f, 0.72f, Mathf.InverseLerp(10f, 18f, stepRate));
+
+        // Landing bounce: squash then a secondary recover when a jump ends.
+        if (wasJumpBlend > 0.4f && jumpBlend < 0.15f && !isJumping) landBounce = 1f;
+        wasJumpBlend = jumpBlend;
+        float bounce = 0f;
+        if (landBounce > 0f)
+        {
+            float bp = 1f - landBounce;
+            bounce = Mathf.Exp(-5.5f * bp) * Mathf.Sin(bp * Mathf.PI * 2.6f);
+            landBounce = Mathf.MoveTowards(landBounce, 0f, dt * 2.4f);
+        }
 
         // Bob is synced to footsteps (down on plant). Idle is a slow breath. Jump is a soft stretch.
         float bob = isJumping ? 0.06f * Mathf.Sin(t * 14f)
-                  : isMoving ? 0.022f - Mathf.Abs(Mathf.Cos(t * gaitFreq)) * 0.042f
+                  : isMoving ? (0.028f - Mathf.Abs(Mathf.Cos(phWalk)) * 0.055f) * amp
                   : Mathf.Sin(t * 2.2f) * 0.014f;
+        bob += bounce * 0.10f + swingSquash * 0.12f;
         body.localScale = new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f);
-        float headTick = isMoving ? gaitFreq : 2.2f;
-        if (head) head.localPosition = headRest + new Vector3(Mathf.Sin(t * headTick) * (isMoving ? 0.018f : 0.012f), Mathf.Abs(Mathf.Sin(t * headTick)) * (isMoving ? 0.018f : 0.014f), 0) * head.localScale.y;
-        float sway = isMoving ? Mathf.Sin(t * gaitFreq) * 6f : 0f;
-        float nod = isMoving ? Mathf.Cos(t * gaitFreq) * 3.5f : 0f;
-        float yawSway = isMoving ? Mathf.Sin(t * gaitFreq) * 4f : 0f;
+        if (head) head.localPosition = headRest + new Vector3(
+            Mathf.Sin(isMoving ? phWalk : t * 2.2f) * (isMoving ? 0.020f : 0.012f),
+            Mathf.Abs(Mathf.Sin(isMoving ? phWalk : t * 2.2f)) * (isMoving ? 0.020f : 0.014f), 0)
+            * head.localScale.y;
+        float sway = isMoving ? Mathf.Sin(phWalk) * 7.5f * amp : 0f;
+        float nod = isMoving ? Mathf.Cos(phWalk) * 4.5f * amp : 0f;
+        float yawSway = isMoving ? Mathf.Sin(phWalk) * 5f * amp : 0f;
+        // Lean into climb and into the turn (anticipation / follow-through).
+        float speedLean = isMoving && playerComp ? Mathf.Clamp(playerComp.calcSpeed * 2.4f, 0f, 14f) : 0f;
+        nod -= speedLean * 0.35f;
+        sway += swingRoll;
+        nod += swingLean;
+        yawSway += swingTwist;
 
         // Legs:
         // Alternating tripod gait (for 6 legs: 3 on each side):
@@ -567,10 +634,11 @@ public partial class TCCuteSpider : MonoBehaviour
             // Tripod assignment: group A = (L0, L2, R1), group B = (R0, R2, L1)
             bool isTripodA = isLeft ? (legIdx != 1) : (legIdx == 1);
             float tripodPhase = isTripodA ? 0f : Mathf.PI;
-            float ph = t * gaitFreq + tripodPhase + (legIdx * 0.25f);
+            // Overlapping per-leg offsets so the gait isn't a stiff locked tripod
+            float ph = phWalk + tripodPhase + legIdx * 0.55f + i * 0.11f;
 
             // Forward/backward stride: softened sine so the plant and reach feel weighty, not jittery
-            float swingAmp = legIdx == 0 ? 22f : (legIdx == 2 ? 20f : 16f);
+            float swingAmp = (legIdx == 0 ? 24f : (legIdx == 2 ? 22f : 18f)) * amp;
             float swing = Mathf.Sin(ph) * swingAmp;
 
             // Lift only on the swing half, eased in and out (longer stance, quicker pick-up)
@@ -610,6 +678,20 @@ public partial class TCCuteSpider : MonoBehaviour
                 Quaternion rollTuck = legRest[i] * Quaternion.Euler(isLeft ? 45f : -45f, 0, 70f);
                 targetLegPose = Quaternion.Slerp(targetLegPose, rollTuck, rollBlend);
             }
+            if (swingTuck > 0.001f)
+            {
+                // Mid-air web swing: legs tucked in close
+                Quaternion webTuck = legRest[i] * Quaternion.Euler(isLeft ? 40f : -40f, 0, 60f);
+                targetLegPose = Quaternion.Slerp(targetLegPose, webTuck, Mathf.Clamp01(swingTuck));
+            }
+            else if (swingTuck < -0.001f)
+            {
+                // Thwip: legs reach out toward the shot
+                float reach = Mathf.Clamp01(-swingTuck);
+                float pitch = legIdx == 0 ? -42f : 12f;
+                Quaternion webReach = legRest[i] * Quaternion.Euler(pitch, (isLeft ? -1f : 1f) * 18f, -8f);
+                targetLegPose = Quaternion.Slerp(targetLegPose, webReach, reach);
+            }
             legs[i].localRotation = targetLegPose;
 
             // Friendly wave in main menu (uses front right leg i == 3)
@@ -644,6 +726,13 @@ public partial class TCCuteSpider : MonoBehaviour
         else
         {
             body.localRotation = Quaternion.Euler(flipPitch + nod, yawSway, sway);
+        }
+
+        // Abdomen follow-through: lags the body slightly so motion feels organic.
+        if (abdomen && hasAbdomenRest)
+        {
+            var lag = Quaternion.Euler(-nod * 0.45f, -yawSway * 0.3f, -sway * 0.35f);
+            abdomen.localRotation = Quaternion.Slerp(abdomen.localRotation, abdomenRest * lag, 1f - Mathf.Exp(-8f * dt));
         }
 
         // Rainbow Spider: dynamically wave colors across all parts over time

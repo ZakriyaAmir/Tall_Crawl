@@ -13,17 +13,20 @@ public class TCWebBonus : MonoBehaviour
     public static TCWebBonus Instance { get; private set; }
 
     public const float DistanceBonusMetres = 5000f;
-    public const float SwingSeconds = 2.6f;
+    public const int SwingCount = 10;
+    public const float SwingSeconds = 9f; // 0.9 s per thwip-and-swing cycle
     public const float GraceSeconds = 1.8f;
-    public const float FirstLetterMetres = 220f;
-    public const float MinLetterSpacingMetres = 70f;
-    public const float LetterChance = 0.085f;
+    // Letter cadence lives in TCTrack (half the health-pickup frequency).
+    // The WEB swing is earned at most once per run; after that no more letters spawn.
 
     public bool HasW { get; private set; }
     public bool HasE { get; private set; }
     public bool HasB { get; private set; }
     public bool AllCollected => HasW && HasE && HasB;
     public bool IsSwinging { get; private set; }
+    public bool OwnsMotion { get; private set; }
+    /// True once this run has started (or finished) its one WEB swing. No further letters spawn.
+    public bool SpentThisRun { get; private set; }
     public bool IsInvincible => IsSwinging || graceLeft > 0f;
     public float ClimbSpeed { get; private set; } // world units / sec during the swing
 
@@ -36,6 +39,16 @@ public class TCWebBonus : MonoBehaviour
     Coroutine swingCo;
     GameObject letterProto;
     AudioSource whoosh;
+    ParticleSystem windTrail;
+    float silkAge;
+    Vector3 silkAnchor, silkTip;
+    bool silkLive;
+    readonly List<LineRenderer> fadingSilk = new List<LineRenderer>();
+    readonly List<float> fadingAge = new List<float>();
+    readonly List<float> fadingLife = new List<float>();
+    readonly List<Material> fadingMat = new List<Material>();
+    const float TrunkRadius = 0.603f;
+    const float OrbitPerSwing = 108f; // degrees around the trunk; 10 swings = 3 full revolutions
 
     void Awake()
     {
@@ -47,16 +60,10 @@ public class TCWebBonus : MonoBehaviour
     void Update()
     {
         if (graceLeft > 0f) graceLeft = Mathf.Max(0f, graceLeft - Time.deltaTime);
-        if (IsSwinging && webLine && webAnchor)
-        {
-            var sp = ResolveSpider();
-            if (sp)
-            {
-                webLine.positionCount = 2;
-                webLine.SetPosition(0, webAnchor.position);
-                webLine.SetPosition(1, sp.position + sp.up * 0.15f);
-            }
-        }
+        if (IsSwinging && webLine && webLine.enabled && silkLive)
+            DrawSilk(silkTip, silkAnchor, 0.85f, silkAge);
+        if (IsSwinging) silkAge += Time.deltaTime;
+        TickFadingSilk();
     }
 
     Transform ResolveSpider()
@@ -75,24 +82,21 @@ public class TCWebBonus : MonoBehaviour
 
     public bool CanSpawnLetter(float metres)
     {
-        if (IsSwinging || AllCollected) return false;
-        if (metres < FirstLetterMetres) return false;
-        if (metres - lastLetterMetres < MinLetterSpacingMetres) return false;
+        if (SpentThisRun || IsSwinging || AllCollected) return false;
         return true;
     }
 
     public char NextLetterToSpawn()
     {
-        // Prefer a letter the player does not already have, in W-E-B order with a little shuffle.
-        var missing = new List<char>(3);
-        if (!HasW) missing.Add('W');
-        if (!HasE) missing.Add('E');
-        if (!HasB) missing.Add('B');
-        if (missing.Count == 0) return 'W';
-        return missing[Random.Range(0, missing.Count)];
+        if (!HasW) return 'W';
+        if (!HasE) return 'E';
+        return 'B';
     }
 
-    public void MarkLetterSpawned(float metres) { lastLetterMetres = metres; }
+    public void MarkLetterSpawned(float metres)
+    {
+        lastLetterMetres = metres;
+    }
 
     public void CollectLetter(char c, Vector3 pos)
     {
@@ -125,49 +129,224 @@ public class TCWebBonus : MonoBehaviour
     IEnumerator SwingRoutine()
     {
         IsSwinging = true;
+        OwnsMotion = true;
+        SpentThisRun = true; // one WEB bonus per run — no more letters after this
         OnSwingStart?.Invoke();
         var pl = player.Instance;
         var sp = ResolveSpider();
+        var cute = ResolveCute(sp);
         if (pl) pl.ResetInputState();
 
-        // Clear hazards ahead so the climb is a pure celebration.
         TCTrack.Instance?.ClearHazardsAhead(80f);
         TCTrack.Instance?.ReserveClearRun(DistanceBonusMetres);
 
-        // Web strand from a point high above the spider.
         EnsureWeb();
-        if (sp && webAnchor)
-        {
-            webAnchor.position = sp.position + Vector3.up * 14f + sp.up * 0.2f;
-            webLine.enabled = true;
-        }
-        TCFx.Shake(0.22f);
+        TCFx.Shake(0.18f);
         TCSfx.Play("celebrate", 1f);
-        if (whoosh && TCAssets.I && TCAssets.I.whoosh) whoosh.PlayOneShot(TCAssets.I.whoosh, 0.9f);
 
-        // Camera punch.
         var cam = Camera.main;
-        Vector3 camLocal = cam ? cam.transform.localPosition : Vector3.zero;
-        if (cam) StartCoroutine(CamPunch(cam, camLocal, 0.18f, 0.55f));
+        Vector3 camRest = cam ? cam.transform.localPosition : Vector3.zero;
+        // Pull the (player-parented) camera back a little so the trunk swirl reads clearly
+        Vector3 camWide = camRest + new Vector3(0f, 0.14f, 0.55f);
+        if (cam)
+        {
+            float z = 0f;
+            while (z < 0.18f)
+            {
+                z += Time.unscaledDeltaTime;
+                cam.transform.localPosition = Vector3.Lerp(camRest, camWide, Smooth(z / 0.18f));
+                yield return null;
+            }
+            cam.transform.localPosition = camWide;
+        }
 
-        // Convert 5000 m into world units (metresPerUnit) and climb it in SwingSeconds.
         float mpu = TCConfig.I != null ? Mathf.Max(0.01f, TCConfig.I.metresPerUnit) : 20f;
         float worldUnits = DistanceBonusMetres / mpu;
-        ClimbSpeed = worldUnits / Mathf.Max(0.2f, SwingSeconds);
+        Vector3 axis = pl && pl.p1 ? pl.p1.position : Vector3.zero;
+        axis.y = 0f;
+        float y0 = pl && pl.p1 ? pl.p1.position.y : (sp ? sp.position.y : 0f);
+        float yEnd = y0 + worldUnits;
+        float yaw = pl ? pl.CurrentYaw : (sp ? sp.eulerAngles.y : 0f);
 
-        float t = 0f;
-        while (t < SwingSeconds)
+        var trail = EnsureWind(sp);
+        if (trail) { trail.Clear(); trail.Play(); }
+
+        const int Shots = SwingCount;
+        float cycle = SwingSeconds / Shots;
+        float yPrev = y0;
+        const float ThwipDur = 0.12f;
+        const float FlipDur = 0.14f;
+
+        for (int shot = 0; shot < Shots; shot++)
         {
-            t += Time.deltaTime;
-            if (webAnchor && sp) webAnchor.position = sp.position + Vector3.up * 14f + sp.up * 0.2f;
-            yield return null;
+            bool last = shot == Shots - 1;
+            float yawStart = yaw;
+            float yawLand = yawStart + OrbitPerSwing; // one consistent spiral around the trunk
+            float yStart = Mathf.Lerp(y0, yEnd, shot / (float)Shots);
+            float yLand = Mathf.Lerp(y0, yEnd, (shot + 1) / (float)Shots);
+            // Anchor is on the bark, above and ahead around the trunk so the pendulum orbits.
+            float yawAnchor = yawStart + OrbitPerSwing * 0.62f;
+            float yAnchor = yStart + 2.15f + (yLand - yStart) * 0.35f;
+            Vector3 anchorFixed = OnTrunk(axis, yawAnchor, yAnchor, TrunkRadius);
+
+            // --- 1. Thwip: silk shoots from the spinnerets to the anchor ---
+            silkLive = true;
+            silkAge = 0f;
+            if (webLine) webLine.enabled = true;
+            PlayThwip(shot);
+            if (cam) StartCoroutine(CamPunch(cam, camWide, 0.16f, 0.22f));
+            TCFx.Shake(0.10f);
+            if (cute) cute.SetSwingPose(-24f, 8f, 0f, 0.18f, -1f); // legs reach toward the shot
+
+            float t = 0f;
+            while (t < ThwipDur)
+            {
+                t += Time.deltaTime;
+                float ext = Mathf.Clamp01(t / ThwipDur);
+                ext = ext * ext * (3f - 2f * ext);
+                silkTip = SpinneretWorld(cute, sp);
+                silkAnchor = Vector3.Lerp(silkTip, anchorFixed, ext);
+                if (webAnchor) webAnchor.position = silkAnchor;
+                DrawSilk(silkTip, silkAnchor, ext, silkAge);
+                if (pl && pl.p1)
+                {
+                    var pos = pl.p1.position; pos.y = yStart;
+                    pl.ApplySwingTransform(pos, yawStart);
+                    yPrev = yStart;
+                }
+                yield return null;
+            }
+            silkAnchor = anchorFixed;
+            if (webAnchor) webAnchor.position = silkAnchor;
+
+            // --- 2. Pendulum arc while orbiting the trunk ---
+            float swingDur = Mathf.Max(0.35f, cycle - ThwipDur - (last ? 0.45f : FlipDur));
+            t = 0f;
+            while (t < swingDur)
+            {
+                t += Time.deltaTime;
+                float swingU = Mathf.Clamp01(t / swingDur);
+                // Slow at the ends, fast through the bottom — a real pendulum.
+                float pend = 0.5f - 0.5f * Mathf.Cos(swingU * Mathf.PI);
+                yaw = yawStart + OrbitPerSwing * pend;
+                // Climb across the cycle, with a dip at the bottom of the arc and a rise into the far peak.
+                float dip = 0.55f * Mathf.Sin(swingU * Mathf.PI);
+                float y = Mathf.Lerp(yStart, yLand, Smooth(pend)) - dip;
+                float taut = 0.50f + 0.50f * Mathf.Abs(Mathf.Cos(swingU * Mathf.PI));
+
+                silkTip = SpinneretWorld(cute, sp);
+                silkAnchor = anchorFixed;
+                if (webAnchor) webAnchor.position = silkAnchor;
+                DrawSilk(silkTip, silkAnchor, taut, silkAge);
+
+                // Lean with momentum; legs tucked mid-air.
+                if (cute)
+                {
+                    float lean = -16f - 14f * Mathf.Sin(swingU * Mathf.PI);
+                    float roll = 18f * Mathf.Sin(swingU * Mathf.PI);
+                    float twist = 12f * pend;
+                    float squash = 0.10f + 0.22f * Mathf.Sin(swingU * Mathf.PI);
+                    cute.SetSwingPose(lean, roll, twist, squash, 0.85f);
+                }
+
+                if (pl && pl.p1)
+                {
+                    var pos = pl.p1.position; pos.y = y;
+                    pl.ApplySwingTransform(pos, yaw);
+                    float dt = Mathf.Max(Time.deltaTime, 1e-4f);
+                    ClimbSpeed = (y - yPrev) / dt;
+                    yPrev = y;
+                }
+                yield return null;
+            }
+            yaw = yawLand;
+
+            // --- 3. Release at the top of the arc, flip/twist, then the next thwip ---
+            LingerCurrentSilk();
+            silkLive = false;
+            if (webLine) webLine.enabled = false;
+
+            if (last)
+            {
+                // Celebratory flip and landing on the last swing.
+                if (cute)
+                {
+                    cute.SetSwingPose(-8f, 10f, 0f, 0.08f, 0.4f);
+                    cute.TriggerBackflip(0.65f);
+                }
+                TCSfx.Play("celebrate", 1f);
+                float flip = 0f;
+                float landY = yLand;
+                while (flip < 0.55f)
+                {
+                    flip += Time.deltaTime;
+                    float k = Mathf.Clamp01(flip / 0.55f);
+                    float y = landY + Mathf.Sin(k * Mathf.PI) * 0.35f;
+                    float spinYaw = yawLand + k * 20f;
+                    if (cute) cute.SetSwingPose(-6f, 8f, 360f * Smooth(k), 0.12f * Mathf.Sin(k * Mathf.PI), 0.2f);
+                    if (pl && pl.p1)
+                    {
+                        var pos = pl.p1.position; pos.y = y;
+                        pl.ApplySwingTransform(pos, Mathf.LerpAngle(yawLand, yawLand, k));
+                        ClimbSpeed = (y - yPrev) / Mathf.Max(Time.deltaTime, 1e-4f);
+                        yPrev = y;
+                    }
+                    yield return null;
+                }
+                yaw = yawLand;
+                if (pl && pl.p1)
+                {
+                    var pos = pl.p1.position; pos.y = landY;
+                    pl.ApplySwingTransform(pos, yaw);
+                }
+            }
+            else
+            {
+                if (cute)
+                {
+                    cute.SetSwingPose(-4f, 6f, 0f, 0.06f, 0.5f);
+                    cute.TriggerBackflip(0.28f);
+                }
+                float flip = 0f;
+                while (flip < FlipDur)
+                {
+                    flip += Time.deltaTime;
+                    float k = Mathf.Clamp01(flip / FlipDur);
+                    float y = yLand + Mathf.Sin(k * Mathf.PI) * 0.18f;
+                    if (cute) cute.SetSwingPose(-8f, 14f, 180f * k, 0.1f, 0.35f);
+                    if (pl && pl.p1)
+                    {
+                        var pos = pl.p1.position; pos.y = y;
+                        pl.ApplySwingTransform(pos, yawLand);
+                        ClimbSpeed = (y - yPrev) / Mathf.Max(Time.deltaTime, 1e-4f);
+                        yPrev = y;
+                    }
+                    yield return null;
+                }
+            }
+        }
+
+        if (trail) trail.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+        if (webLine) webLine.enabled = false;
+        silkLive = false;
+        if (cute) { cute.ClearSwingPose(); cute.TriggerLandBounce(); }
+        if (cam)
+        {
+            float z = 0f;
+            var from = cam.transform.localPosition;
+            while (z < 0.2f)
+            {
+                z += Time.unscaledDeltaTime;
+                cam.transform.localPosition = Vector3.Lerp(from, camRest, Smooth(z / 0.2f));
+                yield return null;
+            }
+            cam.transform.localPosition = camRest;
         }
 
         ClimbSpeed = 0f;
+        OwnsMotion = false;
         IsSwinging = false;
-        if (webLine) webLine.enabled = false;
 
-        // Land safely: another clear stretch + grace invulnerability.
         TCTrack.Instance?.ClearHazardsAhead(12f);
         TCTrack.Instance?.ReserveClearRun(400f);
         graceLeft = GraceSeconds;
@@ -176,9 +355,159 @@ public class TCWebBonus : MonoBehaviour
         var pi = FindObjectOfType<playerInteract>();
         if (pi) pi.GrantGrace(GraceSeconds);
 
-        ResetLetters();
+        ResetLetters(); // clear the HUD; SpentThisRun stays set so letters do not return
         OnSwingEnd?.Invoke();
         swingCo = null;
+    }
+
+    static Vector3 OnTrunk(Vector3 axis, float yawDeg, float y, float radius)
+    {
+        float a = yawDeg * Mathf.Deg2Rad;
+        return new Vector3(axis.x + Mathf.Sin(a) * radius, y, axis.z + Mathf.Cos(a) * radius);
+    }
+
+    void PlayThwip(int shot)
+    {
+        float pitch = 0.94f + (shot % 3) * 0.07f;
+        if (whoosh && TCAssets.I && TCAssets.I.whoosh) whoosh.PlayOneShot(TCAssets.I.whoosh, 0.9f);
+        TCSfx.Play("whoosh", 0.85f, pitch);
+    }
+
+    void LingerCurrentSilk()
+    {
+        if (!webLine || webLine.positionCount < 2) return;
+        var go = new GameObject("TCWebFade");
+        var lr = go.AddComponent<LineRenderer>();
+        lr.positionCount = webLine.positionCount;
+        var pts = new Vector3[webLine.positionCount];
+        webLine.GetPositions(pts);
+        lr.SetPositions(pts);
+        lr.startWidth = webLine.startWidth;
+        lr.endWidth = webLine.endWidth;
+        lr.useWorldSpace = true;
+        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        lr.receiveShadows = false;
+        lr.textureMode = LineTextureMode.Stretch;
+        var sh = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Universal Render Pipeline/Unlit");
+        var mat = new Material(sh) { color = new Color(0.95f, 0.97f, 1f, 0.85f) };
+        lr.material = mat;
+        lr.startColor = new Color(1f, 1f, 1f, 0.9f);
+        lr.endColor = new Color(1f, 1f, 1f, 0.45f);
+        fadingSilk.Add(lr);
+        fadingAge.Add(0f);
+        fadingLife.Add(0.62f);
+        fadingMat.Add(mat);
+    }
+
+    void TickFadingSilk()
+    {
+        for (int i = fadingSilk.Count - 1; i >= 0; i--)
+        {
+            fadingAge[i] += Time.deltaTime;
+            float a = 1f - Mathf.Clamp01(fadingAge[i] / Mathf.Max(0.01f, fadingLife[i]));
+            a *= a;
+            if (fadingMat[i]) fadingMat[i].color = new Color(0.95f, 0.97f, 1f, 0.85f * a);
+            if (fadingSilk[i])
+            {
+                fadingSilk[i].startColor = new Color(1f, 1f, 1f, 0.9f * a);
+                fadingSilk[i].endColor = new Color(1f, 1f, 1f, 0.4f * a);
+            }
+            if (fadingAge[i] >= fadingLife[i])
+            {
+                if (fadingSilk[i]) Destroy(fadingSilk[i].gameObject);
+                fadingSilk.RemoveAt(i);
+                fadingAge.RemoveAt(i);
+                fadingLife.RemoveAt(i);
+                fadingMat.RemoveAt(i);
+            }
+        }
+    }
+
+    static float Smooth(float x)
+    {
+        x = Mathf.Clamp01(x);
+        return x * x * (3f - 2f * x);
+    }
+
+    TCCuteSpider ResolveCute(Transform sp)
+    {
+        if (sp)
+        {
+            var c = sp.GetComponentInParent<TCCuteSpider>() ?? sp.GetComponentInChildren<TCCuteSpider>();
+            if (c) return c;
+        }
+        var pl = player.Instance;
+        if (pl) return pl.GetComponentInChildren<TCCuteSpider>();
+        return FindObjectOfType<TCCuteSpider>();
+    }
+
+    static Vector3 SpinneretWorld(TCCuteSpider cute, Transform sp)
+    {
+        if (cute) return cute.SpinneretTip();
+        if (sp) return sp.position + sp.up * 0.05f - sp.forward * 0.2f;
+        return Vector3.zero;
+    }
+
+    void DrawSilk(Vector3 tip, Vector3 anchor, float taut, float age)
+    {
+        if (!webLine) return;
+        const int N = 16;
+        webLine.positionCount = N;
+        float len = Vector3.Distance(tip, anchor);
+        float sag = Mathf.Lerp(0.22f, 0.05f, Mathf.Clamp01(taut)) * Mathf.Max(0.4f, len);
+        Vector3 side = Vector3.Cross(anchor - tip, Vector3.up);
+        if (side.sqrMagnitude < 1e-6f) side = Vector3.right;
+        side.Normalize();
+        for (int i = 0; i < N; i++)
+        {
+            float u = i / (N - 1f);
+            Vector3 p = Vector3.Lerp(tip, anchor, u);
+            float bow = 4f * u * (1f - u);
+            float wob = Mathf.Sin(age * 16f + u * 9f) * 0.05f * (1.1f - taut);
+            p += Vector3.down * (sag * bow) + side * (wob * bow);
+            webLine.SetPosition(i, p);
+        }
+        webLine.startWidth = 0.055f;
+        webLine.endWidth = 0.016f;
+    }
+
+    ParticleSystem EnsureWind(Transform sp)
+    {
+        if (windTrail) return windTrail;
+        if (!sp) return null;
+        var go = new GameObject("SwingWind");
+        go.transform.SetParent(sp, false);
+        go.transform.localPosition = new Vector3(0f, 0.1f, -0.15f);
+        windTrail = go.AddComponent<ParticleSystem>();
+        var main = windTrail.main;
+        main.loop = true;
+        main.duration = 1f;
+        main.startLifetime = 0.35f;
+        main.startSpeed = 2.4f;
+        main.startSize = 0.07f;
+        main.startColor = new Color(0.92f, 0.97f, 1f, 0.65f);
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        var em = windTrail.emission;
+        em.rateOverTime = 48f;
+        var sh = windTrail.shape;
+        sh.shapeType = ParticleSystemShapeType.Cone;
+        sh.angle = 14f;
+        sh.radius = 0.05f;
+var col = windTrail.colorOverLifetime;
+        col.enabled = true;
+        var g = new Gradient();
+        g.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(0.7f, 0.85f, 1f), 1f) },
+            new[] { new GradientAlphaKey(0.7f, 0f), new GradientAlphaKey(0f, 1f) });
+        col.color = g;
+        var rend = go.GetComponent<ParticleSystemRenderer>();
+        if (rend)
+        {
+            var shd = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shd) rend.material = new Material(shd) { color = new Color(0.95f, 0.98f, 1f, 0.7f) };
+        }
+        windTrail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        return windTrail;
     }
 
     IEnumerator CamPunch(Camera cam, Vector3 rest, float amount, float dur)
@@ -230,18 +559,20 @@ public class TCWebBonus : MonoBehaviour
 
         var item = new GameObject("LetterItem");
         item.transform.SetParent(root.transform, false);
+        // Sit on the trunk surface (root is at the axis, yawed to the lane).
+        item.transform.localPosition = new Vector3(0f, 0f, 0.72f);
         var col = item.AddComponent<SphereCollider>();
         col.isTrigger = true;
-        col.radius = 0.28f;
+        col.radius = 0.55f;
         var letterComp = item.AddComponent<TCWebLetter>();
         letterComp.letter = letter;
 
-        // Billboard letter card
+        // Billboard letter card — large, brightly colored, easy to read on the trunk
         var card = GameObject.CreatePrimitive(PrimitiveType.Quad);
         Object.DestroyImmediate(card.GetComponent<Collider>());
         card.name = "Glyph";
         card.transform.SetParent(item.transform, false);
-        card.transform.localScale = Vector3.one * 0.42f;
+        card.transform.localScale = Vector3.one * 1.05f;
         var mr = card.GetComponent<MeshRenderer>();
         mr.sharedMaterial = LetterMaterial(letter);
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -251,50 +582,127 @@ public class TCWebBonus : MonoBehaviour
         Object.DestroyImmediate(glow.GetComponent<Collider>());
         glow.name = "Glow";
         glow.transform.SetParent(item.transform, false);
-        glow.transform.localPosition = new Vector3(0, 0, 0.02f);
-        glow.transform.localScale = Vector3.one * 0.7f;
+        glow.transform.localPosition = new Vector3(0, 0, 0.03f);
+        glow.transform.localScale = Vector3.one * 1.75f;
         var gr = glow.GetComponent<MeshRenderer>();
-        var gmat = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color"));
-        gmat.color = new Color(0.85f, 0.95f, 1f, 0.35f);
-        gr.sharedMaterial = gmat;
+        gr.sharedMaterial = LetterGlowMaterial(letter);
         gr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        gr.receiveShadows = false;
+
+        var halo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        Object.DestroyImmediate(halo.GetComponent<Collider>());
+        halo.name = "Halo";
+        halo.transform.SetParent(item.transform, false);
+        halo.transform.localPosition = new Vector3(0, 0, 0.05f);
+        halo.transform.localScale = Vector3.one * 2.35f;
+        var hr = halo.GetComponent<MeshRenderer>();
+        hr.sharedMaterial = LetterGlowMaterial(letter);
+        hr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        hr.receiveShadows = false;
 
         var bill = item.AddComponent<TCWebLetterBillboard>();
         bill.visual = item.transform;
+        ApplyLetterVisual(root, letter);
         return root;
     }
 
+    public static Color LetterColor(char letter)
+    {
+        letter = char.ToUpperInvariant(letter);
+        if (letter == 'W') return new Color(1f, 0.78f, 0.12f, 1f);       // gold
+        if (letter == 'E') return new Color(0.12f, 0.95f, 0.48f, 1f);     // emerald
+        return new Color(0.28f, 0.52f, 1f, 1f);                           // azure B
+    }
+
+    public static void ApplyLetterVisual(GameObject root, char letter)
+    {
+        if (!root) return;
+        letter = char.ToUpperInvariant(letter);
+        var glyph = LetterMaterial(letter);
+        var glow = LetterGlowMaterial(letter);
+        foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
+        {
+            if (!r) continue;
+            if (r.name == "Glyph") r.sharedMaterial = glyph;
+            else if (r.name == "Glow" || r.name == "Halo") r.sharedMaterial = glow;
+        }
+        var bill = root.GetComponentInChildren<TCWebLetterBillboard>(true);
+        if (bill) bill.PlayPop();
+    }
+
     static readonly Dictionary<char, Material> letterMats = new Dictionary<char, Material>();
+    static readonly Dictionary<char, Material> glowMats = new Dictionary<char, Material>();
     public static Material LetterMaterial(char letter)
     {
         letter = char.ToUpperInvariant(letter);
         if (letterMats.TryGetValue(letter, out var m) && m) return m;
         var tex = LetterTexture(letter);
-        var sh = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Transparent") ?? Shader.Find("Unlit/Texture");
-        m = new Material(sh) { mainTexture = tex, color = Color.white, name = "WEB_" + letter };
-        if (m.HasProperty("_Mode")) { /* keep default */ }
+        m = MakeLetterUnlit("WEB_" + letter, tex, Color.white, true);
         letterMats[letter] = m;
+        return m;
+    }
+
+    public static Material LetterGlowMaterial(char letter)
+    {
+        letter = char.ToUpperInvariant(letter);
+        if (glowMats.TryGetValue(letter, out var m) && m) return m;
+        var c = LetterColor(letter);
+        m = MakeLetterUnlit("WEBGlow_" + letter, null, new Color(c.r, c.g, c.b, 0.42f), true);
+        glowMats[letter] = m;
+        return m;
+    }
+
+    static Material MakeLetterUnlit(string name, Texture tex, Color color, bool transparent)
+    {
+        var sh = Shader.Find("Universal Render Pipeline/Unlit")
+              ?? Shader.Find("Unlit/Transparent")
+              ?? Shader.Find("Unlit/Texture")
+              ?? Shader.Find("Sprites/Default");
+        var m = new Material(sh) { name = name, color = color };
+        if (tex)
+        {
+            m.mainTexture = tex;
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
+        }
+        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+        if (m.HasProperty("_Color")) m.SetColor("_Color", color);
+        if (transparent)
+        {
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);
+            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 0f);
+            if (m.HasProperty("_SrcBlend")) m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (m.HasProperty("_DstBlend")) m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (m.HasProperty("_ZWrite")) m.SetInt("_ZWrite", 0);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.EnableKeyword("_ALPHABLEND_ON");
+            m.renderQueue = 3000;
+        }
         return m;
     }
 
     static Texture2D LetterTexture(char letter)
     {
-        const int N = 128;
+        const int N = 256;
         var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
         var px = new Color[N * N];
-        // Soft cream card with cocoa letter
+        var col = LetterColor(letter);
+        var card = Color.Lerp(col, Color.white, 0.22f);
+        var rim = Color.Lerp(col, Color.white, 0.7f);
         for (int y = 0; y < N; y++)
             for (int x = 0; x < N; x++)
             {
                 float u = (x + 0.5f) / N * 2 - 1, v = (y + 0.5f) / N * 2 - 1;
-                // rounded rect
-                float ax = Mathf.Abs(u) - 0.72f, ay = Mathf.Abs(v) - 0.72f;
-                float d = Mathf.Min(Mathf.Max(ax, ay), 0) + new Vector2(Mathf.Max(ax, 0), Mathf.Max(ay, 0)).magnitude - 0.18f;
-                float a = Mathf.Clamp01(-d * 32f);
-                px[y * N + x] = new Color(1f, 0.97f, 0.92f, a);
+                float ax = Mathf.Abs(u) - 0.70f, ay = Mathf.Abs(v) - 0.70f;
+                float d = Mathf.Min(Mathf.Max(ax, ay), 0) + new Vector2(Mathf.Max(ax, 0), Mathf.Max(ay, 0)).magnitude - 0.20f;
+                float a = Mathf.Clamp01(-d * 36f);
+                float edge = Mathf.Clamp01(1f - Mathf.Abs(d) * 18f);
+                var fill = Color.Lerp(card, rim, edge * 0.85f);
+                fill.a = a;
+                px[y * N + x] = fill;
             }
         tex.SetPixels(px);
-        // Stamp a chunky letter
         StampLetter(tex, letter);
         tex.Apply(false, false);
         return tex;
@@ -308,7 +716,7 @@ public class TCWebBonus : MonoBehaviour
         {
             if ((uint)x >= (uint)N || (uint)y >= (uint)N) return;
             var c = tex.GetPixel(x, y);
-            var ink = new Color(0.29f, 0.23f, 0.25f, 1);
+            var ink = new Color(0.08f, 0.07f, 0.12f, 1);
             c = Color.Lerp(c, ink, a * 0.95f);
             c.a = Mathf.Max(c.a, a);
             tex.SetPixel(x, y, c);
@@ -398,12 +806,37 @@ public class TCWebLetterBillboard : MonoBehaviour
 {
     public Transform visual;
     Vector3 basePos;
-    void OnEnable() { if (visual) basePos = visual.localPosition; }
+    float pop = 1f;
+    float age;
+
+    void OnEnable()
+    {
+        if (visual) basePos = visual.localPosition;
+        PlayPop();
+    }
+
+    public void PlayPop()
+    {
+        pop = 0f;
+        age = 0f;
+        if (visual) visual.localScale = Vector3.zero;
+    }
+
     void LateUpdate()
     {
         if (!visual) return;
+        age += Time.deltaTime;
+        pop = Mathf.MoveTowards(pop, 1f, Time.deltaTime * 5.5f);
+        // Short overshoot pop-in, then a lively bob + pulse.
+        float over = 1f + Mathf.Sin(Mathf.Clamp01(pop) * Mathf.PI) * 0.22f * (1f - pop);
+        float s = Mathf.SmoothStep(0f, 1f, pop) * over;
+        visual.localScale = Vector3.one * s;
         var cam = Camera.main;
         if (cam) visual.rotation = Quaternion.LookRotation(visual.position - cam.transform.position, Vector3.up);
-        visual.localPosition = basePos + Vector3.up * (Mathf.Sin(Time.time * 2.6f) * 0.04f);
+        visual.localPosition = basePos + Vector3.up * (Mathf.Sin(age * 3.6f) * 0.11f);
+        var glow = visual.Find("Glow");
+        if (glow) glow.localScale = Vector3.one * (1.75f * (1f + 0.08f * Mathf.Sin(age * 5f)));
+        var halo = visual.Find("Halo");
+        if (halo) halo.localScale = Vector3.one * (2.35f * (1f + 0.10f * Mathf.Sin(age * 4.2f + 1f)));
     }
 }

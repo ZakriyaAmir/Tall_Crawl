@@ -17,6 +17,18 @@ public class player : MonoBehaviour
     public bool IsRolling => boost; // Roll animation happens during chilli mode
     public float CurrentYaw => yaw;
 
+    /// Used by the WEB swing so pendulum motion can set both height and yaw.
+    public void ApplySwingTransform(Vector3 pos, float yawDeg)
+    {
+        if (!p1) return;
+        var p = p1.position;
+        p.y = pos.y;
+        p1.position = p;
+        yaw = targetYaw = yawDeg;
+        var e = p1.localEulerAngles; e.y = yaw; p1.localEulerAngles = e;
+        if (C != null) currentScore = (pos.y - startY) * C.metresPerUnit;
+    }
+
     bool IsDeadState => GameOver || (spider != null && spider.IsDead);
     bool IsGamePaused =>
         (gameManager.Instance != null && (gameManager.Instance.IsPaused || gameManager.Instance.runEnded))
@@ -114,11 +126,17 @@ public class player : MonoBehaviour
         if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging)
         {
             calcSpeed = TCWebBonus.Instance.ClimbSpeed;
-            // No steering or jumping mid-swing
             ResetInputState();
+            if (TCWebBonus.Instance.OwnsMotion)
+            {
+                // Vertical motion is applied by the swing (pendulum + climbs). Don't double-add.
+                currentScore = (p1.position.y - startY) * C.metresPerUnit;
+                goto AfterClimb;
+            }
         }
         var pos = p1.position; pos.y += calcSpeed * dt; p1.position = pos;
         currentScore = (pos.y - startY) * C.metresPerUnit;
+        AfterClimb: ;
 
         bool camB = boost;
         if (camAnim && camBoost != camB) { camBoost = camB; camAnim.SetBool("boost", camB); }
@@ -126,11 +144,14 @@ public class player : MonoBehaviour
         float effectiveDt = (Time.timeScale < 0.2f) ? Time.unscaledDeltaTime : dt;
         if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging)
         {
-            // already reset above
+            // no input mid-swing
         }
         else HandleInput(effectiveDt);
-        yaw = Mathf.LerpAngle(yaw, targetYaw, 1f - Mathf.Exp(-C.rotationSmoothing * effectiveDt));
-        var e = p1.localEulerAngles; e.y = yaw; p1.localEulerAngles = e;
+        if (!(TCWebBonus.Instance && TCWebBonus.Instance.OwnsMotion))
+        {
+            yaw = Mathf.LerpAngle(yaw, targetYaw, 1f - Mathf.Exp(-C.rotationSmoothing * effectiveDt));
+            var e = p1.localEulerAngles; e.y = yaw; p1.localEulerAngles = e;
+        }
         if (jumpCooldown > 0) jumpCooldown -= effectiveDt;
         if (spider && !spider.IsJumping) canDoubleJump = false;
 

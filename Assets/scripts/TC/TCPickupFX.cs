@@ -43,6 +43,18 @@ public class TCPickupFX : MonoBehaviour
         }
         phase = Application.isPlaying ? Random.value * 10f : 0f;
         ApplyTint();
+        EnsureMagnetShine();
+    }
+
+    void EnsureMagnetShine()
+    {
+        if (kind != TCPickupKind.Magnet) return;
+        if (GetComponentInChildren<TCMagnetShine>(true)) return;
+        var host = visual ? visual.gameObject : gameObject;
+        var shine = host.AddComponent<TCMagnetShine>();
+        shine.redMat = Resources.Load<Material>("PowerUps/Materials/Magnet_CandyRed");
+        shine.blueMat = Resources.Load<Material>("PowerUps/Materials/Magnet_CandyBlue");
+        shine.chromeMat = Resources.Load<Material>("PowerUps/Materials/Magnet_Chrome");
     }
 
     void OnDisable()

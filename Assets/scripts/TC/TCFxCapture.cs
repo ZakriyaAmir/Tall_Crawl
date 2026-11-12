@@ -10,15 +10,21 @@ using UnityEngine.UI;
 public class TCFxCapture : MonoBehaviour
 {
     string dir; int n;
+    bool letterOnly;
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Boot()
     {
         var args = System.Environment.GetCommandLineArgs();
-        int i = System.Array.IndexOf(args, "-tcfx"); if (i < 0) return;
+        int i = System.Array.IndexOf(args, "-tcfx");
+        int j = System.Array.IndexOf(args, "-tcletter");
+        if (i < 0 && j < 0) return;
         PlayerPrefs.DeleteAll(); PlayerPrefs.SetInt("consent", 1); TCSave.TutorialDone = true;
         PlayerPrefs.SetString("tc_daily_last", System.DateTime.Now.Date.ToString("yyyy-MM-dd"));
         var g = new GameObject("TCFxCapture"); DontDestroyOnLoad(g);
-        g.AddComponent<TCFxCapture>().dir = i + 1 < args.Length ? args[i + 1] : "/tmp";
+        var cap = g.AddComponent<TCFxCapture>();
+        int idx = j >= 0 ? j : i;
+        cap.dir = idx + 1 < args.Length ? args[idx + 1] : "/tmp";
+        cap.letterOnly = j >= 0;
     }
     IEnumerator Shot(string name) { yield return new WaitForEndOfFrame(); ScreenCapture.CaptureScreenshot($"{dir}/{++n:00}_{name}.png"); yield return null; }
     IEnumerator W(float s) { yield return new WaitForSecondsRealtime(s); }
@@ -33,6 +39,12 @@ public class TCFxCapture : MonoBehaviour
 
     IEnumerator Start()
     {
+        if (letterOnly)
+        {
+            yield return LetterOnlyShot();
+            Application.Quit();
+            yield break;
+        }
         yield return W(4f);
         var menu = FindObjectOfType<TCMenuUI>();
         foreach (var cg in Resources.FindObjectsOfTypeAll<CanvasGroup>()) if (cg.name == "Daily" && cg.gameObject.scene.IsValid() && cg.gameObject.activeSelf) TCUI.Hide(menu, cg);
@@ -92,8 +104,10 @@ public class TCFxCapture : MonoBehaviour
         {
             TCUI.Show(menu, settingsCg);
             yield return W(0.3f);
-            menu.ActivateCheat();
-            yield return W(0.4f); yield return Shot("cheat_toast");
+            bool cheatOk = false;
+            yield return TCCheatPlaythrough.Run(menu, ok => cheatOk = ok);
+            Debug.Log("[TCFxCapture] real-event cheat playthrough ok=" + cheatOk);
+            yield return W(0.35f); yield return Shot("cheat_toast");
             TCUI.Hide(menu, settingsCg); yield return W(0.3f);
         }
         var play = GameObject.Find("TC_MenuUI/Safe/Play");
@@ -120,6 +134,37 @@ public class TCFxCapture : MonoBehaviour
         var sp = FindObjectOfType<playerInteract>();
         var track = FindObjectOfType<TCTrack>();
         yield return W(0.6f);
+
+        // Normal run (not the staged tour): confirm a WEB letter actually spawns
+        // from the track pool / prefab. Time is sped up only for the wait.
+        if (pl) pl.paused = false;
+        if (sp) sp.GrantGrace(90f);
+        float prevScale = Time.timeScale;
+        Time.timeScale = 8f;
+        float t0 = Time.realtimeSinceStartup;
+        Transform letterT = null;
+        while (Time.realtimeSinceStartup - t0 < 12f)
+        {
+            foreach (var L in Object.FindObjectsOfType<TCWebLetter>())
+                if (L && L.gameObject.activeInHierarchy) { letterT = L.transform; break; }
+            if (letterT) break;
+            yield return null;
+        }
+        Time.timeScale = prevScale <= 0f ? 1f : prevScale;
+        if (!letterT && track != null)
+        {
+            Debug.Log("[TCFxCapture] Natural letter roll did not land in the wait — placing one via the real letter pool");
+            track.SpawnLetterNow();
+            foreach (var L in Object.FindObjectsOfType<TCWebLetter>())
+                if (L && L.gameObject.activeInHierarchy) { letterT = L.transform; break; }
+        }
+        if (pl) pl.paused = true;
+        yield return W(0.55f);
+        yield return Shot("web_letter_run");
+        Debug.Log("[TCFxCapture] WEB letter shot: " + (letterT ? letterT.root.name : "NONE") +
+                  " at " + (pl ? pl.currentScore.ToString("0") : "?") + " m; pool=" +
+                  (track != null ? "track present" : "no track"));
+
         pl.paused = true;
         ClearHazards();
         yield return W(0.4f);
@@ -202,14 +247,20 @@ public class TCFxCapture : MonoBehaviour
         var wpos = sp.transform.position;
         web.CollectLetter('W', wpos); yield return W(0.2f); yield return Shot("web_hud_w");
         web.CollectLetter('E', wpos); yield return W(0.2f); yield return Shot("web_hud_we");
+        if (pl) pl.paused = false;
+        if (sp) sp.GrantGrace(30f);
         web.CollectLetter('B', wpos);
-        yield return W(0.35f); yield return Shot("web_hud_web");
-        yield return Shot("web_swing_0");
-        yield return W(0.7f); yield return Shot("web_swing_1");
-        yield return W(0.7f); yield return Shot("web_swing_2");
-        // Let the swing finish so later results aren't mid-climb
-        float waitSwing = TCWebBonus.SwingSeconds;
-        yield return W(Mathf.Max(0.2f, waitSwing - 1.4f + 0.4f));
+        yield return W(0.25f); yield return Shot("web_hud_web");
+        // At least 8 frames across several of the 10 thwip-and-orbit cycles, plus landing.
+        int swingShots = 10;
+        float step = TCWebBonus.SwingSeconds / swingShots;
+        for (int f = 0; f < swingShots; f++)
+        {
+            yield return Shot("web_swing_" + f);
+            yield return W(step);
+        }
+        yield return W(0.45f);
+        yield return Shot("web_swing_land");
 
         // Game over + x2 button hide / Home-Restart slide
         if (pl) pl.currentScore = 850;
@@ -229,27 +280,9 @@ public class TCFxCapture : MonoBehaviour
         {
             var db = dbl.GetComponent<Button>();
             if (db) db.onClick.Invoke();
-            yield return W(0.5f); yield return Shot("ad_overlay_rewarded");
-            // Wait out the placeholder overlay (countdown + claim) or grant path
-            yield return W(4.2f);
-            var claim = GameObject.Find("CLAIM REWARD");
-            if (!claim)
-            {
-                foreach (var tmp in Resources.FindObjectsOfTypeAll<TMPro.TextMeshProUGUI>())
-                    if (tmp && tmp.gameObject.scene.IsValid() && tmp.text != null && tmp.text.Contains("CLAIM"))
-                    { claim = tmp.transform.parent ? tmp.transform.parent.gameObject : tmp.gameObject; break; }
-            }
-            if (claim)
-            {
-                var cb = claim.GetComponent<Button>() ?? claim.GetComponentInParent<Button>();
-                if (cb) cb.onClick.Invoke();
-                else
-                {
-                    var ev = new PointerEventData(EventSystem.current) { button = PointerEventData.InputButton.Left };
-                    ExecuteEvents.Execute(claim, ev, ExecuteEvents.pointerClickHandler);
-                }
-            }
-            yield return W(0.7f); yield return Shot("gameover_after_x2");
+            // Standalone/desktop cannot play AdMob; no custom panel. Device grants
+            // via OnUserEarnedReward. Editor grants immediately (logged).
+            yield return W(0.8f); yield return Shot("gameover_after_x2");
         }
 
         Application.Quit();
@@ -259,4 +292,47 @@ public class TCFxCapture : MonoBehaviour
     {
         foreach (var p in FindObjectsOfType<TCPooled>()) if (p.kind != "trunk") p.gameObject.SetActive(false);
     }
+
+    IEnumerator LetterOnlyShot()
+    {
+        yield return W(0.6f);
+        SceneManager.LoadScene("gameplay");
+        yield return W(2.5f);
+        GameObject.Find("TC_GameUI/Safe/Start")?.GetComponent<Button>()?.onClick.Invoke();
+        var ui = FindObjectOfType<TCGameUI>(); if (ui) ui.StartRun();
+        var pl = FindObjectOfType<player>();
+        var sp = FindObjectOfType<playerInteract>();
+        var track = FindObjectOfType<TCTrack>();
+        yield return W(0.8f);
+        if (pl) pl.paused = false;
+        if (sp) sp.GrantGrace(90f);
+        // Climb far enough for the usual mid-run framing, then freeze and place a letter.
+        float prevScale = Time.timeScale;
+        Time.timeScale = 4f;
+        yield return W(2.2f);
+        Time.timeScale = prevScale <= 0f ? 1f : prevScale;
+        if (pl) pl.paused = true;
+        // A natural spawn can land a long way up the trunk (and in a lane
+        // the camera isn't facing). For a readable still, place one via the
+        // real pool, 1.7 wu ahead in the player's current lane.
+        foreach (var L in Object.FindObjectsOfType<TCWebLetter>())
+        {
+            var pooled = L.GetComponentInParent<TCPooled>();
+            if (pooled) pooled.Release();
+            else if (L) L.gameObject.SetActive(false);
+        }
+        Transform letterT = null;
+        if (track != null)
+        {
+            track.SpawnLetterNow();
+            foreach (var L in Object.FindObjectsOfType<TCWebLetter>())
+                if (L && L.gameObject.activeInHierarchy) { letterT = L.transform; break; }
+        }
+        yield return W(0.55f);
+        yield return Shot("web_letter_run");
+        Debug.Log("[TCFxCapture] letter-only shot: " + (letterT ? letterT.root.name : "NONE") +
+                  " at " + (pl ? pl.currentScore.ToString("0") : "?") + " m pos=" +
+                  (letterT ? letterT.position.ToString("F2") : "-"));
+    }
+
 }

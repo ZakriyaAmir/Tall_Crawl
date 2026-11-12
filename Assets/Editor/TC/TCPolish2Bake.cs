@@ -226,47 +226,24 @@ public static class TCPolish2Bake
     static void PolishMagnetVisual(Transform visual)
     {
         if (!visual) return;
-        foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
+        // Never Instantiate materials onto the prefab — unsaved instances become
+        // missing (fileID 0) and render magenta/pink on URP/mobile. Keep the
+        // original Candy Red / Candy Blue / Chrome materials and pulse emission
+        // at runtime via TCMagnetShine (URP-safe, same shaders).
+        foreach (var rim in visual.GetComponentsInChildren<Transform>(true)
+                 .Where(tr => tr.name == "MagnetRim").ToList())
         {
-            if (!r || !r.sharedMaterial) continue;
-            var mats = r.sharedMaterials;
-            for (int i = 0; i < mats.Length; i++)
-            {
-                var m = mats[i];
-                if (!m) continue;
-                // Unique instance so we do not dirty other prefabs sharing the source mat.
-                m = Object.Instantiate(m);
-                m.name = m.name.Replace("(Clone)", "") + "_Pop";
-                if (m.HasProperty("_EmissionColor"))
-                {
-                    m.EnableKeyword("_EMISSION");
-                    var e = m.GetColor("_EmissionColor");
-                    if (e.maxColorComponent < 0.2f) e = new Color(1.0f, 0.75f, 0.2f);
-                    m.SetColor("_EmissionColor", e * 1.8f);
-                }
-                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", Mathf.Max(m.GetFloat("_Metallic"), 0.55f));
-                if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", Mathf.Max(m.GetFloat("_Glossiness"), 0.7f));
-                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", Mathf.Max(m.GetFloat("_Smoothness"), 0.7f));
-                mats[i] = m;
-            }
-            r.sharedMaterials = mats;
+            if (rim && rim != visual) Object.DestroyImmediate(rim.gameObject);
         }
-        // Thin unlit outline shell so the magnet reads against the halo.
-        if (visual.Find("MagnetRim")) return;
-        var src = visual.GetComponentInChildren<MeshFilter>(true);
-        if (!src || !src.sharedMesh) return;
-        var rim = new GameObject("MagnetRim");
-        rim.transform.SetParent(src.transform, false);
-        rim.transform.localPosition = Vector3.zero;
-        rim.transform.localRotation = Quaternion.identity;
-        rim.transform.localScale = Vector3.one * 1.07f;
-        var mf = rim.AddComponent<MeshFilter>(); mf.sharedMesh = src.sharedMesh;
-        var mr = rim.AddComponent<MeshRenderer>();
-        var sh = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Universal Render Pipeline/Unlit");
-        var rimMat = new Material(sh) { name = "MagnetRim" };
-        if (rimMat.HasProperty("_Color")) rimMat.SetColor("_Color", new Color(1f, 0.92f, 0.45f, 1f));
-        mr.sharedMaterial = rimMat;
-        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        var red = AssetDatabase.LoadAssetAtPath<Material>("Assets/resources/PowerUps/Materials/Magnet_CandyRed.mat");
+        var blue = AssetDatabase.LoadAssetAtPath<Material>("Assets/resources/PowerUps/Materials/Magnet_CandyBlue.mat");
+        var chrome = AssetDatabase.LoadAssetAtPath<Material>("Assets/resources/PowerUps/Materials/Magnet_Chrome.mat");
+        var shine = visual.GetComponentInChildren<TCMagnetShine>(true);
+        if (!shine) shine = visual.gameObject.AddComponent<TCMagnetShine>();
+        if (red) shine.redMat = red;
+        if (blue) shine.blueMat = blue;
+        if (chrome) shine.chromeMat = chrome;
+        EditorUtility.SetDirty(visual.gameObject);
     }
 
     [MenuItem("Tools/Tall Crawl/Polish2/Bake HUD Layout")]
