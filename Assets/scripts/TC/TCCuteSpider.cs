@@ -480,6 +480,13 @@ public partial class TCCuteSpider : MonoBehaviour
         rollTimer = duration;
     }
 
+    public Vector3 VisualCenter()
+    {
+        if (body) return body.position;
+        if (abdomen) return abdomen.position;
+        return transform.position;
+    }
+
     /// World position of the spinnerets (abdomen tip / rear of the body) for silk.
     public Vector3 SpinneretTip()
     {

@@ -489,23 +489,22 @@ public class TCFxCapture : MonoBehaviour
             web = wb.AddComponent<TCWebBonus>();
         }
         web.BeginSwing();
-        // Wait for the camera pull-in so the first frame is already close.
-        yield return W(0.32f);
-        // 18 frames fit inside the 9s swing even with Shot()'s extra end-of-frame waits.
-        const int frames = 18;
-        float step = 0.38f;
+        // Wait out the pull-in AND the first thwip so frame 0 is mid-pendulum.
+        yield return W(0.55f);
+        // 16 mid-swing frames stay inside the 9s flight before the land hold.
+        const int frames = 16;
+        float step = 0.42f;
         for (int f = 0; f < frames; f++)
         {
             yield return Shot("web_swing_" + f);
             yield return W(step);
         }
-        // Land / +5000m while the close camera is held.
+        // Land / +5000m while the close camera is held (1.0s).
         float t0 = Time.realtimeSinceStartup;
-        while (!(web && web.ShowcaseHold) && Time.realtimeSinceStartup - t0 < 4f)
+        while (!(web && web.ShowcaseHold) && Time.realtimeSinceStartup - t0 < 5f)
             yield return null;
-        yield return W(0.12f);
         yield return Shot("web_swing_land");
-        yield return W(0.22f);
+        yield return W(0.35f);
         yield return Shot("web_swing_pop");
         Debug.Log("[TCFxCapture] swing-only done, hold=" + (web && web.ShowcaseHold) + " swinging=" + (web && web.IsSwinging));
     }
