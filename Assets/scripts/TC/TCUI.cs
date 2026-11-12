@@ -13,6 +13,44 @@ public static class TCUI
         Blush = Hex("#FF9EC0"), Sky = Hex("#6FC3FF"), Butter = Hex("#FFD54F"), Lilac = Hex("#CFC6F5"), White = Color.white,
         Dim = new Color(0.16f, 0.12f, 0.14f, 0.55f), Grey = Hex("#D9D2CC");
     public static Color Hex(string h) { ColorUtility.TryParseHtmlString(h, out var c); return c; }
+    public static float Luma(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+    /// Dark text on pastel / light faces, white text on dark faces.
+    public static Color TextOn(Color face) => Luma(face) > 0.58f ? Cocoa : Color.white;
+    public static Color OutlineOn(Color face) => Luma(face) > 0.58f ? new Color(0.16f, 0.11f, 0.13f, 1f) : Cocoa;
+
+    /// Recolour every TMP label under a button (or a whole panel) so it stays readable on its face colour.
+    public static void ApplyReadable(Transform root)
+    {
+        if (!root) return;
+        foreach (var b in root.GetComponentsInChildren<Button>(true))
+        {
+            var img = b.GetComponent<Image>();
+            if (img) ApplyReadable(b.transform, img.color);
+        }
+    }
+    public static void ApplyReadable(Transform root, Color face)
+    {
+        if (!root) return;
+        var col = TextOn(face);
+        var ol = OutlineOn(face);
+        bool light = Luma(face) > 0.58f;
+        foreach (var tmp in root.GetComponentsInChildren<TextMeshProUGUI>(true))
+        {
+            tmp.color = col;
+            try
+            {
+                var m = tmp.fontMaterial;
+                m.EnableKeyword("OUTLINE_ON");
+                m.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.22f);
+                m.SetColor(ShaderUtilities.ID_OutlineColor, ol);
+            }
+            catch (Exception) { }
+            var sh = tmp.GetComponent<Shadow>();
+            if (!sh) sh = tmp.gameObject.AddComponent<Shadow>();
+            sh.effectColor = new Color(0f, 0f, 0f, light ? 0.32f : 0.45f);
+            sh.effectDistance = new Vector2(0, -3);
+        }
+    }
 
     static Sprite _round, _circle;
     public static Sprite Round { get { if (!_round && !Readable) _round = Resources.Load<Sprite>("TCUI/round"); if (!_round) _round = MakeRound(64, 26); return _round; } }
@@ -314,7 +352,14 @@ public static class TCUI
     public static Button Btn(string name, Transform parent, string text, Color face, Action onClick, float fontSize = 52, Sprite icon = null)
     {
         var rt = Rect(name, parent);
-        if (!Fresh(rt)) { var bb = Add<Button>(rt.gameObject); bb.onClick.AddListener(() => { TCAudio.Click(); onClick?.Invoke(); }); return bb; }
+        if (!Fresh(rt))
+        {
+            var bb = Add<Button>(rt.gameObject);
+            bb.onClick.AddListener(() => { TCAudio.Click(); onClick?.Invoke(); });
+            var faceImg = rt.GetComponent<Image>();
+            if (faceImg) ApplyReadable(rt, faceImg.color);
+            return bb;
+        }
         var shadow = Img("Shadow", rt, Color.Lerp(face, Cocoa, 0.35f)); Stretch(shadow.rectTransform, 0, 0, 10, -10);
         var img = rt.gameObject.AddComponent<Image>(); img.sprite = Round; img.type = Image.Type.Sliced; img.color = face;
         var rim = rt.gameObject.AddComponent<UnityEngine.UI.Outline>(); rim.effectColor = Color.Lerp(face, Cocoa, 0.6f); rim.effectDistance = new Vector2(5, -5); // thick hypercasual rim
@@ -333,7 +378,9 @@ public static class TCUI
         }
         if (!string.IsNullOrEmpty(text))
         {
-            var l = Label("Text", rt, text, fontSize, Color.white); Stretch(l.rectTransform, icon ? fontSize * 1.9f : 16, 16, 6, 6); Outline(l, 0.28f);
+            var l = Label("Text", rt, text, fontSize, TextOn(face)); Stretch(l.rectTransform, icon ? fontSize * 1.9f : 16, 16, 6, 6); Outline(l, 0.28f);
+            try { var m = l.fontMaterial; m.SetColor(ShaderUtilities.ID_OutlineColor, OutlineOn(face)); } catch (Exception) { }
+            var sh = l.gameObject.AddComponent<Shadow>(); sh.effectColor = new Color(0, 0, 0, Luma(face) > 0.58f ? 0.32f : 0.45f); sh.effectDistance = new Vector2(0, -3);
             l.enableAutoSizing = true; l.fontSizeMax = fontSize; l.fontSizeMin = fontSize * 0.5f;
         }
         rt.gameObject.AddComponent<TCPress>();
@@ -344,7 +391,12 @@ public static class TCUI
     public static CanvasGroup Panel(string name, Transform parent, out RectTransform card, Vector2 size, string title)
     {
         var root = Rect(name, parent);
-        if (!Fresh(root)) { var bc = root.Find("Card"); card = bc ? (RectTransform)bc : root; if (bc) bound.Add(bc); return Add<CanvasGroup>(root.gameObject); }
+        if (!Fresh(root))
+        {
+            var bc = root.Find("Card"); card = bc ? (RectTransform)bc : root; if (bc) bound.Add(bc);
+            LiftOverlay(root, 80);
+            return Add<CanvasGroup>(root.gameObject);
+        }
         Stretch(root);
         var cg = root.gameObject.AddComponent<CanvasGroup>();
         var dim = Img("Dim", root, Dim); Stretch(dim.rectTransform); dim.raycastTarget = true; dim.sprite = null; dim.type = Image.Type.Simple;
@@ -355,7 +407,20 @@ public static class TCUI
         head.gameObject.AddComponent<UnityEngine.UI.Outline>().effectColor = Color.Lerp(Peach, Cocoa, 0.5f); head.GetComponent<UnityEngine.UI.Outline>().effectDistance = new Vector2(5, -5);
         var ht = Label("Title", hr, title, 64, Color.white); Outline(ht, 0.3f); Stretch(ht.rectTransform, 24, 24, 0, 0); ht.enableWordWrapping = false; ht.enableAutoSizing = true; ht.fontSizeMin = 30; ht.fontSizeMax = 64;
         root.gameObject.SetActive(false);
+        LiftOverlay(root, 80);
         return cg;
+    }
+
+    /// Put a panel on its own canvas so it always paints above HUD FX (flying coins use order 15).
+    public static void LiftOverlay(Transform root, int order = 80)
+    {
+        if (!root) return;
+        var c = root.GetComponent<Canvas>();
+        if (!c) c = root.gameObject.AddComponent<Canvas>();
+        c.overrideSorting = true;
+        c.sortingOrder = order;
+        if (!root.GetComponent<UnityEngine.UI.GraphicRaycaster>())
+            root.gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
     }
 
     // ---------- Transitions ----------

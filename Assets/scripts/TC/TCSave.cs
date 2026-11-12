@@ -24,7 +24,11 @@ public static class TCSave
     public static int Best { get => PlayerPrefs.GetInt("tc_best"); set { PlayerPrefs.SetInt("tc_best", value); Fire(); } }
     public static int Runs { get => PlayerPrefs.GetInt("tc_runs"); set => PlayerPrefs.SetInt("tc_runs", value); }
     public static int LifetimeCoins { get => PlayerPrefs.GetInt("tc_life_coins"); set => PlayerPrefs.SetInt("tc_life_coins", value); }
-    public static bool NoAds { get => PlayerPrefs.GetInt("tc_noads") == 1; set { PlayerPrefs.SetInt("tc_noads", value ? 1 : 0); Fire(); } }
+    public static bool NoAds
+    {
+        get => PlayerPrefs.GetInt("tc_noads") == 1 || PlayerPrefs.GetInt("noAds") == 1;
+        set { PlayerPrefs.SetInt("tc_noads", value ? 1 : 0); PlayerPrefs.SetInt("noAds", value ? 1 : 0); Fire(); }
+    }
     public static bool TutorialDone { get => PlayerPrefs.GetInt("tc_tut") == 1; set => PlayerPrefs.SetInt("tc_tut", value ? 1 : 0); }
 
     public static bool Sound { get => PlayerPrefs.GetInt("DisableSound") == 0; set { PlayerPrefs.SetInt("DisableSound", value ? 0 : 1); Apply(); } }

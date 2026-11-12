@@ -25,7 +25,38 @@ public class TCSafeArea : MonoBehaviour
 public static class TCAudio
 {
     static AudioSource src;
-    static AudioSource Src { get { if (!src) { var g = new GameObject("TCAudio"); UnityEngine.Object.DontDestroyOnLoad(g); src = g.AddComponent<AudioSource>(); src.playOnAwake = false; } return src; } }
+    static AudioSource Src { get {
+        if (!src)
+        {
+            var g = new GameObject("TCAudio");
+            if (Application.isPlaying) UnityEngine.Object.DontDestroyOnLoad(g);
+            src = g.AddComponent<AudioSource>(); src.playOnAwake = false;
+        }
+        return src;
+    } }
     public static void Click() { if (TCAssets.I.click) Src.PlayOneShot(TCAssets.I.click, 0.8f); }
     public static void Play(AudioClip c, float v = 1) { if (c) Src.PlayOneShot(c, v); }
+
+    /// Pitched one-shot. Uses a small source pool so overlapping clips can have different pitches
+    /// (a single AudioSource.pitch would retune every playing shot). AudioListener.volume still
+    /// honours TCSave.Sound.
+    static readonly AudioSource[] pitched = new AudioSource[4];
+    static int pitchedAt;
+    public static void Play(AudioClip c, float v, float pitch)
+    {
+        if (!c) return;
+        if (Mathf.Abs(pitch - 1f) < 0.01f) { Play(c, v); return; }
+        if (pitched[0] == null)
+        {
+            var host = Src.gameObject;
+            for (int i = 0; i < pitched.Length; i++)
+            {
+                pitched[i] = host.AddComponent<AudioSource>();
+                pitched[i].playOnAwake = false;
+            }
+        }
+        var s = pitched[pitchedAt++ % pitched.Length];
+        s.pitch = Mathf.Clamp(pitch, 0.55f, 1.8f);
+        s.PlayOneShot(c, v);
+    }
 }

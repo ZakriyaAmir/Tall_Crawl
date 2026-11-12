@@ -160,13 +160,19 @@ public class gameManager : MonoBehaviour
         return RunReward;
     }
 
-    /// x2 bonus reward: doubles the distance bonus only (never the collected coins), once per run, after banking.
+    /// x2 bonus reward: doubles the entire banked run reward (collected coins + distance bonus), once per run.
     public bool ClaimDouble()
     {
-        int extra = DistanceBonus;
-        if (!runEnded || doubledClaimed || extra <= 0) return false;
-        doubledClaimed = true; RunReward += extra; TCSave.Coins += extra; TCSave.LifetimeCoins += extra; return true;
+        if (!runEnded || doubledClaimed) return false;
+        int extra = RunReward;
+        if (extra <= 0) return false;
+        doubledClaimed = true;
+        RunReward += extra;
+        TCSave.Coins += extra;
+        TCSave.LifetimeCoins += extra;
+        return true;
     }
+    public bool DoubleClaimed => doubledClaimed;
 
     public int DistanceBonus => (int)p.currentScore / 100 * BonusPerHundred;
     public int Metres => p ? (int)p.currentScore : 0;

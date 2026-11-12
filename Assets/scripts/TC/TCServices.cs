@@ -17,29 +17,58 @@ public static class TCServices
 #endif
     }
 
-    /// Shows a rewarded ad; reward is granted on completion. In the editor / when no ad is
-    /// loaded we grant directly so the flow is testable (test IDs only).
+    /// Shows a rewarded ad; reward is granted on completion.
+    /// When ads are removed (IAP or cheat) the reward is granted directly, no ad.
+    /// In the Editor, or when the Mobile Ads SDK cannot show, a visible placeholder
+    /// overlay stands in so the flow is testable. Official Google test unit IDs are
+    /// used on device.
     public static void Rewarded(Action onReward, string placement)
     {
         Log("rewarded_request", "placement_" + placement, 1);
+        if (TCSave.NoAds)
+        {
+            onReward?.Invoke();
+            return;
+        }
         try
         {
-            if (AdsManager.Instance != null && !Application.isEditor && AdsManager.Instance.RunRewardedAd(onReward)) return;
+            if (!Application.isEditor && AdsManager.Instance != null && AdsManager.Instance.RunRewardedAd(onReward))
+                return;
         }
         catch (Exception e) { Debug.LogWarning(e.Message); }
-        onReward?.Invoke();
+        TCAdOverlay.ShowRewarded(onReward, placement);
     }
 
     public static void Interstitial()
     {
         if (TCSave.NoAds) return;
-        try { AdsManager.Instance?.RunInterstitialAd(); } catch (Exception) { }
+        try
+        {
+            if (!Application.isEditor && AdsManager.Instance != null)
+            {
+                AdsManager.Instance.RunInterstitialAd();
+                return;
+            }
+        }
+        catch (Exception) { }
+        TCAdOverlay.ShowInterstitial();
     }
 
     public static void Banner(bool show)
     {
         if (TCSave.NoAds) show = false;
-        try { if (show) AdsManager.Instance?.RunBannerAd(); else AdsManager.Instance?.HideBanner(); } catch (Exception) { }
+        TCSafeArea.BannerVisible = show;
+        try
+        {
+            if (!Application.isEditor && AdsManager.Instance != null)
+            {
+                if (show) AdsManager.Instance.RunBannerAd();
+                else AdsManager.Instance.HideBanner();
+                return;
+            }
+        }
+        catch (Exception) { }
+        TCAdOverlay.ShowBanner(show);
     }
 
     /// productIndex maps to UnityIAP.kProductIDs (dummy IDs, see README).

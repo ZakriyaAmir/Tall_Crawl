@@ -136,7 +136,9 @@ public class playerInteract : MonoBehaviour
         if (!other || !other.gameObject.activeSelf) return false;
 
         var fxKind = TCPickupFX.KindFromTag(other.tag);
-        if (fxKind.HasValue) TCPickupFX.Burst(fxKind.Value, other.bounds.center);
+        // No coin-burst when the magnet is picked up — the magnet aura is the collect FX.
+        if (fxKind.HasValue && fxKind.Value != TCPickupKind.Magnet)
+            TCPickupFX.Burst(fxKind.Value, other.bounds.center);
 
         if (other.CompareTag("points"))
         {
@@ -179,6 +181,13 @@ public class playerInteract : MonoBehaviour
             TCCoinMagnet.Instance?.Activate();
             OnEvent?.Invoke("magnet", transform.position);
             TCFx.Shake(0.08f);
+            return true;
+        }
+
+        var letter = other.GetComponentInParent<TCWebLetter>() ?? other.GetComponent<TCWebLetter>();
+        if (letter)
+        {
+            letter.Collect(other.transform.position);
             return true;
         }
 
@@ -336,11 +345,31 @@ public class playerInteract : MonoBehaviour
             invulnTimer = 0.8f;
             return;
         }
+        if (TCWebBonus.Instance && TCWebBonus.Instance.IsInvincible)
+        {
+            invulnTimer = 0.4f;
+            return;
+        }
+        // A hit during the coin magnet breaks the magnet and costs no health.
+        if (TCCoinMagnet.Instance && TCCoinMagnet.Instance.IsActive)
+        {
+            TCCoinMagnet.Instance.Break();
+            invulnTimer = 0.8f;
+            TCServices.Haptic();
+            TCFx.Shake(0.18f);
+            OnEvent?.Invoke("magnet_break", transform.position);
+            return;
+        }
         TCServices.Haptic();
         TCFx.Shake(0.25f);
         life--;
         OnEvent?.Invoke("hit", transform.position);
         if (life > 0) invulnTimer = 1.4f; else death();
+    }
+
+    public void GrantGrace(float seconds)
+    {
+        invulnTimer = Mathf.Max(invulnTimer, seconds);
     }
 
     public void increaseHealth() { life = Mathf.Min(MaxLife, life + 1); }

@@ -51,6 +51,13 @@ public class TCCoinMagnet : MonoBehaviour
         public float baseAngle;
     }
 
+    struct LightningArc
+    {
+        public LineRenderer line;
+        public float phase;
+        public float baseAngle;
+    }
+
     float activeTimeRemaining = 0f;
     float emissionTimer = 0f;
     float boltOrbitAngle = 0f;
@@ -59,6 +66,7 @@ public class TCCoinMagnet : MonoBehaviour
 
     ShockwaveWave[] subtleShockwaves;
     MagnetBolt[] magnetBolts;
+    LightningArc[] lightningArcs;
     static Mesh cachedSubtleWaveMesh;
     static Mesh cachedBoltQuadMesh;
 
@@ -148,10 +156,10 @@ public class TCCoinMagnet : MonoBehaviour
                             float alpha = Mathf.Sin(u * Mathf.PI);
                             alpha = Mathf.Pow(alpha, 1.2f) * 0.85f;
 
-                            // Brilliant electric silver / metallic platinum pulse
+                            // Metallic platinum / cool steel with a bright chrome crest
                             Color waveCol = Color.Lerp(
-                                new Color(0.95f, 0.98f, 1.0f, alpha),
-                                new Color(0.75f, 0.85f, 0.98f, alpha * 0.70f),
+                                new Color(0.92f, 0.95f, 1.0f, alpha),
+                                new Color(0.55f, 0.62f, 0.72f, alpha * 0.78f),
                                 u
                             );
 
@@ -193,6 +201,8 @@ public class TCCoinMagnet : MonoBehaviour
                             SetMatColor(bolt.material, boltCol);
                         }
                     }
+
+                    TickLightningArcs(dt);
                 }
 
                 // Attract nearby coins along trunk towards spider (strictly within 40m distance)
@@ -285,6 +295,120 @@ public class TCCoinMagnet : MonoBehaviour
                 baseAngle = baseAng
             };
         }
+
+        CreateLightningArcs();
+    }
+
+    public void Break()
+    {
+        if (!IsActive) return;
+        activeTimeRemaining = 0f;
+        TCSfx.Play("hit", 0.8f);
+        TCSfx.Play("whoosh", 0.55f);
+        TCFx.Shake(0.22f);
+        if (isActiveAndEnabled) StartCoroutine(BreakRoutine());
+        else if (magnetAuraObj) magnetAuraObj.SetActive(false);
+    }
+
+    IEnumerator BreakRoutine()
+    {
+        if (magnetAuraObj == null) yield break;
+        magnetAuraObj.SetActive(true);
+        if (magnetBolts != null)
+            foreach (var b in magnetBolts)
+                if (b.root) b.root.gameObject.SetActive(false);
+
+        float dur = 0.28f;
+        for (float t = 0f; t < dur; t += Time.unscaledDeltaTime)
+        {
+            float k = t / dur;
+            if (subtleShockwaves != null)
+            {
+                for (int i = 0; i < subtleShockwaves.Length; i++)
+                {
+                    var wave = subtleShockwaves[i];
+                    if (wave.root == null || wave.material == null) continue;
+                    float radius = Mathf.Lerp(0.22f, 0.55f, k);
+                    wave.root.localScale = new Vector3(radius, 1f, radius);
+                    SetMatColor(wave.material, new Color(1f, 1f, 1f, 1f - k));
+                }
+            }
+            TickLightningArcs(0.03f, 1f - k);
+            yield return null;
+        }
+        if (magnetAuraObj) magnetAuraObj.SetActive(false);
+        if (magnetBolts != null)
+            foreach (var b in magnetBolts)
+                if (b.root) b.root.gameObject.SetActive(true);
+    }
+
+    void CreateLightningArcs()
+    {
+        const int n = 5;
+        lightningArcs = new LightningArc[n];
+        var shader = FindAdditiveShader();
+        for (int i = 0; i < n; i++)
+        {
+            var go = new GameObject("Magnet_Arc_" + i);
+            go.transform.SetParent(magnetAuraObj.transform, false);
+            go.transform.localPosition = new Vector3(0f, -0.018f, 0f);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.positionCount = 6;
+            lr.useWorldSpace = false;
+            lr.loop = false;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.numCapVertices = 2;
+            lr.numCornerVertices = 2;
+            lr.widthMultiplier = 0.012f;
+            var mat = new Material(shader) { name = "MagnetArc_Mat_" + i };
+            if (mat.HasProperty("_MainTex")) mat.mainTexture = Texture2D.whiteTexture;
+            SetMatColor(mat, new Color(0.85f, 0.95f, 1f, 0.9f));
+            lr.sharedMaterial = mat;
+            lr.startColor = new Color(0.95f, 0.98f, 1f, 0.95f);
+            lr.endColor = new Color(0.55f, 0.75f, 1f, 0.15f);
+            lightningArcs[i] = new LightningArc
+            {
+                line = lr,
+                phase = Random.value * 10f,
+                baseAngle = i * (360f / n) + Random.Range(-12f, 12f)
+            };
+        }
+    }
+
+    void TickLightningArcs(float dt, float alphaMul = 1f)
+    {
+        if (lightningArcs == null) return;
+        for (int i = 0; i < lightningArcs.Length; i++)
+        {
+            var arc = lightningArcs[i];
+            if (arc.line == null) continue;
+            arc.phase += dt * 18f;
+            // Flicker: some frames the bolt is hidden so it crackles.
+            bool on = Mathf.Sin(arc.phase * 7.3f + i) > -0.15f;
+            arc.line.enabled = on && alphaMul > 0.05f;
+            if (!on) continue;
+            float ang = (arc.baseAngle + emissionTimer * 40f + i * 8f) * Mathf.Deg2Rad;
+            float inner = 0.08f;
+            float outer = 0.26f + 0.04f * Mathf.Sin(arc.phase);
+            var pts = new Vector3[6];
+            for (int s = 0; s < 6; s++)
+            {
+                float u = s / 5f;
+                float r = Mathf.Lerp(inner, outer, u);
+                float jag = (s > 0 && s < 5) ? (Mathf.PerlinNoise(arc.phase * 0.7f, s * 1.7f + i) - 0.5f) * 0.07f : 0f;
+                float a = ang + jag * 3f;
+                // Sit under the ring, slightly dropped on Y.
+                pts[s] = new Vector3(Mathf.Cos(a) * r, -0.01f - 0.012f * u, Mathf.Sin(a) * r);
+            }
+            arc.line.SetPositions(pts);
+            float aCol = Mathf.Clamp01(alphaMul) * (0.55f + 0.45f * Random.value);
+            var c0 = new Color(0.95f, 0.98f, 1f, aCol);
+            var c1 = new Color(0.55f, 0.78f, 1f, aCol * 0.2f);
+            arc.line.startColor = c0;
+            arc.line.endColor = c1;
+            lightningArcs[i] = arc;
+        }
     }
 
     /// <summary>
@@ -302,10 +426,10 @@ public class TCCoinMagnet : MonoBehaviour
         // Defined ring thickness (20% of radius) for sharp, clear visibility on mobile screens
         float[] radii = { 0.80f, 0.90f, 0.95f, 1.00f };
         Color[] baseColors = {
-            new Color(0.85f, 0.92f, 1.0f, 0.0f),  // inner edge (transparent silver)
-            new Color(0.95f, 0.98f, 1.0f, 0.92f), // sharp inner crest (gleaming silver-white)
-            new Color(0.82f, 0.90f, 1.0f, 0.92f), // sharp outer crest (silver chrome)
-            new Color(0.70f, 0.82f, 0.95f, 0.0f)  // outer edge (transparent)
+            new Color(0.70f, 0.76f, 0.85f, 0.0f),  // inner edge (transparent steel)
+            new Color(0.98f, 0.99f, 1.0f, 1.00f), // sharp inner crest (chrome highlight)
+            new Color(0.62f, 0.70f, 0.82f, 0.95f), // outer crest (cool metal)
+            new Color(0.40f, 0.48f, 0.58f, 0.0f)  // outer edge
         };
 
         int ringCount = radii.Length;
@@ -808,8 +932,8 @@ public class TCMagnetShine : MonoBehaviour
     public Material blueMat;
     public Material chromeMat;
 
-    Color redEmissionBase = new Color(1.0f, 0.12f, 0.25f);
-    Color blueEmissionBase = new Color(0.05f, 0.50f, 1.0f);
+    Color redEmissionBase = new Color(1.35f, 0.18f, 0.28f);
+    Color blueEmissionBase = new Color(0.12f, 0.65f, 1.35f);
 
     void Update()
     {

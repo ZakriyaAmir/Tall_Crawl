@@ -38,6 +38,64 @@ public class TCFxCapture : MonoBehaviour
         foreach (var cg in Resources.FindObjectsOfTypeAll<CanvasGroup>()) if (cg.name == "Daily" && cg.gameObject.scene.IsValid() && cg.gameObject.activeSelf) TCUI.Hide(menu, cg);
         yield return W(1f);
         yield return Shot("menu");
+        yield return Shot("logo");
+        // Spider tap actions on the menu preview
+        if (menu)
+        {
+            var preview = GameObject.Find("PreviewSpider") ?? Object.FindObjectOfType<TCCuteSpider>()?.gameObject;
+            var cute = preview ? preview.GetComponent<TCCuteSpider>() : Object.FindObjectOfType<TCCuteSpider>();
+            if (cute)
+            {
+                var acts = (TCCuteSpider.TouchAct[])System.Enum.GetValues(typeof(TCCuteSpider.TouchAct));
+                for (int a = 0; a < acts.Length; a++)
+                {
+                    cute.BeginTouch(acts[a]);
+                    yield return W(0.35f);
+                    yield return Shot("spider_" + acts[a].ToString().ToLower());
+                    yield return W(0.55f);
+                }
+            }
+        }
+        // Shop + skins contrast, insufficient-coins toast, cheat toast
+        CanvasGroup skinsCg = null, settingsCg = null, shopEarly = null;
+        foreach (var cg in Resources.FindObjectsOfTypeAll<CanvasGroup>())
+        {
+            if (!cg.gameObject.scene.IsValid()) continue;
+            if (cg.name == "Shop") shopEarly = cg;
+            if (cg.name == "Skins") skinsCg = cg;
+            if (cg.name == "Settings") settingsCg = cg;
+        }
+        if (shopEarly && menu)
+        {
+            TCUI.Show(menu, shopEarly);
+            yield return W(0.5f); yield return Shot("shop_readable");
+            TCUI.Hide(menu, shopEarly); yield return W(0.35f);
+        }
+        if (skinsCg && menu)
+        {
+            TCUI.Show(menu, skinsCg);
+            yield return W(0.5f); yield return Shot("skins_sort");
+            yield return Shot("skins_back");
+            int keepCoins = TCSave.Coins;
+            TCSave.Coins = 0;
+            var buy = GameObject.Find("TC_MenuUI/Skins/Card/Action") ?? GameObject.Find("Action");
+            if (buy)
+            {
+                var b = buy.GetComponent<Button>();
+                if (b) b.onClick.Invoke();
+                yield return W(0.35f); yield return Shot("insufficient_coins");
+            }
+            TCSave.Coins = keepCoins;
+            TCUI.Hide(menu, skinsCg); yield return W(0.35f);
+        }
+        if (settingsCg && menu)
+        {
+            TCUI.Show(menu, settingsCg);
+            yield return W(0.3f);
+            menu.ActivateCheat();
+            yield return W(0.4f); yield return Shot("cheat_toast");
+            TCUI.Hide(menu, settingsCg); yield return W(0.3f);
+        }
         var play = GameObject.Find("TC_MenuUI/Safe/Play");
         Press(play, true);
         for (int f = 0; f < 4; f++) { yield return W(0.03f); yield return Shot("menu_press_" + f); }
@@ -94,7 +152,13 @@ public class TCFxCapture : MonoBehaviour
                 pl.paused = true; sp.boostDuration = 0.01f;
                 yield return W(1.4f);
             }
-            if (names[i] == "magnet") { yield return W(0.5f); yield return Shot("magnet_active"); }
+            if (names[i] == "magnet")
+        {
+            yield return W(0.5f); yield return Shot("magnet_active");
+            yield return W(0.25f); yield return Shot("magnet_lightning");
+            TCCoinMagnet.Instance?.Break();
+            yield return W(0.12f); yield return Shot("magnet_break");
+        }
             Destroy(g);
             ClearHazards();
             yield return W(0.4f);
@@ -114,6 +178,80 @@ public class TCFxCapture : MonoBehaviour
         for (int f = 0; f < 4; f++) { yield return W(0.07f); yield return Shot("lives_gain_" + f); }
         yield return W(0.6f);
         sp.life = 1; yield return W(0.9f); yield return Shot("lives_danger");
+
+        // Pause placement + 3-2-1 resume countdown
+        sp.life = 3;
+        if (ui) ui.ShowPause();
+        yield return W(0.45f); yield return Shot("pause");
+        yield return Shot("pause_button");
+        var resumeBtn = GameObject.Find("TC_GameUI/Pause/Card/Resume");
+        if (resumeBtn) resumeBtn.GetComponent<Button>()?.onClick.Invoke();
+        else { var pbtn = GameObject.Find("Resume"); pbtn?.GetComponent<Button>()?.onClick.Invoke(); }
+        yield return W(0.25f); yield return Shot("countdown_3");
+        yield return W(0.85f); yield return Shot("countdown_2");
+        yield return W(0.85f); yield return Shot("countdown_1");
+        yield return W(1.0f);
+
+        // WEB letters HUD + swing
+        var web = TCWebBonus.Instance;
+        if (web == null)
+        {
+            var wb = new GameObject("TCWebBonus");
+            web = wb.AddComponent<TCWebBonus>();
+        }
+        var wpos = sp.transform.position;
+        web.CollectLetter('W', wpos); yield return W(0.2f); yield return Shot("web_hud_w");
+        web.CollectLetter('E', wpos); yield return W(0.2f); yield return Shot("web_hud_we");
+        web.CollectLetter('B', wpos);
+        yield return W(0.35f); yield return Shot("web_hud_web");
+        yield return Shot("web_swing_0");
+        yield return W(0.7f); yield return Shot("web_swing_1");
+        yield return W(0.7f); yield return Shot("web_swing_2");
+        // Let the swing finish so later results aren't mid-climb
+        float waitSwing = TCWebBonus.SwingSeconds;
+        yield return W(Mathf.Max(0.2f, waitSwing - 1.4f + 0.4f));
+
+        // Game over + x2 button hide / Home-Restart slide
+        if (pl) pl.currentScore = 850;
+        if (gameManager.Instance) { /* coins already accrued */ }
+        var gm = gameManager.Instance;
+        if (gm != null)
+        {
+            // Ensure there is something to double
+            var field = typeof(gameManager).GetField("coinsCollected");
+            if (gm.coinsCollected < 12) gm.coinsCollected = 12;
+        }
+        pl.paused = true;
+        if (ui) ui.ShowGameOver(false);
+        yield return W(0.7f); yield return Shot("gameover_before_x2");
+        var dbl = GameObject.Find("TC_GameUI/Results/Card/Double");
+        if (dbl)
+        {
+            var db = dbl.GetComponent<Button>();
+            if (db) db.onClick.Invoke();
+            yield return W(0.5f); yield return Shot("ad_overlay_rewarded");
+            // Wait out the placeholder overlay (countdown + claim) or grant path
+            yield return W(4.2f);
+            var claim = GameObject.Find("CLAIM REWARD");
+            if (!claim)
+            {
+                foreach (var tmp in Resources.FindObjectsOfTypeAll<TMPro.TextMeshProUGUI>())
+                    if (tmp && tmp.gameObject.scene.IsValid() && tmp.text != null && tmp.text.Contains("CLAIM"))
+                    { claim = tmp.transform.parent ? tmp.transform.parent.gameObject : tmp.gameObject; break; }
+            }
+            if (claim)
+            {
+                var cb = claim.GetComponent<Button>() ?? claim.GetComponentInParent<Button>();
+                if (cb) cb.onClick.Invoke();
+                else
+                {
+                    var ev = new PointerEventData(EventSystem.current) { button = PointerEventData.InputButton.Left };
+                    ExecuteEvents.Execute(claim, ev, ExecuteEvents.pointerClickHandler);
+                }
+            }
+            yield return W(0.7f); yield return Shot("gameover_after_x2");
+        }
+
         Application.Quit();
     }
 

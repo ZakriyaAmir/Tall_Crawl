@@ -55,8 +55,10 @@ public class TCPickupFX : MonoBehaviour
     void ApplyTint()
     {
         if (mpb == null) mpb = new MaterialPropertyBlock();
-        if (halo) { halo.GetPropertyBlock(mpb); mpb.SetColor("_TintColor", color); halo.SetPropertyBlock(mpb); }
-        if (rays) { rays.GetPropertyBlock(mpb); mpb.SetColor("_TintColor", new Color(color2.r, color2.g, color2.b, 0.75f)); rays.SetPropertyBlock(mpb); }
+        float haloA = kind == TCPickupKind.Magnet ? 0.32f : 1f;
+        float rayA = kind == TCPickupKind.Magnet ? 0.45f : 0.75f;
+        if (halo) { halo.GetPropertyBlock(mpb); mpb.SetColor("_TintColor", new Color(color.r, color.g, color.b, haloA)); halo.SetPropertyBlock(mpb); }
+        if (rays) { rays.GetPropertyBlock(mpb); mpb.SetColor("_TintColor", new Color(color2.r, color2.g, color2.b, rayA)); rays.SetPropertyBlock(mpb); }
     }
 
     void LateUpdate()
@@ -120,8 +122,10 @@ public class TCPickupFX : MonoBehaviour
         var fx = new GameObject("PickupFX").transform;
         fx.SetParent(root.transform, false); fx.localPosition = centreLocal;
 
-        var halo = Quad(fx, "Halo", "Halo", size * 3.4f, 0.02f);
-        var rays = Quad(fx, "Rays", "Rays", size * 3.9f, 0.03f);
+        float haloMul = k == TCPickupKind.Magnet ? 2.15f : 3.4f;
+        float raysMul = k == TCPickupKind.Magnet ? 2.6f : 3.9f;
+        var halo = Quad(fx, "Halo", "Halo", size * haloMul, 0.02f);
+        var rays = Quad(fx, "Rays", "Rays", size * raysMul, 0.03f);
 
         // sonar ping ring
         var ping = TCFxLib.PS(fx, "Ping", "Ring", new Vector3(0, 0, -0.02f), 4);

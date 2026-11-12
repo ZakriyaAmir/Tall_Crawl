@@ -72,6 +72,9 @@ public static class TCSelfTest
         Check(unfair == 0, $"no unfair rows (worst steer {worst:0} deg/s, unfair {unfair})");
         Check(beeChain == 0, $"no back-to-back bee rows ({bees} bee rows)");
         Object.DestroyImmediate(root);
+        int cheatFails = TCCheatCode.RunSelfTest();
+        fails += cheatFails;
+        Check(cheatFails == 0, "cheat-code state machine (" + cheatFails + " fails)");
         Debug.Log($"SELFTEST DONE fails={fails}");
         if (Application.isBatchMode) EditorApplication.Exit(fails == 0 ? 0 : 2);
     }

@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 /// Main menu: currencies, best score, 3D spider preview, Play, Skins, Shop, Daily reward, Settings, consent.
 public class TCMenuUI : MonoBehaviour
@@ -13,6 +14,7 @@ public class TCMenuUI : MonoBehaviour
     CanvasGroup skinsPanel, shopPanel, settingsPanel, dailyPanel, consentPanel, toastGroup; TextMeshProUGUI toastText;
     GameObject previewSpider; RenderTexture rt; [SerializeField] Camera previewCam; RawImage previewImg, skinPreviewImg; int previewSkin = -1;
     readonly List<System.Action> refreshers = new List<System.Action>();
+    readonly TCCheatCode cheat = new TCCheatCode();
 
     void Start()
     {
@@ -26,6 +28,9 @@ public class TCMenuUI : MonoBehaviour
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
         TCServices.Banner(true);
         if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(3.0f, OpenDaily));
+        if (canvas) TCUI.ApplyReadable(canvas.transform);
+        HookPreviewTap(previewImg);
+        HookPreviewTap(skinPreviewImg);
     }
     /// Builds (or, when baked into the scene, binds to) every menu screen. Also run in edit mode by TCUIBake.
     public void BuildUI()
@@ -401,9 +406,11 @@ public class TCMenuUI : MonoBehaviour
 
             var skins = db != null && db.skins != null && db.skins.Length > 0 ? db.skins : TCSkins.All;
             var parent = skinsListParent ? skinsListParent : card;
+            var order = TCSkins.DisplayOrder(skins);
 
-            for (int i = 0; i < skins.Length; i++)
+            for (int n = 0; n < order.Length; n++)
             {
+                int i = order[n];
                 int idx = i; var def = skins[i];
 
                 GameObject itemObj;
@@ -496,7 +503,7 @@ public class TCMenuUI : MonoBehaviour
             {
                 skinAction.interactable = true;
                 if (own) skinActionText.text = TCSave.SelectedSkin == selectedCard ? "EQUIPPED" : "SELECT";
-                else if (d.unlock == SkinUnlock.Coins) { skinActionText.text = "BUY " + d.amount; skinAction.interactable = TCSave.Coins >= d.amount; }
+                else if (d.unlock == SkinUnlock.Coins) { skinActionText.text = "BUY " + d.amount; skinAction.interactable = true; }
                 else if (d.unlock == SkinUnlock.Ads) skinActionText.text = "WATCH AD (" + TCSave.SkinAdsWatched(selectedCard) + "/" + d.amount + ")";
                 else { skinActionText.text = d.UnlockText; skinAction.interactable = false; }
             }
@@ -509,7 +516,19 @@ public class TCMenuUI : MonoBehaviour
         if (selectedCard < 0 || selectedCard >= skins.Length) return;
         int i = selectedCard; var d = skins[i];
         if (TCSave.SkinOwned(i)) { TCSave.SelectedSkin = i; Toast(d.name + " equipped!"); }
-        else if (d.unlock == SkinUnlock.Coins && TCSave.Coins >= d.amount) { TCSave.Coins -= d.amount; TCSave.UnlockSkin(i); TCSave.SelectedSkin = i; TCAudio.Play(TCAssets.I.purchase); Toast("Unlocked " + d.name + "!"); TCServices.Log("skin_buy", "skin", i); }
+        else if (d.unlock == SkinUnlock.Coins)
+        {
+            if (TCSave.Coins >= d.amount)
+            {
+                TCSave.Coins -= d.amount; TCSave.UnlockSkin(i); TCSave.SelectedSkin = i;
+                TCAudio.Play(TCAssets.I.purchase); Toast("Unlocked " + d.name + "!"); TCServices.Log("skin_buy", "skin", i);
+            }
+            else
+            {
+                Toast("Insufficient coins");
+                if (skinAction) StartCoroutine(TCUI.Punch(skinAction.transform, 0.3f, 0.22f));
+            }
+        }
         else if (d.unlock == SkinUnlock.Ads) TCServices.Rewarded(() => { TCSave.AddSkinAd(i); TCSkins.CheckAchievements(); if (TCSave.SkinOwned(i)) { TCSave.SelectedSkin = i; Toast("Unlocked " + d.name + "!"); } RefreshSkinGrid(); }, "skin");
         RefreshSkinGrid();
     }
@@ -658,14 +677,19 @@ public class TCMenuUI : MonoBehaviour
     void BuildSettings()
     {
         settingsPanel = TCUI.Panel("Settings", safe, out var card, new Vector2(900, 1240), "SETTINGS");
-        TCGameUI.Toggle(card, "Sound", 380, () => TCSave.Sound, v => TCSave.Sound = v, 700);
-        TCGameUI.Toggle(card, "Music", 270, () => TCSave.Music, v => { TCSave.Music = v; ApplyMenuMusic(); }, 700);
-        TCGameUI.Toggle(card, "Vibration", 160, () => TCSave.Vibration, v => TCSave.Vibration = v, 700);
+        TCGameUI.Toggle(card, "Sound", 380, () => TCSave.Sound, v => { TCSave.Sound = v; if (FeedCheat(TCCheatCode.Kind.Sound)) ActivateCheat(); }, 700);
+        TCGameUI.Toggle(card, "Music", 270, () => TCSave.Music, v => { TCSave.Music = v; ApplyMenuMusic(); FeedCheat(TCCheatCode.Kind.Music); }, 700);
+        TCGameUI.Toggle(card, "Vibration", 160, () => TCSave.Vibration, v => { TCSave.Vibration = v; if (FeedCheat(TCCheatCode.Kind.Vibration)) ActivateCheat(); }, 700);
         var sl = TCUI.Label("SensL", card, "Control sensitivity", 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Place(sl.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 50), new Vector2(700, 70));
-        var slider = BuildSlider(card, new Vector2(0, -30)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity; slider.onValueChanged.AddListener(v => TCSave.Sensitivity = v);
-        TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => Application.OpenURL(TCAssets.I.privacyUrl), 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -170), new Vector2(620, 110));
-        TCUI.Place((RectTransform)TCUI.Btn("Tutorial", card, "REPLAY TUTORIAL", TCUI.Blush, StartTutorialGame, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -310), new Vector2(620, 110));
-        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => TCUI.Hide(this, settingsPanel), 50).transform, new Vector2(0.5f, 0), new Vector2(0, 110), new Vector2(420, 120));
+        var slider = BuildSlider(card, new Vector2(0, -30)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity;
+        slider.onValueChanged.AddListener(v =>
+        {
+            TCSave.Sensitivity = v;
+            if (FeedCheat(TCCheatCode.ClassifySlider(v, slider.minValue, slider.maxValue))) ActivateCheat();
+        });
+        TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => { FeedCheat(TCCheatCode.Kind.Other); Application.OpenURL(TCAssets.I.privacyUrl); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -170), new Vector2(620, 110));
+        TCUI.Place((RectTransform)TCUI.Btn("Tutorial", card, "REPLAY TUTORIAL", TCUI.Blush, () => { FeedCheat(TCCheatCode.Kind.Other); StartTutorialGame(); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -310), new Vector2(620, 110));
+        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => { FeedCheat(TCCheatCode.Kind.Other); TCUI.Hide(this, settingsPanel); }, 50).transform, new Vector2(0.5f, 0), new Vector2(0, 110), new Vector2(420, 120));
     }
     Slider BuildSlider(RectTransform parent, Vector2 pos)
     {
@@ -745,13 +769,61 @@ public class TCMenuUI : MonoBehaviour
         toastText = TCUI.Label("T", r.transform, "", 44, Color.white); TCUI.Stretch(toastText.rectTransform);
     }
     Coroutine toastCo;
-    void Toast(string msg) { if (toastCo != null) StopCoroutine(toastCo); toastCo = StartCoroutine(ToastCo(msg)); }
-    IEnumerator ToastCo(string msg)
+    void Toast(string msg) { Toast(msg, false); }
+    void Toast(string msg, bool flashy)
     {
-        toastText.text = msg; toastGroup.transform.SetAsLastSibling();
+        if (toastCo != null) StopCoroutine(toastCo);
+        toastCo = StartCoroutine(ToastCo(msg, flashy));
+    }
+    IEnumerator ToastCo(string msg, bool flashy = false)
+    {
+        toastText.text = msg;
+        toastGroup.transform.SetAsLastSibling();
+        var img = toastGroup.GetComponent<Image>();
+        var original = img ? img.color : TCUI.Cocoa;
+        if (img && flashy) img.color = TCUI.Butter;
+        if (flashy) toastText.color = TCUI.Cocoa;
+        else toastText.color = Color.white;
+        if (flashy) StartCoroutine(TCUI.Punch(toastGroup.transform, 0.45f, 0.4f));
+        if (flashy) TCSfx.Play("celebrate", 0.9f);
         for (float t = 0; t < 0.2f; t += Time.unscaledDeltaTime) { toastGroup.alpha = t / 0.2f; yield return null; }
-        toastGroup.alpha = 1; yield return new WaitForSecondsRealtime(1.4f);
+        toastGroup.alpha = 1;
+        yield return new WaitForSecondsRealtime(flashy ? 2.2f : 1.4f);
         for (float t = 0; t < 0.3f; t += Time.unscaledDeltaTime) { toastGroup.alpha = 1 - t / 0.3f; yield return null; }
         toastGroup.alpha = 0;
+        if (img) img.color = original;
+        toastText.color = Color.white;
     }
+
+    bool FeedCheat(TCCheatCode.Kind kind) => cheat.Feed(kind, Time.unscaledTime);
+
+    public void ActivateCheat()
+    {
+        TCCheatCode.Grant();
+        Refresh();
+        RefreshSkinGrid();
+        Toast("Cheat code activated!", true);
+    }
+
+    void HookPreviewTap(RawImage img)
+    {
+        if (!img) return;
+        img.raycastTarget = true;
+        var tap = img.GetComponent<TCPreviewTap>();
+        if (!tap) tap = img.gameObject.AddComponent<TCPreviewTap>();
+        tap.onTap = OnPreviewTapped;
+    }
+
+    void OnPreviewTapped()
+    {
+        if (entering || !previewSpider) return;
+        var cs = previewSpider.GetComponent<TCCuteSpider>();
+        if (cs) cs.PlayRandomTouch();
+    }
+}
+
+public class TCPreviewTap : MonoBehaviour, IPointerClickHandler
+{
+    public System.Action onTap;
+    public void OnPointerClick(PointerEventData e) { onTap?.Invoke(); }
 }

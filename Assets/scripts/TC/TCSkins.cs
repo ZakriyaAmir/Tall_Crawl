@@ -79,6 +79,37 @@ public static class TCSkins
         new SkinDef("Squirrel",   "#D4571E", "#FFF6E8", SkinPattern.Gradient, 0.10f,"#FFA066",   SkinShape.Pear,   6, 0.40f, SkinUnlock.KillSquirrels, 100,"#141216", 0f,   0.10f, 0.55f),
     };
 
+    /// Display order: easiest unlock first, Golden always last. Does not change saved skin indices.
+    public static int UnlockSortKey(SkinDef s)
+    {
+        if (s == null) return 0;
+        if (s.name == "Golden") return 1_000_000_000;
+        switch (s.unlock)
+        {
+            case SkinUnlock.Free: return 0;
+            case SkinUnlock.Coins: return 1000 + s.amount;
+            case SkinUnlock.Ads: return 200_000 + s.amount;
+            case SkinUnlock.Runs: return 300_000 + s.amount;
+            case SkinUnlock.BestScore: return 400_000 + s.amount;
+            case SkinUnlock.KillBees: return 500_000 + s.amount;
+            case SkinUnlock.KillWasps: return 600_000 + s.amount;
+            case SkinUnlock.KillSquirrels: return 700_000 + s.amount;
+            default: return 800_000 + s.amount;
+        }
+    }
+    public static int[] DisplayOrder(SkinDef[] skins)
+    {
+        if (skins == null) return new int[0];
+        var idx = new int[skins.Length];
+        for (int i = 0; i < idx.Length; i++) idx[i] = i;
+        System.Array.Sort(idx, (a, b) =>
+        {
+            int c = UnlockSortKey(skins[a]).CompareTo(UnlockSortKey(skins[b]));
+            return c != 0 ? c : a.CompareTo(b);
+        });
+        return idx;
+    }
+
     public static bool CanAutoUnlock(int i)
     {
         var s = All[i];

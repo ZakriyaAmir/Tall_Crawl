@@ -6,7 +6,7 @@ using UnityEngine;
 /// (+2 tiny side eyes), tiny fangs and 8 short chunky bent legs.
 /// Skins only change colours/pattern, back spikes and the body shape. The old realistic mesh is hidden,
 /// its rig/animator still drives jump/death motion which we follow (position) and stylise (squash, flip).
-public class TCCuteSpider : MonoBehaviour
+public partial class TCCuteSpider : MonoBehaviour
 {
     const string RootName = "__cute";
     public Transform bone; Vector3 boneRest; Animator anim; playerInteract pi;
@@ -537,14 +537,23 @@ public class TCCuteSpider : MonoBehaviour
 
         float hop = Mathf.Clamp01(currentAirHeight * 3.5f);
 
-        // Squash & stretch + scuttle bounce (gentle breathing when idle, active bounce when moving, dynamic stretch when jumping)
-        float bob = isJumping ? 0.08f * Mathf.Sin(t * 18f) : isMoving ? Mathf.Sin(t * 24f) * 0.035f : Mathf.Sin(t * 2.5f) * 0.015f;
-        body.localScale = new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f);
-        if (head) head.localPosition = headRest + new Vector3(Mathf.Sin(t * (isMoving ? 12f : 2f)) * 0.015f, Mathf.Abs(Mathf.Sin(t * (isMoving ? 12f : 2f))) * 0.02f, 0) * head.localScale.y;
+        // Cadence scales with climb speed: a weighty, readable gait rather than a frantic blur.
+        float startSp = (TCConfig.I != null) ? Mathf.Max(0.1f, TCConfig.I.startSpeed) : 1.6f;
+        float speedRatio = (playerComp && playerComp.calcSpeed > 0f)
+            ? Mathf.Clamp(playerComp.calcSpeed / startSp, 1f, 2.5f) : 1f;
+        float gaitFreq = Mathf.Lerp(6.4f, 11.2f, Mathf.InverseLerp(1f, 2.5f, speedRatio));
+        if (isIntroWalking && (playerComp == null || playerComp.paused)) gaitFreq = 7.4f;
 
-        // Speed of movement affects leg gait rate
-        float moveSpeed = (playerComp && playerComp.calcSpeed > 0) ? playerComp.calcSpeed : 10f;
-        float gaitFreq = Mathf.Clamp(moveSpeed * 1.5f, 12f, 26f);
+        // Bob is synced to footsteps (down on plant). Idle is a slow breath. Jump is a soft stretch.
+        float bob = isJumping ? 0.06f * Mathf.Sin(t * 14f)
+                  : isMoving ? 0.022f - Mathf.Abs(Mathf.Cos(t * gaitFreq)) * 0.042f
+                  : Mathf.Sin(t * 2.2f) * 0.014f;
+        body.localScale = new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f);
+        float headTick = isMoving ? gaitFreq : 2.2f;
+        if (head) head.localPosition = headRest + new Vector3(Mathf.Sin(t * headTick) * (isMoving ? 0.018f : 0.012f), Mathf.Abs(Mathf.Sin(t * headTick)) * (isMoving ? 0.018f : 0.014f), 0) * head.localScale.y;
+        float sway = isMoving ? Mathf.Sin(t * gaitFreq) * 6f : 0f;
+        float nod = isMoving ? Mathf.Cos(t * gaitFreq) * 3.5f : 0f;
+        float yawSway = isMoving ? Mathf.Sin(t * gaitFreq) * 4f : 0f;
 
         // Legs:
         // Alternating tripod gait (for 6 legs: 3 on each side):
@@ -560,15 +569,13 @@ public class TCCuteSpider : MonoBehaviour
             float tripodPhase = isTripodA ? 0f : Mathf.PI;
             float ph = t * gaitFreq + tripodPhase + (legIdx * 0.25f);
 
-            // Forward/backward stride swing:
-            // Front legs reach forward and pull; rear legs push backward; mid legs stabilize
-            float swingAmp = legIdx == 0 ? 24f : (legIdx == 2 ? 22f : 18f);
+            // Forward/backward stride: softened sine so the plant and reach feel weighty, not jittery
+            float swingAmp = legIdx == 0 ? 22f : (legIdx == 2 ? 20f : 16f);
             float swing = Mathf.Sin(ph) * swingAmp;
 
-            // Realistic vertical lift: legs lift high during swing phase, step firmly onto surface
-            float liftNormalized = Mathf.Clamp01(Mathf.Sin(ph));
-            // Steeper parabolic lift (quick step up and down, longer stance)
-            float stepLift = Mathf.Pow(liftNormalized, 1.8f) * 22f;
+            // Lift only on the swing half, eased in and out (longer stance, quicker pick-up)
+            float liftNorm = Mathf.Max(0f, Mathf.Sin(ph));
+            float stepLift = liftNorm * liftNorm * (3f - 2f * liftNorm) * 16f;
 
             // Lateral foot splay/curl during stride (curls inward during lift, splays outward on stance):
             float splay = Mathf.Cos(ph) * (isLeft ? -7f : 7f);
@@ -636,7 +643,7 @@ public class TCCuteSpider : MonoBehaviour
         }
         else
         {
-            body.localRotation = Quaternion.Euler(flipPitch, 0, 0);
+            body.localRotation = Quaternion.Euler(flipPitch + nod, yawSway, sway);
         }
 
         // Rainbow Spider: dynamically wave colors across all parts over time
@@ -660,6 +667,8 @@ public class TCCuteSpider : MonoBehaviour
                 }
             }
         }
+
+        TickTouch(dt);
     }
 
     static bool HasBool(Animator a, string n) { foreach (var p in a.parameters) if (p.name == n) return true; return false; }

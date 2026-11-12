@@ -19,6 +19,8 @@ public class TCTrack : MonoBehaviour
     float lastHazardY = -999f, lastBonusY = -999f;
     float nextHeartEligibleTime;
     float runActiveTimer;
+    float clearUntilY = -999f;
+    TCPool letterPool;
     int rowIndex; bool lastWasBee; player pl;
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
@@ -37,7 +39,7 @@ public class TCTrack : MonoBehaviour
         ResetChilliRegulation();
     }
 
-    // Chilli Regulation: if player collects >= 3 chillies under 10 seconds, suppress new chilli spawns for 10 seconds
+    // Chilli Regulation: if player collects >= 3 chillies under 6 seconds, suppress new chilli spawns for 6 seconds
     static readonly List<float> chilliPickupTimestamps = new List<float>();
     static float chilliSpawnBlockedUntil = 0f;
 
@@ -53,20 +55,20 @@ public class TCTrack : MonoBehaviour
     {
         float now = Time.time;
 
-        // Purge timestamps older than 10 seconds
+        // Purge timestamps older than 6 seconds
         for (int i = chilliPickupTimestamps.Count - 1; i >= 0; i--)
         {
-            if (now - chilliPickupTimestamps[i] > 10f)
+            if (now - chilliPickupTimestamps[i] > 6f)
                 chilliPickupTimestamps.RemoveAt(i);
         }
 
         // Record this collection
         chilliPickupTimestamps.Add(now);
 
-        // Check if 3 or more chillies have been collected in the sliding 10-second window
+        // Check if 3 or more chillies have been collected in the sliding 6-second window
         if (chilliPickupTimestamps.Count >= 3)
         {
-            chilliSpawnBlockedUntil = Mathf.Max(chilliSpawnBlockedUntil, now + 10f);
+            chilliSpawnBlockedUntil = Mathf.Max(chilliSpawnBlockedUntil, now + 6f);
             chilliPickupTimestamps.Clear();
 
             if (Instance != null)
@@ -117,6 +119,16 @@ public class TCTrack : MonoBehaviour
         if (!mProto) mProto = TCCoinMagnet.CreateMagnetPickupPrefab(bonusParent);
         if (mProto != null) mProto.SetActive(false);
         magnetPool = new TCPool(mProto, bonusParent, 3);
+
+        if (!FindObjectOfType<TCWebBonus>())
+        {
+            var wb = new GameObject("TCWebBonus");
+            wb.AddComponent<TCWebBonus>();
+        }
+        var letterProto = TCWebBonus.CreateLetterPrefab(bonusParent, 'W');
+        if (letterProto) letterProto.SetActive(false);
+        letterPool = letterProto ? new TCPool(letterProto, bonusParent, 4) : null;
+        clearUntilY = -999f;
 
         var pProto = pineconePrefab ? pineconePrefab : SafeCreateEnemy(() => TCEnemy.CreatePineconePrefab(hazardParent));
         pineconePool = pProto ? new TCPool(pProto, hazardParent, 5) : null;
@@ -194,7 +206,12 @@ public class TCTrack : MonoBehaviour
         float y = Mathf.Max(nextRowY, lastHazardY + MinHazardSpacing);
         rowIndex++;
         float gap = Mathf.Lerp(C.rowGapEasy, C.rowGapHard, d) * Random.Range(0.95f, 1.15f);
+        // Once max climb speed (2.5x) is reached, cut hurdle density by 30% (wider gaps).
+        if (C.SpeedMultiplierAtDistance(metres) >= 2.49f)
+            gap /= 0.70f;
         bool breather = C.breatherEvery > 0 && rowIndex % C.breatherEvery == 0;
+        if (y < clearUntilY)
+            breather = true;
 
         // Check 10-second timer for heart eligibility (2 out of 10 probability, i.e. 0.20)
         bool heartEligible = false;
@@ -237,6 +254,10 @@ public class TCTrack : MonoBehaviour
             else if (canSpawnBreatherBonus && canSpawnMagnet && Random.value < C.magnetChance * 2f)
             {
                 Spawn(magnetPool, "magnet", bonusY, safeAngle);
+                lastBonusY = bonusY;
+            }
+            else if (canSpawnBreatherBonus && TrySpawnLetter(bonusY, safeAngle, metres))
+            {
                 lastBonusY = bonusY;
             }
             else
@@ -355,6 +376,10 @@ public class TCTrack : MonoBehaviour
         else if (canSpawnBonus && canSpawnMagnetGap && Random.value < C.magnetChance)
         {
             Spawn(magnetPool, "magnet", bonusYPos, newSafe);
+            lastBonusY = bonusYPos;
+        }
+        else if (canSpawnBonus && TrySpawnLetter(bonusYPos, newSafe, metres))
+        {
             lastBonusY = bonusYPos;
         }
         else if (Random.value < C.coinTrailChance)
@@ -759,4 +784,55 @@ public class TCTrack : MonoBehaviour
     {
         return Spawn(cooldownPool, "cooldown", y, angle);
     }
+
+    bool TrySpawnLetter(float y, float angle, float metres)
+    {
+        var web = TCWebBonus.Instance;
+        if (web == null || letterPool == null) return false;
+        if (!web.CanSpawnLetter(metres)) return false;
+        if (Random.value > TCWebBonus.LetterChance) return false;
+        char L = web.NextLetterToSpawn();
+        var p = Spawn(letterPool, "webletter", y, angle);
+        if (!p) return false;
+        var letter = p.GetComponentInChildren<TCWebLetter>(true);
+        if (letter)
+        {
+            letter.letter = L;
+            letter.gameObject.name = "LetterItem";
+        }
+        foreach (var r in p.GetComponentsInChildren<MeshRenderer>(true))
+            if (r.name == "Glyph") r.sharedMaterial = TCWebBonus.LetterMaterial(L);
+        p.gameObject.name = "WebLetter_" + L;
+        web.MarkLetterSpawned(metres);
+        return true;
+    }
+
+    public void ClearHazardsAhead(float worldDist)
+    {
+        if (!player) return;
+        float py = player.position.y;
+        float cut = py + worldDist;
+        for (int i = live.Count - 1; i >= 0; i--)
+        {
+            var item = live[i];
+            if (!item) { live.RemoveAt(i); continue; }
+            if (item.kind == "trunk") continue;
+            if (item.y >= py - 0.5f && item.y <= cut)
+            {
+                item.Release();
+                live.RemoveAt(i);
+            }
+        }
+    }
+
+    /// Push the next hazard row past a stretch of empty trunk (metres of climb).
+    public void ReserveClearRun(float metres)
+    {
+        if (!player || C == null) return;
+        float world = metres / Mathf.Max(0.01f, C.metresPerUnit);
+        float until = player.position.y + world;
+        clearUntilY = Mathf.Max(clearUntilY, until);
+        nextRowY = Mathf.Max(nextRowY, until);
+    }
+
 }

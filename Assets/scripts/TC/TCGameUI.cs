@@ -23,7 +23,14 @@ public class TCGameUI : MonoBehaviour
     bool started, turnedOnce, jumpedOnce, rolledOnce;
     readonly Queue<TextMeshProUGUI> popPool = new Queue<TextMeshProUGUI>();
     readonly Queue<Image> flyingCoinPool = new Queue<Image>();
-    TextMeshProUGUI resMetres, resBest, resCoins, resBonus, resTotal, reviveTimer; Button doubleBtn, reviveGemBtn;
+    TextMeshProUGUI resMetres, resBest, resCoins, resBonus, resTotal, reviveTimer, countDownText; Button doubleBtn, reviveGemBtn;
+    RectTransform resultHomeRt, resultAgainRt, countDownRoot;
+    CanvasGroup countDownGroup;
+    Vector2 resultHomeRest, resultAgainRest;
+    bool resuming;
+    TextMeshProUGUI[] webLetterText;
+    Image[] webLetterBg;
+    string lastWebHud = "";
     Camera cam;
     RectTransform fxRoot;
     Canvas fxCanvas;
@@ -50,6 +57,11 @@ public class TCGameUI : MonoBehaviour
         {
             var cmObj = new GameObject("TCCoinMagnet");
             cmObj.AddComponent<TCCoinMagnet>();
+        }
+        if (!FindObjectOfType<TCWebBonus>())
+        {
+            var wb = new GameObject("TCWebBonus");
+            wb.AddComponent<TCWebBonus>();
         }
         BuildUI();
         hintText.text = TCSave.TutorialDone ? "TOUCH TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk";
@@ -113,7 +125,10 @@ public class TCGameUI : MonoBehaviour
         coinText = TCUI.Label("Value", cp.transform, "0", 52, TCUI.Cocoa, TextAlignmentOptions.Right); TCUI.Stretch(coinText.rectTransform, 90, 26, 0, 0);
         heartsRow = TCUI.Rect("Hearts", top); TCUI.Place(heartsRow, new Vector2(0, 0.5f), new Vector2(170, 10), new Vector2(300, 80));
         var pause = TCUI.Btn("Pause", top, "", TCUI.Butter, ShowPause, 40, TCUI.Icon("pause"));
-        TCUI.Place((RectTransform)pause.transform, new Vector2(0, 0.5f), new Vector2(170, -110), new Vector2(110, 110));
+        // Top-right of the safe HUD, clear of hearts / score, easy to tap.
+        TCUI.Place((RectTransform)pause.transform, new Vector2(1, 0.5f), new Vector2(-80, -118), new Vector2(120, 120));
+        BuildWebHud(top);
+        BuildCountdown();
 
         // Speed Multiplier & Chilli Mode Panel (Left Side of HUD - baked in scene so user can edit transform)
         speedPanel = TCUI.Rect("SpeedChilliPanel", safe);
@@ -298,10 +313,11 @@ public class TCGameUI : MonoBehaviour
             startOverlay.blocksRaycasts = false;
             startOverlay.interactable = false;
         }
-        if (Input.GetKeyDown(KeyCode.Escape)) // Android back: pause / resume
+        if (Input.GetKeyDown(KeyCode.Escape) && !resuming) // Android back: pause / resume
         {
             if (pausePanel.gameObject.activeSelf) HidePause(); else ShowPause();
         }
+        RefreshWebHud();
         int m = (int)pl.currentScore;
         if (m != shownMetres) { if (shownMetres > 0 && m / 100 > shownMetres / 100 && scoreText) StartCoroutine(TCUI.Punch(scoreText.transform.parent, 0.18f, 0.3f)); shownMetres = m; scoreText.text = m + "M"; } // polish2: milestone pop every 100 m
         if (gm.coinsCollected != shownCoins)
@@ -1350,19 +1366,45 @@ public class TCGameUI : MonoBehaviour
 
     public void ShowPause()
     {
+        if (resuming) return;
         if (!started || pl == null || pl.GameOver || (gm != null && gm.runEnded) || pausePanel.gameObject.activeSelf) return;
         gm.Pause(true); TCUI.Show(this, pausePanel);
     }
     void HidePause()
     {
-        if (!pausePanel.gameObject.activeSelf) return;
-        TCUI.Hide(this, pausePanel, () =>
+        if (!pausePanel.gameObject.activeSelf || resuming) return;
+        // Keep the game paused until the 3-2-1 countdown finishes.
+        TCUI.Hide(this, pausePanel, () => StartCoroutine(ResumeCountdown()));
+    }
+
+    IEnumerator ResumeCountdown()
+    {
+        resuming = true;
+        if (gm != null) gm.Pause(true);
+        Time.timeScale = 0f;
+        if (countDownGroup)
         {
-            gm.Pause(false);
-            if (pl != null && pl.GameOver) { Time.timeScale = 1f; return; }
-            bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
-            Time.timeScale = slowActive ? TCTimeDilation.SlowScale : currentTargetTimeScale;
-        });
+            countDownGroup.gameObject.SetActive(true);
+            countDownGroup.alpha = 1f;
+            countDownGroup.transform.SetAsLastSibling();
+        }
+        for (int i = 3; i >= 1; i--)
+        {
+            if (countDownText) countDownText.text = i.ToString();
+            if (countDownRoot) StartCoroutine(TCUI.Punch(countDownRoot, 0.35f, 0.35f));
+            TCSfx.Play("chime", 0.7f);
+            yield return new WaitForSecondsRealtime(0.85f);
+        }
+        if (countDownGroup)
+        {
+            countDownGroup.alpha = 0f;
+            countDownGroup.gameObject.SetActive(false);
+        }
+        resuming = false;
+        if (gm != null) gm.Pause(false);
+        if (pl != null && pl.GameOver) { Time.timeScale = 1f; yield break; }
+        bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
+        Time.timeScale = slowActive ? TCTimeDilation.SlowScale : currentTargetTimeScale;
     }
 
     // ---------------- Revive ----------------
@@ -1452,18 +1494,25 @@ public class TCGameUI : MonoBehaviour
         doubleBtn = TCUI.Btn("Double", card, "x2 BONUS (WATCH AD)", TCUI.Butter, () => TCServices.Rewarded(() =>
         {
             if (!gm.ClaimDouble()) return; // reward callbacks can fire twice; never double-pay
+            resCoins.text = (gm.coinsCollected * 2).ToString("N0");
             resBonus.text = (gm.DistanceBonus * 2).ToString("N0") + GemSuffix();
             resTotal.text = gm.RunReward.ToString("N0");
-            doubleBtn.interactable = false; StartCoroutine(TCUI.Punch(resTotal.transform, 0.4f, 0.4f)); TCAudio.Play(TCAssets.I.purchase);
+            StartCoroutine(TCUI.Punch(resTotal.transform, 0.4f, 0.4f));
+            TCAudio.Play(TCAssets.I.purchase);
+            StartCoroutine(HideDoubleAndSlideActions());
         }, "double_coins"), 46, TCUI.Icon("play"));
         TCUI.Place((RectTransform)doubleBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -165), new Vector2(680, 115));
 
         // Bottom action row: Home (left) and Restart (right), compact with icons only and clean spacing
         var homeBtn = TCUI.Btn("Home", card, "", TCUI.Sky, () => gm.Home(), 40, TCUI.Icon("home"));
         TCUI.Place((RectTransform)homeBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(-155, -340), new Vector2(170, 140));
+        resultHomeRt = (RectTransform)homeBtn.transform;
+        resultHomeRest = resultHomeRt.anchoredPosition;
 
         var againBtn = TCUI.Btn("Again", card, "", TCUI.Mint, () => gm.Restart(), 40, TCUI.Icon("restart"));
         TCUI.Place((RectTransform)againBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(155, -340), new Vector2(170, 140));
+        resultAgainRt = (RectTransform)againBtn.transform;
+        resultAgainRest = resultAgainRt.anchoredPosition;
     }
 
     TextMeshProUGUI Row(RectTransform card, string label, float y, bool isTotal)
@@ -1497,7 +1546,14 @@ public class TCGameUI : MonoBehaviour
         resCoins.text = gm.coinsCollected.ToString("N0");
         resBonus.text = gm.DistanceBonus.ToString("N0") + GemSuffix();
         resTotal.text = total.ToString("N0");
-        doubleBtn.interactable = gm.DistanceBonus > 0;
+        if (doubleBtn)
+        {
+            doubleBtn.gameObject.SetActive(true);
+            doubleBtn.transform.localScale = Vector3.one;
+            doubleBtn.interactable = total > 0 && !gm.DoubleClaimed;
+        }
+        if (resultHomeRt) resultHomeRt.anchoredPosition = resultHomeRest;
+        if (resultAgainRt) resultAgainRt.anchoredPosition = resultAgainRest;
         TCUI.Show(this, resultPanel);
 
         if (newBest)
@@ -1507,6 +1563,99 @@ public class TCGameUI : MonoBehaviour
             StartCoroutine(TCUI.Punch(resBest.transform, 0.45f, 0.5f));
             StartCoroutine(TCUI.Punch(resMetres.transform, 0.35f, 0.4f));
             if (resultPanel) StartCoroutine(ConfettiCelebration(resultPanel.transform));
+        }
+    }
+
+    IEnumerator HideDoubleAndSlideActions()
+    {
+        if (doubleBtn) doubleBtn.interactable = false;
+        var dbRt = doubleBtn ? (RectTransform)doubleBtn.transform : null;
+        Vector2 fromH = resultHomeRt ? resultHomeRt.anchoredPosition : Vector2.zero;
+        Vector2 fromA = resultAgainRt ? resultAgainRt.anchoredPosition : Vector2.zero;
+        // Slide Home / Restart up into the x2 button's slot.
+        Vector2 toH = new Vector2(-170, -165);
+        Vector2 toA = new Vector2(170, -165);
+        float dur = 0.4f;
+        for (float t = 0; t < dur; t += Time.unscaledDeltaTime)
+        {
+            float k = Mathf.SmoothStep(0f, 1f, t / dur);
+            if (dbRt) dbRt.localScale = Vector3.one * (1f - k);
+            if (resultHomeRt) resultHomeRt.anchoredPosition = Vector2.Lerp(fromH, toH, k);
+            if (resultAgainRt) resultAgainRt.anchoredPosition = Vector2.Lerp(fromA, toA, k);
+            yield return null;
+        }
+        if (dbRt)
+        {
+            dbRt.localScale = Vector3.zero;
+            if (doubleBtn) doubleBtn.gameObject.SetActive(false);
+        }
+        if (resultHomeRt) resultHomeRt.anchoredPosition = toH;
+        if (resultAgainRt) resultAgainRt.anchoredPosition = toA;
+    }
+
+    void BuildCountdown()
+    {
+        countDownRoot = TCUI.Rect("Countdown", safe.parent);
+        TCUI.LiftOverlay(countDownRoot, 90);
+        TCUI.Stretch(countDownRoot);
+        countDownGroup = TCUI.Add<CanvasGroup>(countDownRoot.gameObject);
+        countDownGroup.alpha = 0f;
+        countDownGroup.interactable = false;
+        countDownGroup.blocksRaycasts = false;
+        var bg = TCUI.Img("Dim", countDownRoot, new Color(0.12f, 0.09f, 0.14f, 0.35f));
+        TCUI.Stretch(bg.rectTransform); bg.raycastTarget = false;
+        countDownText = TCUI.Label("N", countDownRoot, "3", 220, Color.white);
+        TCUI.Place(countDownText.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(400, 400));
+        TCUI.Outline(countDownText, 0.35f);
+        countDownRoot.gameObject.SetActive(false);
+    }
+
+    void BuildWebHud(Transform top)
+    {
+        var row = TCUI.Rect("WebLetters", top);
+        TCUI.Place(row, new Vector2(0.5f, 0.5f), new Vector2(0, -92), new Vector2(280, 64));
+        webLetterText = new TextMeshProUGUI[3];
+        webLetterBg = new Image[3];
+        char[] letters = { 'W', 'E', 'B' };
+        for (int i = 0; i < 3; i++)
+        {
+            var bg = TCUI.Img("Letter" + letters[i], row, new Color(1f, 1f, 1f, 0.55f));
+            TCUI.Place(bg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2((i - 1) * 80f, 0), new Vector2(68, 58));
+            var lab = TCUI.Label("T", bg.transform, letters[i].ToString(), 40, new Color(0.3f, 0.24f, 0.28f, 0.4f));
+            TCUI.Stretch(lab.rectTransform);
+            webLetterBg[i] = bg;
+            webLetterText[i] = lab;
+        }
+        lastWebHud = "";
+    }
+
+    void RefreshWebHud()
+    {
+        if (webLetterText == null) return;
+        var w = TCWebBonus.Instance;
+        bool hasW = w && w.HasW, hasE = w && w.HasE, hasB = w && w.HasB;
+        string key = (hasW ? "W" : ".") + (hasE ? "E" : ".") + (hasB ? "B" : ".");
+        if (key == lastWebHud) return;
+        bool first = lastWebHud == "";
+        lastWebHud = key;
+        ApplyWebLetter(0, hasW, !first);
+        ApplyWebLetter(1, hasE, !first);
+        ApplyWebLetter(2, hasB, !first);
+    }
+
+    void ApplyWebLetter(int i, bool on, bool punch)
+    {
+        if (webLetterBg == null || i >= webLetterBg.Length || !webLetterBg[i]) return;
+        if (on)
+        {
+            webLetterBg[i].color = TCUI.Mint;
+            if (webLetterText[i]) webLetterText[i].color = TCUI.Cocoa;
+            if (punch) StartCoroutine(TCUI.Punch(webLetterBg[i].transform, 0.28f, 0.25f));
+        }
+        else
+        {
+            webLetterBg[i].color = new Color(1f, 1f, 1f, 0.55f);
+            if (webLetterText[i]) webLetterText[i].color = new Color(0.3f, 0.24f, 0.28f, 0.4f);
         }
     }
 

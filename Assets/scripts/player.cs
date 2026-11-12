@@ -29,6 +29,7 @@ public class player : MonoBehaviour
     public void ResetInputState()
     {
         dragging = false;
+        axisLock = GestureAxis.None;
         lastTapTime = -1f;
         targetYaw = yaw;
         if (p1)
@@ -63,6 +64,9 @@ public class player : MonoBehaviour
     float targetYaw, yaw, startY, jumpCooldown;
     bool canDoubleJump;
     Vector2 touchStart, lastPos, lastTapPos, rawTouchDownPos; float touchStartTime, rawTouchDownTime, lastTapTime = -1f; bool dragging;
+    enum GestureAxis { None, Horizontal, Vertical }
+    GestureAxis axisLock;
+    float gestureStartYaw;
     playerInteract spider;
 
     void Awake()
@@ -107,6 +111,12 @@ public class player : MonoBehaviour
         float baseSpeed = C.ClimbSpeedAtDistance(currentScore);
         float speedMult = boost ? C.boostMultiplier : 1f;
         calcSpeed = baseSpeed * speedMult;
+        if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging)
+        {
+            calcSpeed = TCWebBonus.Instance.ClimbSpeed;
+            // No steering or jumping mid-swing
+            ResetInputState();
+        }
         var pos = p1.position; pos.y += calcSpeed * dt; p1.position = pos;
         currentScore = (pos.y - startY) * C.metresPerUnit;
 
@@ -114,7 +124,11 @@ public class player : MonoBehaviour
         if (camAnim && camBoost != camB) { camBoost = camB; camAnim.SetBool("boost", camB); }
 
         float effectiveDt = (Time.timeScale < 0.2f) ? Time.unscaledDeltaTime : dt;
-        HandleInput(effectiveDt);
+        if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging)
+        {
+            // already reset above
+        }
+        else HandleInput(effectiveDt);
         yaw = Mathf.LerpAngle(yaw, targetYaw, 1f - Mathf.Exp(-C.rotationSmoothing * effectiveDt));
         var e = p1.localEulerAngles; e.y = yaw; p1.localEulerAngles = e;
         if (jumpCooldown > 0) jumpCooldown -= effectiveDt;
@@ -175,47 +189,51 @@ public class player : MonoBehaviour
                 }
             }
             dragging = true;
+            axisLock = GestureAxis.None;
+            gestureStartYaw = targetYaw;
             rawTouchDownPos = touchStart = lastPos = p;
             rawTouchDownTime = touchStartTime = Time.unscaledTime;
         }
         else if (dragging && (held || up))
         {
             float dx = p.x - lastPos.x;
-            float dy = p.y - lastPos.y;
+            float upwardDist = p.y - rawTouchDownPos.y;
+            float sideDist = Mathf.Abs(p.x - rawTouchDownPos.x);
+            float lockDist = Screen.height * 0.025f;
 
-            // Direct, responsive left/right steering without dead zones or yaw snaps
-            if (steerAllowed && Mathf.Abs(dx) > 0.001f)
+            // Dominant-axis lock: once the gesture is clearly a jump swipe, never steer,
+            // and once it's clearly a turn, never jump.
+            if (axisLock == GestureAxis.None)
+            {
+                if (upwardDist > lockDist && upwardDist > sideDist * 1.15f)
+                    axisLock = GestureAxis.Vertical;
+                else if (sideDist > lockDist && sideDist > Mathf.Abs(upwardDist) * 0.9f)
+                    axisLock = GestureAxis.Horizontal;
+            }
+
+            // Only apply left/right steering on a horizontal (or still-undecided and not vertical) drag
+            if (steerAllowed && axisLock != GestureAxis.Vertical && Mathf.Abs(dx) > 0.001f)
             {
                 targetYaw -= dx * degPerPixel;
                 OnTurned?.Invoke();
             }
 
-            float upwardDist = p.y - touchStart.y;
-            float sideDist = Mathf.Abs(p.x - touchStart.x);
             float minSwipeDist = Screen.height * 0.055f;
-
-            // Genuine swipe up check:
-            // 1. Must travel upward by at least minSwipeDist (~105px on 1920h)
-            // 2. Upward movement must strongly dominate horizontal movement (steeper than 53 degrees)
-            // 3. Must be executed briskly (< 0.5s)
             bool isGenuineSwipeUp = jumpAllowed
+                && axisLock != GestureAxis.Horizontal
                 && upwardDist > minSwipeDist
-                && upwardDist > sideDist * 1.35f
-                && (Time.unscaledTime - touchStartTime) < 0.5f;
+                && upwardDist > sideDist * 1.15f
+                && (Time.unscaledTime - rawTouchDownTime) < 0.5f;
 
             if (isGenuineSwipeUp)
             {
-                touchStart = p; // reset origin so subsequent upward motion doesn't double-trigger
+                // Discard any accidental yaw applied before the swipe was classified as vertical
+                targetYaw = gestureStartYaw;
+                axisLock = GestureAxis.Vertical;
+                touchStart = p;
                 touchStartTime = Time.unscaledTime;
                 lastTapTime = -1f;
                 jump();
-            }
-            else if (sideDist > upwardDist * 0.8f || dy < 0)
-            {
-                // Active lateral steering or downward motion:
-                // Keep touchStart tracking the finger so slight thumb curvature during turning never accumulates!
-                touchStart = p;
-                touchStartTime = Time.unscaledTime;
             }
 
             lastPos = p;

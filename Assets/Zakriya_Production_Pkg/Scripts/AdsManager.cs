@@ -81,6 +81,8 @@ public class AdsManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
+        testMode = true;
+        ApplyOfficialTestIds();
         if (testMode)
         {
             //AndroidGoogleAppID = "ca-app-pub-3940256099942544~3347511713";
@@ -305,5 +307,15 @@ public class AdsManager : MonoBehaviour
         Debug.Log("Reward granted");
         money += 10;
         moneytext.text = "Total Reward: " + money.ToString();
+    }
+
+    /// Google's documented test units: https://developers.google.com/admob/unity/test-ads
+    public void ApplyOfficialTestIds()
+    {
+        AdmobBannerUnitId = "ca-app-pub-3940256099942544/6300978111";
+        AdmobInterstitialUnitId = "ca-app-pub-3940256099942544/1033173712";
+        AdmobRewardedUnitId = "ca-app-pub-3940256099942544/5224354917";
+        AdmobRewardedInterstitialUnitId = "ca-app-pub-3940256099942544/5354046379";
+        AdmobAppOpenAdUnitId = "ca-app-pub-3940256099942544/3419835294";
     }
 }
