@@ -58,6 +58,7 @@ public class TCTimeDilation : MonoBehaviour
     public static bool TriggerCooldown()
     {
         if (IsPausedNow() || IsDeadOrEnded()) return false;
+        if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging) return false;
         if (player.Instance != null && player.Instance.IsInputBlocked) return false;
         if (playerInteract.CooldownInventory <= 0) return false;
         playerInteract.CooldownInventory--;
@@ -72,17 +73,23 @@ public class TCTimeDilation : MonoBehaviour
     public void Activate()
     {
         if (IsPausedNow() || IsDeadOrEnded()) return;
+        if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging) return;
         TCSfx.Play("cooldown_activate", 0.9f);
         TCFx.Shake(0.15f);
         if (dilationRoutine != null) StopCoroutine(dilationRoutine);
         dilationRoutine = StartCoroutine(DilationSequence());
     }
 
-    public void CancelOnDeath()
+    public void Cancel()
     {
         if (dilationRoutine != null) { StopCoroutine(dilationRoutine); dilationRoutine = null; }
         activeTimeRemaining = 0f;
         if (!IsPausedNow()) Time.timeScale = 1.0f;
+    }
+
+    public void CancelOnDeath()
+    {
+        Cancel();
     }
 
     IEnumerator RampTimeScale(float fromScale, float toScale, float dur)

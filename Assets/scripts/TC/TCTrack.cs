@@ -244,6 +244,8 @@ public class TCTrack : MonoBehaviour
         if (y < clearUntilY)
             breather = true;
 
+        bool webSwinging = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
+
         // Heart check: every HeartCheckInterval seconds, HeartCheckChance probability.
         bool heartEligible = false;
         if (Time.time >= nextHeartEligibleTime)
@@ -274,37 +276,61 @@ public class TCTrack : MonoBehaviour
             safeAngle += Random.value < 0.5f ? -60f : 60f;
             lastWasBee = false;
 
-            bool canSpawnBreatherBonus = bonusY > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusY - lastCoinY) > BonusCoinMargin;
+            bool canSpawnBreatherBonus = !webSwinging && bonusY > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusY - lastCoinY) > BonusCoinMargin;
 
             float playerTraveledMetres = pl ? pl.currentScore : 0f;
             bool canSpawnCooldown = playerTraveledMetres >= C.cooldownMinMetres && metres >= C.cooldownMinMetres;
             bool canSpawnMagnet = playerTraveledMetres >= C.magnetMinMetres && metres >= C.magnetMinMetres;
 
-            if (canSpawnBreatherBonus && heartEligible)
+            if (canSpawnBreatherBonus)
             {
-                Spawn(heartPool, "heart", bonusY, safeAngle);
-                lastBonusY = bonusY;
-                heartEligible = false; // consumed
-            }
-            else if (canSpawnBreatherBonus && letterEligible && TrySpawnLetter(bonusY, safeAngle, metres))
-            {
-                lastBonusY = bonusY;
-                letterEligible = false;
-            }
-            else if (canSpawnBreatherBonus && CanSpawnChilli && Random.value < C.boostChance * 2f)
-            {
-                Spawn(boostPool, "boost", bonusY, safeAngle);
-                lastBonusY = bonusY;
-            }
-            else if (canSpawnBreatherBonus && canSpawnCooldown && Random.value < C.cooldownChance * 2f)
-            {
-                Spawn(cooldownPool, "cooldown", bonusY, safeAngle);
-                lastBonusY = bonusY;
-            }
-            else if (canSpawnBreatherBonus && canSpawnMagnet && Random.value < C.magnetChance * 2f)
-            {
-                Spawn(magnetPool, "magnet", bonusY, safeAngle);
-                lastBonusY = bonusY;
+                if (letterEligible && TrySpawnLetter(bonusY, safeAngle, metres))
+                {
+                    lastBonusY = bonusY;
+                    letterEligible = false;
+                }
+                else
+                {
+                    // Weighted random probability selection across unlocked powerups
+                    float wHeart = heartEligible ? C.heartChance * 1.5f : 0f;
+                    float wChilli = CanSpawnChilli ? C.boostChance * 1.5f : 0f;
+                    float wCooldown = canSpawnCooldown ? C.cooldownChance * 1.5f : 0f;
+                    float wMagnet = canSpawnMagnet ? C.magnetChance * 1.5f : 0f;
+                    float totalWeight = wHeart + wChilli + wCooldown + wMagnet;
+
+                    if (totalWeight > 0f && Random.value < Mathf.Clamp01(totalWeight))
+                    {
+                        float roll = Random.Range(0f, totalWeight);
+                        if (wHeart > 0f && (roll -= wHeart) <= 0f)
+                        {
+                            Spawn(heartPool, "heart", bonusY, safeAngle);
+                            lastBonusY = bonusY;
+                            heartEligible = false;
+                        }
+                        else if (wChilli > 0f && (roll -= wChilli) <= 0f)
+                        {
+                            Spawn(boostPool, "boost", bonusY, safeAngle);
+                            lastBonusY = bonusY;
+                        }
+                        else if (wCooldown > 0f && (roll -= wCooldown) <= 0f)
+                        {
+                            Spawn(cooldownPool, "cooldown", bonusY, safeAngle);
+                            lastBonusY = bonusY;
+                        }
+                        else if (wMagnet > 0f)
+                        {
+                            Spawn(magnetPool, "magnet", bonusY, safeAngle);
+                            lastBonusY = bonusY;
+                        }
+                    }
+                    else
+                    {
+                        // Coin spiral that guarantees no overlap with hazards or powerups
+                        float spiralStartY = Mathf.Max(y + 0.3f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+                        float spiralEndY = y + gap - 0.3f;
+                        SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
+                    }
+                }
             }
             else
             {
@@ -317,8 +343,6 @@ public class TCTrack : MonoBehaviour
             nextRowY = y + gap * 1.3f;
             return;
         }
-
-        bool webSwinging = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
 
         // Bee swarms only spawn after crossing 2000 metres (never during WEB boost)
         if (!webSwinging && !lastWasBee && metres >= 2000f && Random.value < C.beeChance * d + 0.02f)
@@ -399,7 +423,7 @@ public class TCTrack : MonoBehaviour
 
         // In the safe gap between rows, spawn strictly ONE item type (heart, chilli boost, or coins) with proper margins
         float bonusYPos = y + gap * 0.5f;
-        bool canSpawnBonus = bonusYPos > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusYPos - lastCoinY) > BonusCoinMargin;
+        bool canSpawnBonus = !webSwinging && bonusYPos > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusYPos - lastCoinY) > BonusCoinMargin;
 
         float playerDistance = pl ? pl.currentScore : 0f;
         bool canSpawnCooldownGap = playerDistance >= C.cooldownMinMetres && metres >= C.cooldownMinMetres;
@@ -686,8 +710,11 @@ public class TCTrack : MonoBehaviour
             float arc = trunkRadius * dAngle * Mathf.Deg2Rad;
             float dist = Mathf.Sqrt(dy * dy + arc * arc);
 
+            bool webSwing = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
+
             // Check if coin has reached the spider -> collect it immediately!
-            if (dist <= 0.45f)
+            float collectDist = webSwing ? 0.65f : 0.45f;
+            if (dist <= collectDist)
             {
                 coinChild.gameObject.SetActive(false);
                 coinChild.localPosition = new Vector3(0f, 0f, 0.603f);
@@ -705,7 +732,9 @@ public class TCTrack : MonoBehaviour
 
             // Fly coin smoothly with curved acceleration: gentle drift from far, swooping curve closer in
             float tNear = Mathf.Clamp01(1f - (heightDiffMetres / maxMetresDiff)); // 0 when at 40m, 1 when at spider height
-            float smoothSpeed = Mathf.Lerp(8.0f, 26.0f, tNear * tNear);
+            float smoothSpeed = webSwing
+                ? Mathf.Lerp(26.0f, 68.0f, tNear * tNear)
+                : Mathf.Lerp(8.0f, 26.0f, tNear * tNear);
             float step = smoothSpeed * Time.deltaTime;
 
             // Smooth interpolation along height (Y)
@@ -713,13 +742,16 @@ public class TCTrack : MonoBehaviour
             float newY = Mathf.MoveTowards(coinY, spiderY, step * Mathf.Clamp01(Mathf.Abs(dy) / Mathf.Max(0.001f, dist)));
 
             // Smooth angular tracking around cylinder trunk
-            float angleSpeed = Mathf.Lerp(90f, 360f, tNear);
+            float angleSpeed = webSwing
+                ? Mathf.Lerp(320f, 960f, tNear)
+                : Mathf.Lerp(90f, 360f, tNear);
             float newAngle = Mathf.MoveTowardsAngle(coinAngle, spiderAngle, angleSpeed * Time.deltaTime);
 
             // Lift coin gently off bark along an arc as it glides in
             float targetR = Mathf.Max(trunkRadius, spiderRadius);
             float arcLift = Mathf.Sin(tNear * Mathf.PI) * 0.12f;
-            float currentR = Mathf.Lerp(trunkRadius, targetR, tNear) + arcLift;
+            float rLerp = webSwing ? Mathf.Clamp01(tNear * 1.15f) : tNear;
+            float currentR = Mathf.Lerp(trunkRadius, targetR, rLerp) + arcLift;
 
             p.transform.position = new Vector3(0f, newY, 0f);
             p.transform.rotation = Quaternion.Euler(0f, newAngle, 0f);

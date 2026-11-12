@@ -150,13 +150,19 @@ public class TCWebBonus : MonoBehaviour
     {
         c = char.ToUpperInvariant(c);
         bool changed = false;
-        if (c == 'W' && !HasW) { HasW = true; changed = true; }
-        else if (c == 'E' && !HasE) { HasE = true; changed = true; }
-        else if (c == 'B' && !HasB) { HasB = true; changed = true; }
+        int letterIdx = 0;
+        if (c == 'W' && !HasW) { HasW = true; changed = true; letterIdx = 0; }
+        else if (c == 'E' && !HasE) { HasE = true; changed = true; letterIdx = 1; }
+        else if (c == 'B' && !HasB) { HasB = true; changed = true; letterIdx = 2; }
         if (!changed) return;
-        TCSfx.Play("coin", 0.9f);
+
+        // Distinct magical bell chime sound with rising musical pitch for W -> E -> B progression
+        float pitch = 1.05f + letterIdx * 0.18f;
+        TCSfx.Play("chime", 0.95f, pitch);
+
         TCFx.Shake(0.08f);
         TCPickupFX.Burst(TCPickupKind.Letter, pos);
+        TCGameUI.Instance?.FlyWebLetter(c, pos);
         OnLettersChanged?.Invoke();
         if (AllCollected && !IsSwinging) BeginSwing();
     }
@@ -186,7 +192,17 @@ public class TCWebBonus : MonoBehaviour
         var pl = player.Instance;
         var sp = ResolveSpider();
         var cute = ResolveCute(sp);
-        if (pl) pl.ResetInputState();
+        if (pl)
+        {
+            pl.ResetInputState();
+            pl.boost = false;
+        }
+        var pi = sp ? sp.GetComponent<playerInteract>() : null;
+        if (!pi && pl) pi = pl.GetComponentInChildren<playerInteract>();
+        if (!pi) pi = FindFirstObjectByType<playerInteract>();
+        pi?.EndBoost();
+        TCTimeDilation.Instance?.Cancel();
+
         metresAtSwingStart = pl ? pl.currentScore : 0f;
         TCTrack.Instance?.ClearEnemiesAhead(30f);
 
@@ -333,6 +349,8 @@ public class TCWebBonus : MonoBehaviour
                 // Overhead web bark pivot sweeps naturally down across upper trunk during the hang
                 // so the taut braided web string stays pinned & clearly readable through the whole whip.
                 Vector3 spiderPos = VisualSpiderPos();
+                if (!(TCCoinMagnet.Instance && TCCoinMagnet.Instance.IsActive))
+                    TCTrack.Instance?.AttractCoins(spiderPos, 40f, 0f);
                 Vector3 radialVec = new Vector3(spiderPos.x - axis.x, 0f, spiderPos.z - axis.z);
                 float targetRadius = radialVec.magnitude;
                 float targetRelY = spiderPos.y - camBaselineY;
@@ -541,12 +559,11 @@ public class TCWebBonus : MonoBehaviour
         OwnsMotion = false;
         IsSwinging = false;
 
-        TCTrack.Instance?.ClearHazardsAhead(12f);
-        TCTrack.Instance?.ReserveClearRun(400f);
+        // Keep branches as they are (no ClearHazardsAhead or ReserveClearRun)
         graceLeft = GraceSeconds;
         if (pl) pl.ResetInputState();
 
-        var pi = FindObjectOfType<playerInteract>();
+        if (!pi) pi = FindFirstObjectByType<playerInteract>();
         if (pi) pi.GrantGrace(GraceSeconds);
 
         ResetLetters();
@@ -660,7 +677,7 @@ public class TCWebBonus : MonoBehaviour
         Vector3 axis = pl && pl.p1 ? pl.p1.position : spiderPos;
 
         // Orbit the camera around the tree with smooth rotational and relative-follow delay,
-        // level horizon pitch (no upward tilt), 20% closer distance (2.592m), and 15% higher (+0.45 vs +0.30).
+        // level horizon pitch (no upward tilt), 25% closer distance (1.556m), and 15% higher (+0.45 vs +0.30).
         Vector3 trackedSpiderPos = camDampedReady
             ? new Vector3(
                 axis.x + Mathf.Sin(camDampedYaw * Mathf.Deg2Rad) * camDampedRadius,
@@ -675,9 +692,9 @@ public class TCWebBonus : MonoBehaviour
         Vector3 restPos = new Vector3(axis.x, camBaselineY, axis.z) + (yawDeltaRot * camWorldOffsetRest);
         Vector3 camFwd = orbitedRot * Vector3.forward;
         Vector3 camUp = orbitedRot * Vector3.up;
-        const float FollowDistance = 2.074f; // 20% closer than 2.592f
+        const float FollowDistance = 1.050f; // 10% closer than 1.167f
         float halfViewH = FollowDistance * Mathf.Tan(fovRest * 0.5f * Mathf.Deg2Rad);
-        Vector3 centeredPos = trackedSpiderPos - camFwd * FollowDistance + camUp * (halfViewH * 0.45f);
+        Vector3 centeredPos = trackedSpiderPos - camFwd * FollowDistance + camUp * (halfViewH * 0.55f);
 
         cam.transform.position = Vector3.Lerp(restPos, centeredPos, cBlend);
         cam.transform.rotation = orbitedRot;
@@ -882,7 +899,9 @@ public class TCWebBonus : MonoBehaviour
         go.transform.SetParent(sp, false);
         go.transform.localPosition = new Vector3(0f, -0.05f, 0f);
         windTrail = go.AddComponent<ParticleSystem>();
+        windTrail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         var main = windTrail.main;
+        main.playOnAwake = false;
         main.loop = true;
         main.duration = 1f;
         main.startLifetime = new ParticleSystem.MinMaxCurve(0.22f, 0.38f);
@@ -1149,10 +1168,11 @@ public class TCWebBonus : MonoBehaviour
         var go = new GameObject(celebrate ? "SwingCelebrate" : "AnchorBurst");
         go.transform.position = pos;
         var ps = go.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         var main = ps.main;
+        main.playOnAwake = false;
         main.loop = false;
         main.duration = 0.4f;
-        main.playOnAwake = false;
         main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f);
         main.startSpeed = new ParticleSystem.MinMaxCurve(celebrate ? 1.6f : 0.8f, celebrate ? 4.2f : 2.2f);
         main.startSize = new ParticleSystem.MinMaxCurve(0.02f, celebrate ? 0.06f : 0.035f);

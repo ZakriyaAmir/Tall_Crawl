@@ -725,17 +725,216 @@ public class TCSquirrel : TCEnemy
     public Transform legFL, legFR, legBL, legBR;
     public float runSpeed = 1.6f;
 
+    float delayTimer = 0f;
+
     public override void Init(float startY, float startAngle, float sweep = 40f, float spd = 2.2f)
     {
         base.Init(startY, startAngle, sweep, spd);
         runSpeed = Random.Range(1.4f, 1.9f);
-        TCSfx.Play("squirrel", 0.8f);
+        delayTimer = 1.0f; // 2x earlier advance warning: leaves start falling 1.0s before squirrel scampers into view
+        if (model) model.gameObject.SetActive(false);
+        SpawnFallingLeavesWarning(startY, startAngle);
+    }
+
+    static Texture2D _leafTex;
+    static Material _leafMat;
+
+    static Texture2D GetLeafTexture()
+    {
+        if (_leafTex) return _leafTex;
+        const int W = 64;
+        const int H = 64;
+        _leafTex = new Texture2D(W, H, TextureFormat.RGBA32, false)
+        {
+            name = "TC_ProceduralLeaf",
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear
+        };
+        var px = new Color[W * H];
+        for (int y = 0; y < H; y++)
+        {
+            float ny = (y - 4f) / (H - 8f); // 0 at stem base, 1 at leaf tip
+            for (int x = 0; x < W; x++)
+            {
+                float nx = (x - W * 0.5f) / (W * 0.5f); // -1 to 1 across leaf width
+                if (ny <= 0f || ny >= 1f)
+                {
+                    px[y * W + x] = Color.clear;
+                    continue;
+                }
+
+                // Natural pointed oval leaf profile: rounded belly at ny ~ 0.38, tapering to tip
+                float maxWidth = Mathf.Sin(ny * Mathf.PI) * (1.1f - ny * 0.45f);
+                float absX = Mathf.Abs(nx);
+                if (absX > maxWidth)
+                {
+                    px[y * W + x] = Color.clear;
+                    continue;
+                }
+
+                float edgeDist = 1f - (absX / Mathf.Max(0.01f, maxWidth));
+                float alpha = Mathf.Clamp01(edgeDist * 4f);
+
+                // Leaf center vein line
+                float vein = Mathf.Clamp01(Mathf.Abs(nx) * 12f);
+                float shade = Mathf.Lerp(0.82f, 1.0f, vein);
+
+                px[y * W + x] = new Color(shade, shade, shade, alpha);
+            }
+        }
+        _leafTex.SetPixels(px);
+        _leafTex.Apply(false, true);
+        return _leafTex;
+    }
+
+    static Material GetLeafMaterial()
+    {
+        if (_leafMat) return _leafMat;
+        Shader sh = Shader.Find("TallCrawl/FX Particle")
+            ?? Shader.Find("Mobile/Particles/Alpha Blended")
+            ?? Shader.Find("Sprites/Default")
+            ?? Shader.Find("Universal Render Pipeline/Particles/Unlit")
+            ?? Shader.Find("Unlit/Transparent");
+        _leafMat = new Material(sh) { name = "TC_SquirrelLeavesMat" };
+        var tex = GetLeafTexture();
+        if (tex)
+        {
+            _leafMat.mainTexture = tex;
+            if (_leafMat.HasProperty("_BaseMap")) _leafMat.SetTexture("_BaseMap", tex);
+        }
+        if (_leafMat.HasProperty("_Additive")) _leafMat.SetFloat("_Additive", 0f);
+        if (_leafMat.HasProperty("_DepthPull")) _leafMat.SetFloat("_DepthPull", 0.32f);
+        return _leafMat;
+    }
+
+    void SpawnFallingLeavesWarning(float startY, float angleDeg)
+    {
+        var go = new GameObject("SquirrelLeavesWarning");
+        float rad = angleDeg * Mathf.Deg2Rad;
+        float r = radius + 0.05f;
+        Vector3 spawnWorldPos = new Vector3(Mathf.Sin(rad) * r, startY + 0.15f, Mathf.Cos(rad) * r);
+        Vector3 outward = new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));
+        Vector3 tangent = new Vector3(-outward.z, 0f, outward.x); // Circumferential direction around trunk
+        go.transform.position = spawnWorldPos;
+        go.transform.rotation = Quaternion.LookRotation(outward, Vector3.up);
+
+        var ps = go.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        var main = ps.main;
+        main.playOnAwake = false;
+        main.loop = false;
+        main.duration = 1.2f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(1.4f, 2.0f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.08f, 0.28f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.10f, 0.18f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+        main.startRotation3D = true;
+        main.startRotationX = new ParticleSystem.MinMaxCurve(-0.5f, 0.5f);
+        main.startRotationY = new ParticleSystem.MinMaxCurve(-0.5f, 0.5f);
+        main.startRotationZ = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+        main.gravityModifier = 0.65f;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+        // Vivid forest leaf palette: fresh lime green, golden yellow-green, and warm autumn russet
+        var grad = new ParticleSystem.MinMaxGradient(
+            new Color(0.42f, 0.86f, 0.22f, 0.98f),
+            new Color(0.88f, 0.74f, 0.16f, 0.98f)
+        );
+        main.startColor = grad;
+
+        var em = ps.emission;
+        em.rateOverTime = 14f;
+        em.SetBursts(new[]
+        {
+            new ParticleSystem.Burst(0.0f, 8, 12),
+            new ParticleSystem.Burst(0.25f, 5, 8),
+            new ParticleSystem.Burst(0.50f, 3, 6)
+        });
+
+        var sh = ps.shape;
+        sh.shapeType = ParticleSystemShapeType.Sphere;
+        sh.radius = 0.05f; // Tightly pinpointed to the exact squirrel lane
+        sh.position = Vector3.zero;
+
+        // Leaf fluttering sway: tight local flutter aligned with squirrel lane (avoids wide world-space drift)
+        var vel = ps.velocityOverLifetime;
+        vel.enabled = true;
+        vel.space = ParticleSystemSimulationSpace.Local;
+        vel.y = new ParticleSystem.MinMaxCurve(-0.25f, -0.65f); // Gentle downward descent
+        vel.z = new ParticleSystem.MinMaxCurve(0.01f, 0.06f);  // Keep close to bark surface
+        var flutterX = new AnimationCurve();
+        flutterX.AddKey(0f, 0.06f);
+        flutterX.AddKey(0.25f, -0.06f);
+        flutterX.AddKey(0.5f, 0.06f);
+        flutterX.AddKey(0.75f, -0.06f);
+        flutterX.AddKey(1f, 0.02f);
+        vel.x = new ParticleSystem.MinMaxCurve(1f, flutterX);
+
+        // Tumble rotation over lifetime
+        var rot = ps.rotationOverLifetime;
+        rot.enabled = true;
+        rot.separateAxes = true;
+        rot.x = new ParticleSystem.MinMaxCurve(-2.2f, 2.2f);
+        rot.y = new ParticleSystem.MinMaxCurve(-1.8f, 1.8f);
+        rot.z = new ParticleSystem.MinMaxCurve(-3.5f, 3.5f);
+
+        // Size over lifetime: pop into view, flutter down, shrink slightly before dissolving
+        var sol = ps.sizeOverLifetime;
+        sol.enabled = true;
+        var sizeCurve = new AnimationCurve();
+        sizeCurve.AddKey(0f, 0.4f);
+        sizeCurve.AddKey(0.12f, 1.0f);
+        sizeCurve.AddKey(0.80f, 0.95f);
+        sizeCurve.AddKey(1f, 0.2f);
+        sol.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
+
+        // Fade in rapidly, then smooth dissolve at end
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        var alphaGrad = new Gradient();
+        alphaGrad.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.08f), new GradientAlphaKey(0.95f, 0.72f), new GradientAlphaKey(0f, 1f) }
+        );
+        col.color = alphaGrad;
+
+        var rend = go.GetComponent<ParticleSystemRenderer>();
+        if (rend)
+        {
+            rend.renderMode = ParticleSystemRenderMode.Billboard;
+            rend.material = GetLeafMaterial();
+            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            rend.receiveShadows = false;
+        }
+
+        ps.Play(true);
+        Object.Destroy(go, 3.8f);
     }
 
     void Update()
     {
         if (isSmashed) return;
         float dt = Time.deltaTime;
+
+        if (delayTimer > 0f)
+        {
+            delayTimer -= dt;
+            if (delayTimer <= 0f)
+            {
+                delayTimer = 0f;
+                if (model) model.gameObject.SetActive(true);
+                TCSfx.Play("squirrel", 0.8f);
+            }
+            else
+            {
+                // While waiting during the advance warning, keep transform pinned and model hidden
+                transform.position = new Vector3(0, y, 0);
+                transform.rotation = Quaternion.Euler(0, baseAngle, 0);
+                return;
+            }
+        }
+
         float t = Time.time;
 
         // 1. Scamper down the tree trunk

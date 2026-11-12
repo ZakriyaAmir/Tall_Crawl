@@ -413,9 +413,18 @@ public class playerInteract : MonoBehaviour
     public void StartBoost(float secs)
     {
         if (IsDead || (p != null && p.GameOver)) return;
+        if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging) return;
         if (boostDuration <= 0) TCPickupFX.Burst(TCPickupKind.BoostStart, transform.position + transform.up * 0.2f);
         boostDuration = Mathf.Max(boostDuration, secs);
         OnEvent?.Invoke("boost", transform.position);
+    }
+
+    /// <summary>Ends active chilli boost cleanly without triggering post-boost invulnerability blink.</summary>
+    public void EndBoost()
+    {
+        boostDuration = 0f;
+        if (!p) p = GetComponentInParent<player>();
+        if (p != null) p.boost = false;
     }
 
     public void jump(float duration = 0.6f)

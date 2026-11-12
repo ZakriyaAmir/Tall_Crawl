@@ -23,6 +23,7 @@ public class TCGameUI : MonoBehaviour
     bool started, turnedOnce, jumpedOnce, rolledOnce;
     readonly Queue<TextMeshProUGUI> popPool = new Queue<TextMeshProUGUI>();
     readonly Queue<Image> flyingCoinPool = new Queue<Image>();
+    readonly Queue<RectTransform> flyingLetterPool = new Queue<RectTransform>();
     TextMeshProUGUI resMetres, resBest, resCoins, resBonus, resTotal, reviveTimer, countDownText; Button doubleBtn, reviveGemBtn;
     RectTransform resultHomeRt, resultAgainRt, countDownRoot;
     CanvasGroup countDownGroup;
@@ -608,6 +609,90 @@ public class TCGameUI : MonoBehaviour
 
         coinImg.gameObject.SetActive(false);
         flyingCoinPool.Enqueue(coinImg);
+    }
+
+    public void FlyWebLetter(char c, Vector3 worldPos)
+    {
+        c = char.ToUpperInvariant(c);
+        int idx = (c == 'W') ? 0 : (c == 'E') ? 1 : (c == 'B') ? 2 : -1;
+        if (idx < 0) return;
+        if (!cam) cam = Camera.main;
+        if (!cam || !safe) return;
+        EnsureFxCanvas();
+
+        RectTransform root = flyingLetterPool.Count > 0 ? flyingLetterPool.Dequeue() : null;
+        Image bg = null;
+        TextMeshProUGUI label = null;
+        if (!root)
+        {
+            var go = new GameObject("FlyLetterRoot");
+            root = go.AddComponent<RectTransform>();
+            root.SetParent(fxRoot, false);
+            bg = TCUI.Img("Bg", root, TCUI.Mint);
+            TCUI.Stretch(bg.rectTransform);
+            bg.raycastTarget = false;
+            label = TCUI.Label("T", root, "", 36, TCUI.Cocoa);
+            TCUI.Stretch(label.rectTransform);
+            label.raycastTarget = false;
+            TCUI.Outline(label, 0.2f);
+        }
+        else
+        {
+            bg = root.GetComponentInChildren<Image>(true);
+            label = root.GetComponentInChildren<TextMeshProUGUI>(true);
+        }
+
+        root.sizeDelta = new Vector2(66, 56);
+        if (label) label.text = c.ToString();
+        if (bg) bg.color = TCUI.Mint;
+        root.gameObject.SetActive(true);
+
+        Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
+        StartCoroutine(FlyWebLetterRoutine(root, idx, screenPos));
+    }
+
+    IEnumerator FlyWebLetterRoutine(RectTransform letterRt, int slotIdx, Vector3 screenStart)
+    {
+        var canvas = letterRt.GetComponentInParent<Canvas>();
+        float s = canvas ? canvas.scaleFactor : 1f;
+        letterRt.anchorMin = letterRt.anchorMax = Vector2.zero;
+
+        Vector2 start = new Vector2(screenStart.x, screenStart.y) / s;
+        Vector2 midOffset = new Vector2(Random.Range(-50f, 50f), Random.Range(90f, 180f));
+
+        float duration = 0.55f;
+        for (float elapsed = 0; elapsed < duration; elapsed += Time.deltaTime)
+        {
+            float t = elapsed / duration;
+            Vector2 target = (webLetterBg != null && slotIdx < webLetterBg.Length && webLetterBg[slotIdx])
+                ? (Vector2)webLetterBg[slotIdx].rectTransform.position / s
+                : start + new Vector2(0, 400);
+
+            // Quadratic bezier curve from pickup contact directly to WEB HUD slot
+            Vector2 control = (start + target) * 0.5f + midOffset;
+            float u = 1f - t;
+            Vector2 current = u * u * start + 2f * u * t * control + t * t * target;
+            letterRt.anchoredPosition = current;
+
+            // Start medium, punch up slightly mid-flight, settle cleanly to slot size
+            float scale = t < 0.25f ? Mathf.Lerp(0.6f, 1.35f, t / 0.25f) : Mathf.Lerp(1.35f, 1.0f, (t - 0.25f) / 0.75f);
+            letterRt.localScale = Vector3.one * scale;
+
+            // Slight playful wobble rotation
+            float rot = Mathf.Sin(t * Mathf.PI * 3f) * 14f * (1f - t);
+            letterRt.localEulerAngles = new Vector3(0, 0, rot);
+
+            yield return null;
+        }
+
+        // Arrival punch on the target slot
+        if (webLetterBg != null && slotIdx < webLetterBg.Length && webLetterBg[slotIdx])
+        {
+            StartCoroutine(TCUI.Punch(webLetterBg[slotIdx].transform, 0.32f, 0.28f));
+        }
+
+        letterRt.gameObject.SetActive(false);
+        flyingLetterPool.Enqueue(letterRt);
     }
 
     public void TriggerHighScoreCelebration()
