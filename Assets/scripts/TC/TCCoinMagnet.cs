@@ -59,6 +59,7 @@ public class TCCoinMagnet : MonoBehaviour
     }
 
     float activeTimeRemaining = 0f;
+    float totalActiveDuration = 8f;
     float emissionTimer = 0f;
     float boltOrbitAngle = 0f;
     Transform spiderTransform;
@@ -101,7 +102,8 @@ public class TCCoinMagnet : MonoBehaviour
 
     public void Activate()
     {
-        activeTimeRemaining = Duration;
+        totalActiveDuration = Duration;
+        activeTimeRemaining = totalActiveDuration;
         emissionTimer = 0f;
         boltOrbitAngle = 0f;
         TCSfx.Play("cooldown_activate", 0.9f);
@@ -132,6 +134,15 @@ public class TCCoinMagnet : MonoBehaviour
 
                 if (magnetAuraObj != null)
                 {
+                    // Compute smooth ease-in on activation and ease-out on expiration (0.6s transitions)
+                    float easeIn = Mathf.Clamp01(emissionTimer / 0.6f);
+                    easeIn = Mathf.SmoothStep(0f, 1f, easeIn);
+
+                    float easeOut = Mathf.Clamp01(activeTimeRemaining / 0.6f);
+                    easeOut = Mathf.SmoothStep(0f, 1f, easeOut);
+
+                    float globalEnvelope = easeIn * easeOut;
+
                     // Situate the aura directly on the spider carapace plane (does not float high or block camera)
                     magnetAuraObj.transform.position = sp.position + sp.up * 0.04f;
                     magnetAuraObj.transform.rotation = sp.rotation;
@@ -147,14 +158,14 @@ public class TCCoinMagnet : MonoBehaviour
                             float phaseOffset = (float)i / SubtleWaveCount;
                             float u = Mathf.Repeat((emissionTimer / WaveLoopPeriod) + phaseOffset, 1.0f);
 
-                            // Smooth ease-out expansion from spider body out past the legs (0.10m to 0.32m)
+                            // Smooth ease-out expansion from spider body out past the legs (0.10m to 0.32m), scaled by transition envelope
                             float ease = 1f - Mathf.Pow(1f - u, 2.0f);
-                            float radius = Mathf.Lerp(0.10f, 0.32f, ease);
+                            float radius = Mathf.Lerp(0.10f, 0.32f, ease) * Mathf.Lerp(0.4f, 1.0f, globalEnvelope);
                             wave.root.localScale = new Vector3(radius, 1f, radius);
 
-                            // Crisp bell curve with punchy opacity clearly visible on phone screens
+                            // Crisp bell curve with punchy opacity, smoothly faded by ease-in / ease-out
                             float alpha = Mathf.Sin(u * Mathf.PI);
-                            alpha = Mathf.Pow(alpha, 1.2f) * 0.85f;
+                            alpha = Mathf.Pow(alpha, 1.2f) * 0.85f * globalEnvelope;
 
                             // Metallic platinum / cool steel with a bright chrome crest
                             Color waveCol = Color.Lerp(
@@ -181,18 +192,18 @@ public class TCCoinMagnet : MonoBehaviour
                             float angleDeg = bolt.baseAngle + boltOrbitAngle;
                             float angleRad = angleDeg * Mathf.Deg2Rad;
 
-                            // Dynamic rhythmic electric pulse for each bolt
+                            // Dynamic rhythmic electric pulse for each bolt, scaled by transition envelope
                             float pulse = 0.5f + 0.5f * Mathf.Sin(basePulseTime + i * 0.785f);
-                            float radius = 0.28f + 0.03f * pulse;
-                            float scale = Mathf.Lerp(0.70f, 0.98f, pulse);
+                            float radius = (0.28f + 0.03f * pulse) * Mathf.Lerp(0.45f, 1.0f, globalEnvelope);
+                            float scale = Mathf.Lerp(0.70f, 0.98f, pulse) * globalEnvelope;
 
                             bolt.root.localPosition = new Vector3(Mathf.Cos(angleRad) * radius, 0.005f, Mathf.Sin(angleRad) * radius);
                             // Point the bolt outward radially away from the spider
                             bolt.root.localRotation = Quaternion.Euler(0f, -angleDeg + 90f, 0f);
                             bolt.root.localScale = Vector3.one * scale;
 
-                            // Shimmering silver electric bolt color
-                            float alpha = Mathf.Lerp(0.65f, 1.0f, pulse);
+                            // Shimmering silver electric bolt color with smooth fade
+                            float alpha = Mathf.Lerp(0.65f, 1.0f, pulse) * globalEnvelope;
                             Color boltCol = Color.Lerp(
                                 new Color(0.85f, 0.92f, 1.0f, alpha),
                                 new Color(1.0f, 1.0f, 1.0f, alpha),
@@ -202,7 +213,7 @@ public class TCCoinMagnet : MonoBehaviour
                         }
                     }
 
-                    TickLightningArcs(dt);
+                    TickLightningArcs(dt, globalEnvelope);
                 }
 
                 // Attract nearby coins along trunk towards spider (strictly within 40m distance)
@@ -216,6 +227,7 @@ public class TCCoinMagnet : MonoBehaviour
             {
                 activeTimeRemaining = 0f;
                 if (magnetAuraObj != null) magnetAuraObj.SetActive(false);
+                TCSfx.Play("menu_drop", 0.75f, 0.95f);
             }
         }
     }

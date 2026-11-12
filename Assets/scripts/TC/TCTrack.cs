@@ -402,26 +402,39 @@ public class TCTrack : MonoBehaviour
         if (spawnBranches) lastHazardY = y;
         OnRow?.Invoke(y, newSafe, Mathf.Abs(Mathf.DeltaAngle(safeAngle, newSafe)), window, secs, metres);
 
-        // Enemy / Hurdle Spawns based on distance:
-        // - First 2000 meters: only wasps and branches
-        // - After 2000 meters: bee swarms can spawn (handled above)
-        // - After 3000 meters: squirrels can spawn
-        if (!webSwinging && metres >= 3000f && Random.value < 0.32f)
+        // Enemy / Hurdle Spawns based on distance and probability rules:
+        // - Wasps: unlock after 30m, scaling with distance difficulty d (12% base up to 26%)
+        // - Pinecones: unlock after 800m, tumbling down trunk lanes (14% base up to 24%)
+        // - Squirrels: unlock after 2000m with advance leaf warning (15% base up to 28%)
+        if (!webSwinging)
         {
-            float squirrelY = y + gap * 0.52f;
-            float squirrelAngle = newSafe + (Random.value < 0.5f ? -35f : 35f);
-            Spawn(squirrelPool, "squirrel", squirrelY, squirrelAngle);
+            float waspProb = metres > 30f ? Mathf.Lerp(0.12f, 0.26f, d) : 0f;
+            float pineconeProb = metres >= 800f ? Mathf.Lerp(0.14f, 0.24f, d) : 0f;
+            float squirrelProb = metres >= 2000f ? Mathf.Lerp(0.15f, 0.28f, d) : 0f;
+
+            if (waspProb > 0f && Random.value < waspProb)
+            {
+                float waspY = y + gap * Random.Range(0.65f, 0.78f);
+                float waspAngle = newSafe + (Random.value < 0.5f ? -1f : 1f) * Random.Range(32f, 48f);
+                Spawn(waspPool, "wasp", waspY, waspAngle);
+            }
+
+            if (pineconeProb > 0f && Random.value < pineconeProb)
+            {
+                float pineconeY = y + gap * Random.Range(0.38f, 0.55f);
+                float pineconeAngle = newSafe + (Random.value < 0.5f ? -1f : 1f) * Random.Range(24f, 40f);
+                Spawn(pineconePool, "pinecone", pineconeY, pineconeAngle);
+            }
+
+            if (squirrelProb > 0f && Random.value < squirrelProb)
+            {
+                float squirrelY = y + gap * Random.Range(0.48f, 0.62f);
+                float squirrelAngle = newSafe + (Random.value < 0.5f ? -1f : 1f) * Random.Range(28f, 44f);
+                Spawn(squirrelPool, "squirrel", squirrelY, squirrelAngle);
+            }
         }
 
-        // Wasps spawn from the beginning (alongside branches)
-        if (!webSwinging && metres > 30f && Random.value < 0.22f)
-        {
-            float waspY = y + gap * 0.72f;
-            float waspAngle = newSafe + (Random.value < 0.5f ? -42f : 42f);
-            Spawn(waspPool, "wasp", waspY, waspAngle);
-        }
-
-        // In the safe gap between rows, spawn strictly ONE item type (heart, chilli boost, or coins) with proper margins
+        // In the safe gap between rows, spawn strictly ONE item type (letter, powerup, or coin trail) with proper margins
         float bonusYPos = y + gap * 0.5f;
         bool canSpawnBonus = !webSwinging && bonusYPos > lastBonusY + MinBonusSpacing && Mathf.Abs(bonusYPos - lastCoinY) > BonusCoinMargin;
 
@@ -429,33 +442,57 @@ public class TCTrack : MonoBehaviour
         bool canSpawnCooldownGap = playerDistance >= C.cooldownMinMetres && metres >= C.cooldownMinMetres;
         bool canSpawnMagnetGap = playerDistance >= C.magnetMinMetres && metres >= C.magnetMinMetres;
 
-        if (canSpawnBonus && heartEligible)
+        bool spawnedPowerup = false;
+        if (canSpawnBonus)
         {
-            Spawn(heartPool, "heart", bonusYPos, newSafe);
-            lastBonusY = bonusYPos;
-            heartEligible = false; // consumed
+            if (letterEligible && TrySpawnLetter(bonusYPos, newSafe, metres))
+            {
+                lastBonusY = bonusYPos;
+                letterEligible = false;
+                spawnedPowerup = true;
+            }
+            else
+            {
+                // Weighted random selection across available powerups
+                float wHeart = heartEligible ? C.heartChance : 0f;
+                float wChilli = CanSpawnChilli ? C.boostChance : 0f;
+                float wCooldown = canSpawnCooldownGap ? C.cooldownChance : 0f;
+                float wMagnet = canSpawnMagnetGap ? C.magnetChance : 0f;
+                float totalPowerupWeight = wHeart + wChilli + wCooldown + wMagnet;
+
+                if (totalPowerupWeight > 0f && Random.value < Mathf.Clamp01(totalPowerupWeight))
+                {
+                    float roll = Random.Range(0f, totalPowerupWeight);
+                    if (wHeart > 0f && (roll -= wHeart) <= 0f)
+                    {
+                        Spawn(heartPool, "heart", bonusYPos, newSafe);
+                        lastBonusY = bonusYPos;
+                        heartEligible = false;
+                        spawnedPowerup = true;
+                    }
+                    else if (wChilli > 0f && (roll -= wChilli) <= 0f)
+                    {
+                        Spawn(boostPool, "boost", bonusYPos, newSafe);
+                        lastBonusY = bonusYPos;
+                        spawnedPowerup = true;
+                    }
+                    else if (wCooldown > 0f && (roll -= wCooldown) <= 0f)
+                    {
+                        Spawn(cooldownPool, "cooldown", bonusYPos, newSafe);
+                        lastBonusY = bonusYPos;
+                        spawnedPowerup = true;
+                    }
+                    else if (wMagnet > 0f)
+                    {
+                        Spawn(magnetPool, "magnet", bonusYPos, newSafe);
+                        lastBonusY = bonusYPos;
+                        spawnedPowerup = true;
+                    }
+                }
+            }
         }
-        else if (canSpawnBonus && letterEligible && TrySpawnLetter(bonusYPos, newSafe, metres))
-        {
-            lastBonusY = bonusYPos;
-            letterEligible = false;
-        }
-        else if (canSpawnBonus && CanSpawnChilli && Random.value < C.boostChance)
-        {
-            Spawn(boostPool, "boost", bonusYPos, newSafe);
-            lastBonusY = bonusYPos;
-        }
-        else if (canSpawnBonus && canSpawnCooldownGap && Random.value < C.cooldownChance)
-        {
-            Spawn(cooldownPool, "cooldown", bonusYPos, newSafe);
-            lastBonusY = bonusYPos;
-        }
-        else if (canSpawnBonus && canSpawnMagnetGap && Random.value < C.magnetChance)
-        {
-            Spawn(magnetPool, "magnet", bonusYPos, newSafe);
-            lastBonusY = bonusYPos;
-        }
-        else if (Random.value < C.coinTrailChance)
+
+        if (!spawnedPowerup && Random.value < C.coinTrailChance)
         {
             // Spawn one of three coin string patterns randomly:
             // 0: Standard smooth climbing trail (leads smoothly into safe gap)
@@ -859,6 +896,15 @@ public class TCTrack : MonoBehaviour
     public TCPooled SpawnTutorialBees(float y)
     {
         return Spawn(beePool, "bees", y, 0);
+    }
+
+    public TCSquirrel SpawnTutorialSquirrel(float y, float angle)
+    {
+        var p = Spawn(squirrelPool, "squirrel", y, angle);
+        if (!p) return null;
+        var squirrel = p.GetComponent<TCSquirrel>();
+        if (squirrel) squirrel.Init(y, angle, 0f, 0f);
+        return squirrel;
     }
 
     public TCPooled SpawnTutorialChilli(float y, float angle)

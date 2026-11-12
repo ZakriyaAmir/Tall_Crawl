@@ -1215,7 +1215,86 @@ public class TCGameUI : MonoBehaviour
         yield return new WaitForSeconds(0.6f);
 
         // -------------------------------------------------------------
-        // STEP 5: REACH THE CHILLI
+        // STEP 5: DODGE THE SQUIRREL
+        // -------------------------------------------------------------
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
+        // Spawn a squirrel directly in the spider's path ahead (falling leaves warning triggers immediately!)
+        float squirrelAngle = pl.CurrentYaw;
+        float squirrelY = SpiderY + 5.2f;
+        var squirrel = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialSquirrel(squirrelY, squirrelAngle) : null;
+        hintText.text = "WATCH FOR FALLING LEAVES!\nSquirrel incoming!";
+        handMode = HandAnimMode.Hidden;
+
+        // Climb forward while leaves fall and squirrel begins scampering down
+        while (squirrel != null && squirrel.gameObject.activeInHierarchy && (squirrelY - SpiderY) > 2.2f)
+        {
+            if (IsTutorialAborted) yield break;
+            yield return null;
+        }
+
+        // Slow down smoothly as squirrel approaches down the trunk
+        yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
+        while (squirrel != null && squirrel.gameObject.activeInHierarchy && (squirrelY - SpiderY) > 1.35f)
+        {
+            if (IsTutorialAborted) yield break;
+            yield return null;
+        }
+
+        if (squirrel != null && squirrel.gameObject.activeInHierarchy)
+        {
+            // Freeze right before collision and prompt player to steer away to the other side
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+            IsTutorialFrozen = true;
+            Time.timeScale = 0f;
+            currentTargetTimeScale = 0f;
+
+            pl.SetSteerAllowed(true);
+            pl.SetJumpAllowed(false);
+            handMode = HandAnimMode.Horizontal;
+            hintText.text = "DRAG TO AVOID\nthe squirrel!";
+
+            // Wait until the player circles at least 50 degrees away from the squirrel's lane
+            while (squirrel != null && squirrel.gameObject.activeInHierarchy && Mathf.Abs(Mathf.DeltaAngle(squirrelAngle, pl.CurrentYaw)) < 50f)
+            {
+                if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+                yield return null;
+            }
+
+            // Player cleared the lane! Unfreeze and pass safely
+            IsTutorialFrozen = false;
+            hintText.text = "";
+            handMode = HandAnimMode.Hidden;
+            pl.SetSteerAllowed(false);
+            pl.SetJumpAllowed(false);
+            foreach (var col in squirrel.GetComponentsInChildren<Collider>()) col.enabled = false;
+
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) yield break;
+            Time.timeScale = 1.0f;
+            currentTargetTimeScale = 1.0f;
+
+            while (squirrel != null && squirrel.gameObject.activeInHierarchy && SpiderY < squirrelY + 0.8f)
+            {
+                if (IsTutorialAborted) yield break;
+                yield return null;
+            }
+        }
+        else
+        {
+            IsTutorialFrozen = false;
+            yield return WaitWhilePausedOverlay();
+            if (!IsTutorialAborted) { Time.timeScale = 1.0f; currentTargetTimeScale = 1.0f; }
+        }
+
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+        yield return new WaitForSeconds(0.6f);
+
+        // -------------------------------------------------------------
+        // STEP 6: REACH THE CHILLI
         // -------------------------------------------------------------
         pl.SetSteerAllowed(false);
         pl.SetJumpAllowed(false);
