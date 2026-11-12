@@ -10,21 +10,23 @@ using UnityEngine.UI;
 public class TCFxCapture : MonoBehaviour
 {
     string dir; int n;
-    bool letterOnly;
+    bool letterOnly, swingOnly;
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Boot()
     {
         var args = System.Environment.GetCommandLineArgs();
         int i = System.Array.IndexOf(args, "-tcfx");
         int j = System.Array.IndexOf(args, "-tcletter");
-        if (i < 0 && j < 0) return;
+        int k = System.Array.IndexOf(args, "-tcswing");
+        if (i < 0 && j < 0 && k < 0) return;
         PlayerPrefs.DeleteAll(); PlayerPrefs.SetInt("consent", 1); TCSave.TutorialDone = true;
         PlayerPrefs.SetString("tc_daily_last", System.DateTime.Now.Date.ToString("yyyy-MM-dd"));
         var g = new GameObject("TCFxCapture"); DontDestroyOnLoad(g);
         var cap = g.AddComponent<TCFxCapture>();
-        int idx = j >= 0 ? j : i;
+        int idx = k >= 0 ? k : (j >= 0 ? j : i);
         cap.dir = idx + 1 < args.Length ? args[idx + 1] : "/tmp";
-        cap.letterOnly = j >= 0;
+        cap.letterOnly = j >= 0 && k < 0;
+        cap.swingOnly = k >= 0;
     }
     IEnumerator Shot(string name) { yield return new WaitForEndOfFrame(); ScreenCapture.CaptureScreenshot($"{dir}/{++n:00}_{name}.png"); yield return null; }
     IEnumerator W(float s) { yield return new WaitForSecondsRealtime(s); }
@@ -42,6 +44,12 @@ public class TCFxCapture : MonoBehaviour
         if (letterOnly)
         {
             yield return LetterOnlyShot();
+            Application.Quit();
+            yield break;
+        }
+        if (swingOnly)
+        {
+            yield return SwingOnlyShot();
             Application.Quit();
             yield break;
         }
@@ -251,8 +259,8 @@ public class TCFxCapture : MonoBehaviour
         if (sp) sp.GrantGrace(30f);
         web.CollectLetter('B', wpos);
         yield return W(0.25f); yield return Shot("web_hud_web");
-        // At least 8 frames across several of the 10 thwip-and-orbit cycles, plus landing.
-        int swingShots = 10;
+        // Dense showcase: 20 frames across the 10 thwip-and-orbit cycles, plus landing.
+        int swingShots = 20;
         float step = TCWebBonus.SwingSeconds / swingShots;
         for (int f = 0; f < swingShots; f++)
         {
@@ -333,6 +341,51 @@ public class TCFxCapture : MonoBehaviour
         Debug.Log("[TCFxCapture] letter-only shot: " + (letterT ? letterT.root.name : "NONE") +
                   " at " + (pl ? pl.currentScore.ToString("0") : "?") + " m pos=" +
                   (letterT ? letterT.position.ToString("F2") : "-"));
+    }
+
+
+    IEnumerator SwingOnlyShot()
+    {
+        yield return W(0.6f);
+        SceneManager.LoadScene("gameplay");
+        yield return W(2.5f);
+        GameObject.Find("TC_GameUI/Safe/Start")?.GetComponent<Button>()?.onClick.Invoke();
+        var ui = FindObjectOfType<TCGameUI>(); if (ui) ui.StartRun();
+        var pl = FindObjectOfType<player>();
+        var sp = FindObjectOfType<playerInteract>();
+        yield return W(0.8f);
+        if (pl) pl.paused = false;
+        if (sp) sp.GrantGrace(90f);
+        float prev = Time.timeScale;
+        Time.timeScale = 4f;
+        yield return W(1.6f);
+        Time.timeScale = prev <= 0f ? 1f : prev;
+        var web = TCWebBonus.Instance;
+        if (web == null)
+        {
+            var wb = new GameObject("TCWebBonus");
+            web = wb.AddComponent<TCWebBonus>();
+        }
+        web.BeginSwing();
+        // Wait for the camera pull-in so the first frame is already close.
+        yield return W(0.32f);
+        // 18 frames fit inside the 9s swing even with Shot()'s extra end-of-frame waits.
+        const int frames = 18;
+        float step = 0.38f;
+        for (int f = 0; f < frames; f++)
+        {
+            yield return Shot("web_swing_" + f);
+            yield return W(step);
+        }
+        // Land / +5000m while the close camera is held.
+        float t0 = Time.realtimeSinceStartup;
+        while (!(web && web.ShowcaseHold) && Time.realtimeSinceStartup - t0 < 4f)
+            yield return null;
+        yield return W(0.12f);
+        yield return Shot("web_swing_land");
+        yield return W(0.22f);
+        yield return Shot("web_swing_pop");
+        Debug.Log("[TCFxCapture] swing-only done, hold=" + (web && web.ShowcaseHold) + " swinging=" + (web && web.IsSwinging));
     }
 
 }

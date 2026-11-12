@@ -58,8 +58,11 @@ public class TCSpeedLines : MonoBehaviour
         float target = webSwing ? 0.95f : !running || slow ? 0f : boost ? 1f : Mathf.Clamp01((mult - 1.15f) / 1.2f) * 0.3f;
         level = Mathf.MoveTowards(level, target, Time.unscaledDeltaTime * (target > level ? 4f : 2f));
 
-        var em = lines.emission; em.rateOverTime = level * 95f;
-        var m = lines.main; m.startColor = boost ? new Color(1f, 0.9f, 0.7f, 0.75f) : new Color(1f, 1f, 1f, 0.45f);
-        var ee = embers.emission; ee.rateOverTime = boost && running ? 45f : 0f;
+        var em = lines.emission; em.rateOverTime = level * (webSwing ? 140f : 95f);
+        var m = lines.main;
+        m.startColor = webSwing ? new Color(0.85f, 0.95f, 1f, 0.8f)
+                     : boost ? new Color(1f, 0.9f, 0.7f, 0.75f)
+                     : new Color(1f, 1f, 1f, 0.45f);
+        var ee = embers.emission; ee.rateOverTime = (boost && running) || webSwing ? (webSwing ? 28f : 45f) : 0f;
     }
 }
