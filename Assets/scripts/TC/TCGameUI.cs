@@ -120,14 +120,14 @@ public class TCGameUI : MonoBehaviour
         var top = TCUI.Rect("Top", safe); if (TCUI.Fresh(top)) { top.anchorMin = new Vector2(0, 1); top.anchorMax = new Vector2(1, 1); top.pivot = new Vector2(0.5f, 1); top.sizeDelta = new Vector2(0, 200); top.anchoredPosition = Vector2.zero; }
         var pill = TCUI.Img("ScorePill", top, new Color(1, 1, 1, 0.85f)); TCUI.Place(pill.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 10), new Vector2(360, 120));
         scoreText = TCUI.Label("Score", pill.transform, "0M", 72, TCUI.Cocoa); TCUI.Stretch(scoreText.rectTransform);
-        var cp = TCUI.Img("Coins", top, new Color(1, 1, 1, 0.85f)); TCUI.Place(cp.rectTransform, new Vector2(1, 0.5f), new Vector2(-190, 10), new Vector2(260, 96));
-        var ci = TCUI.Img("Icon", cp.transform, Color.white, TCUI.Icon("coin")); TCUI.Place(ci.rectTransform, new Vector2(0, 0.5f), new Vector2(50, 0), new Vector2(72, 72));
+        var cp = TCUI.Img("Coins", top, new Color(1, 1, 1, 0.85f)); TCUI.Place(cp.rectTransform, new Vector2(1, 0.5f), new Vector2(-188, 10), new Vector2(240, 96));
+        var ci = TCUI.Img("Icon", cp.transform, Color.white, TCUI.Icon("coin")); TCUI.Place(ci.rectTransform, new Vector2(0, 0.5f), new Vector2(46, 0), new Vector2(68, 68));
         coinIconTarget = ci.rectTransform;
-        coinText = TCUI.Label("Value", cp.transform, "0", 52, TCUI.Cocoa, TextAlignmentOptions.Right); TCUI.Stretch(coinText.rectTransform, 90, 26, 0, 0);
+        coinText = TCUI.Label("Value", cp.transform, "0", 50, TCUI.Cocoa, TextAlignmentOptions.Right); TCUI.Stretch(coinText.rectTransform, 82, 22, 0, 0);
         heartsRow = TCUI.Rect("Hearts", top); TCUI.Place(heartsRow, new Vector2(0, 0.5f), new Vector2(170, 10), new Vector2(300, 80));
         var pause = TCUI.Btn("Pause", top, "", TCUI.Butter, ShowPause, 40, TCUI.Icon("pause"));
-        // Top-right of the safe HUD, clear of hearts / score, easy to tap.
-        TCUI.Place((RectTransform)pause.transform, new Vector2(1, 0.5f), new Vector2(-80, -118), new Vector2(120, 120));
+        // Perfectly balanced on the top-right header row alongside Coins, ScorePill, and Hearts
+        TCUI.Place((RectTransform)pause.transform, new Vector2(1, 0.5f), new Vector2(-54, 10), new Vector2(96, 96));
         BuildWebHud(top);
         BuildCountdown();
 
