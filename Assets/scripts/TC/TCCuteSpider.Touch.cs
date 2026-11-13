@@ -21,6 +21,23 @@ public partial class TCCuteSpider
     Quaternion bodyTouchRot = Quaternion.identity;
     float eyeLidMul = 1f;
     int eyeLidOnly = -1; // -1 both, else index into eyes
+    bool eyeOverrideActive;
+
+    public void SetEyeOverride(float lidMul, int onlyIndex = -1)
+    {
+        eyeOverrideActive = true;
+        eyeLidMul = lidMul;
+        eyeLidOnly = onlyIndex;
+        ApplyTouchOffsets();
+    }
+
+    public void ClearEyeOverride()
+    {
+        eyeOverrideActive = false;
+        eyeLidMul = 1f;
+        eyeLidOnly = -1;
+        ApplyTouchOffsets();
+    }
 
     public bool IsTouchActing => touchBusy;
 
@@ -98,7 +115,7 @@ public partial class TCCuteSpider
             // Ease any leftover touch offsets back to rest
             bodyTouchOff = Vector3.Lerp(bodyTouchOff, Vector3.zero, 1f - Mathf.Exp(-10f * dt));
             bodyTouchRot = Quaternion.Slerp(bodyTouchRot, Quaternion.identity, 1f - Mathf.Exp(-10f * dt));
-            eyeLidMul = Mathf.MoveTowards(eyeLidMul, 1f, dt * 8f);
+            if (!eyeOverrideActive) eyeLidMul = Mathf.MoveTowards(eyeLidMul, 1f, dt * 8f);
             ApplyTouchOffsets();
             return;
         }
@@ -125,7 +142,7 @@ public partial class TCCuteSpider
         // Compose on top of whatever LateUpdate already set
         body.localRotation = bodyTouchRot * body.localRotation;
         // Eye lids
-        if (eyes.Count > 0 && eyeLidMul < 0.999f)
+        if (eyes.Count > 0 && (eyeLidMul < 0.999f || eyeOverrideActive))
         {
             for (int i = 0; i < eyes.Count; i++)
             {

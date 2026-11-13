@@ -14,6 +14,7 @@ public class player : MonoBehaviour
     public float currentScore, calcSpeed;
     public bool jumpAllowed = true;
     public bool steerAllowed = true;
+    public bool slowmoAllowed = true;
     public bool IsRolling => boost; // Roll animation happens during chilli mode
     public float CurrentYaw => yaw;
 
@@ -67,6 +68,11 @@ public class player : MonoBehaviour
         jumpAllowed = allowed;
     }
 
+    public void SetSlowmoAllowed(bool allowed)
+    {
+        slowmoAllowed = allowed;
+    }
+
     public static System.Action OnJumped, OnTurned, OnRolled;
     public static float DebugSteer; // used by the automated screenshot tour
 
@@ -75,7 +81,7 @@ public class player : MonoBehaviour
     bool camBoost; [HideInInspector] public float camHoldUntil;
     float targetYaw, yaw, startY, jumpCooldown;
     bool canDoubleJump;
-    Vector2 touchStart, lastPos, lastTapPos, rawTouchDownPos; float touchStartTime, rawTouchDownTime, lastTapTime = -1f; bool dragging;
+    Vector2 touchStart, lastPos, lastTapPos, rawTouchDownPos; float touchStartTime, rawTouchDownTime, lastTapTime = -1f; bool dragging, swipeDownConsumed;
     enum GestureAxis { None, Horizontal, Vertical }
     GestureAxis axisLock;
     float gestureStartYaw;
@@ -176,6 +182,13 @@ public class player : MonoBehaviour
         float k = Input.GetAxisRaw("Horizontal") + DebugSteer;
         if (steerAllowed && Mathf.Abs(k) > 0.05f) { targetYaw -= k * C.keyboardTurnSpeed * TCSave.Sensitivity * dt; OnTurned?.Invoke(); }
         if (jumpAllowed && (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))) jump();
+        if ((Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
+            && slowmoAllowed
+            && playerInteract.CooldownInventory > 0
+            && (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive))
+        {
+            TCTimeDilation.TriggerCooldown();
+        }
 
         // Touch, falling back to mouse in the editor
         bool down, held, up; Vector2 p;
@@ -210,6 +223,7 @@ public class player : MonoBehaviour
                 }
             }
             dragging = true;
+            swipeDownConsumed = false;
             axisLock = GestureAxis.None;
             gestureStartYaw = targetYaw;
             rawTouchDownPos = touchStart = lastPos = p;
@@ -222,11 +236,11 @@ public class player : MonoBehaviour
             float sideDist = Mathf.Abs(p.x - rawTouchDownPos.x);
             float lockDist = Screen.height * 0.025f;
 
-            // Dominant-axis lock: once the gesture is clearly a jump swipe, never steer,
-            // and once it's clearly a turn, never jump.
+            // Dominant-axis lock: once the gesture is clearly a jump/slow-mo swipe, never steer,
+            // and once it's clearly a turn, never jump or slow-mo.
             if (axisLock == GestureAxis.None)
             {
-                if (upwardDist > lockDist && upwardDist > sideDist * 1.15f)
+                if (Mathf.Abs(upwardDist) > lockDist && Mathf.Abs(upwardDist) > sideDist * 1.15f)
                     axisLock = GestureAxis.Vertical;
                 else if (sideDist > lockDist && sideDist > Mathf.Abs(upwardDist) * 0.9f)
                     axisLock = GestureAxis.Horizontal;
@@ -255,6 +269,27 @@ public class player : MonoBehaviour
                 touchStartTime = Time.unscaledTime;
                 lastTapTime = -1f;
                 jump();
+            }
+
+            // Swipe down to trigger slow motion if available (one use per swipe gesture, cannot trigger if already slow)
+            bool isGenuineSwipeDown = !swipeDownConsumed
+                && slowmoAllowed
+                && axisLock != GestureAxis.Horizontal
+                && (-upwardDist) > minSwipeDist
+                && (-upwardDist) > sideDist * 1.15f
+                && (Time.unscaledTime - rawTouchDownTime) < 0.5f
+                && playerInteract.CooldownInventory > 0
+                && (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive);
+
+            if (isGenuineSwipeDown)
+            {
+                swipeDownConsumed = true;
+                targetYaw = gestureStartYaw;
+                axisLock = GestureAxis.Vertical;
+                touchStart = p;
+                touchStartTime = Time.unscaledTime;
+                lastTapTime = -1f;
+                TCTimeDilation.TriggerCooldown();
             }
 
             lastPos = p;

@@ -404,12 +404,10 @@ public class TCTrack : MonoBehaviour
 
         // Enemy / Hurdle Spawns based on distance and probability rules:
         // - Wasps: unlock after 30m, scaling with distance difficulty d (12% base up to 26%)
-        // - Pinecones: unlock after 800m, tumbling down trunk lanes (14% base up to 24%)
         // - Squirrels: unlock after 2000m with advance leaf warning (15% base up to 28%)
         if (!webSwinging)
         {
             float waspProb = metres > 30f ? Mathf.Lerp(0.12f, 0.26f, d) : 0f;
-            float pineconeProb = metres >= 800f ? Mathf.Lerp(0.14f, 0.24f, d) : 0f;
             float squirrelProb = metres >= 2000f ? Mathf.Lerp(0.15f, 0.28f, d) : 0f;
 
             if (waspProb > 0f && Random.value < waspProb)
@@ -417,13 +415,6 @@ public class TCTrack : MonoBehaviour
                 float waspY = y + gap * Random.Range(0.65f, 0.78f);
                 float waspAngle = newSafe + (Random.value < 0.5f ? -1f : 1f) * Random.Range(32f, 48f);
                 Spawn(waspPool, "wasp", waspY, waspAngle);
-            }
-
-            if (pineconeProb > 0f && Random.value < pineconeProb)
-            {
-                float pineconeY = y + gap * Random.Range(0.38f, 0.55f);
-                float pineconeAngle = newSafe + (Random.value < 0.5f ? -1f : 1f) * Random.Range(24f, 40f);
-                Spawn(pineconePool, "pinecone", pineconeY, pineconeAngle);
             }
 
             if (squirrelProb > 0f && Random.value < squirrelProb)
@@ -494,24 +485,16 @@ public class TCTrack : MonoBehaviour
 
         if (!spawnedPowerup && Random.value < C.coinTrailChance)
         {
-            // Spawn one of three coin string patterns randomly:
-            // 0: Standard smooth climbing trail (leads smoothly into safe gap)
-            // 1: Zigzag string (player weaves left and right across climbing path)
-            // 2: Vertical jump arc string (spider jumps to collect the arced coins in the air)
-            int pattern = Random.Range(0, 3);
+            // Spawn smooth, strictly vertical-increasing coin strings:
+            // 0: Standard smooth vertical climbing trail (smoothly interpolates towards safe gap)
+            // 1: Vertical jump arc string (straight vertical constant angle, spider hops over)
+            int pattern = Random.Range(0, 2);
             int stringCount = Random.Range(6, 11); // 6 to 10 coins
             float trailSpan = (stringCount - 1) * UniformCoinSpacing;
             float trailEndY = y - 0.35f;
             float trailStartY = Mathf.Max(trailEndY - trailSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
 
             if (pattern == 1)
-            {
-                // Zigzag pattern
-                float centerAngle = Mathf.LerpAngle(safeAngle, newSafe, 0.5f);
-                float angleAmp = Random.Range(14f, 22f);
-                SpawnCoinZigzag(trailStartY, trailEndY, centerAngle, angleAmp, stringCount);
-            }
-            else if (pattern == 2)
             {
                 // Vertical arc pattern straight upward (constant angle, Subway Surfers style canonical 8-coin jump arc, farthest landing span)
                 const float jumpSpan = LongestArcSpan;
@@ -521,7 +504,7 @@ public class TCTrack : MonoBehaviour
             }
             else
             {
-                // Classic smooth trail
+                // Classic smooth vertical trail (strictly monotonic upward progression)
                 SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.70f), newSafe, stringCount);
             }
         }
@@ -545,13 +528,22 @@ public class TCTrack : MonoBehaviour
 
         if (totalPathLength < UniformCoinSpacing * 0.7f) return;
 
-        // Calculate exact count of coins so that the spacing between consecutive coins is exactly UniformCoinSpacing
+        // Calculate steps based strictly on vertical progress to guarantee increasing vertical order without horizontal clustering
+        // Minimum vertical step per coin ensures coins are spaced out vertically (never cluttered horizontally)
         int steps = Mathf.Max(1, Mathf.RoundToInt(totalPathLength / UniformCoinSpacing));
         int count = steps + 1;
         if (preferredCount > 0)
         {
             count = Mathf.Min(count, preferredCount);
             steps = count - 1;
+        }
+
+        // Clamp steps so vertical delta between any consecutive coins is at least 0.12m
+        const float minStepY = 0.12f;
+        if (steps > 1 && (spanY / steps) < minStepY)
+        {
+            steps = Mathf.Max(1, Mathf.FloorToInt(spanY / minStepY));
+            count = steps + 1;
         }
 
         if (count < 2)
@@ -561,14 +553,9 @@ public class TCTrack : MonoBehaviour
             return;
         }
 
-        // Advance along the path in strictly uniform surface arc/linear distance steps
-        float actualTotalDist = steps * UniformCoinSpacing;
-        float frac = Mathf.Clamp01(actualTotalDist / totalPathLength);
-        float actualSpanY = spanY * frac;
-        float actualDeltaAngle = deltaAngleDeg * frac;
-
-        float stepY = actualSpanY / steps;
-        float stepAngle = actualDeltaAngle / steps;
+        // Advance along the path in strictly uniform distance steps with guaranteed vertical progression
+        float stepY = spanY / steps;
+        float stepAngle = deltaAngleDeg / steps;
 
         for (int i = 0; i <= steps; i++)
         {
@@ -915,6 +902,19 @@ public class TCTrack : MonoBehaviour
     public TCPooled SpawnTutorialCooldown(float y, float angle)
     {
         return Spawn(cooldownPool, "cooldown", y, angle);
+    }
+
+    public System.Collections.Generic.List<TCPooled> SpawnTutorialCoins(float startY, float angle, int count = 4, float spacing = UniformCoinSpacing)
+    {
+        var list = new System.Collections.Generic.List<TCPooled>(count);
+        for (int i = 0; i < count; i++)
+        {
+            float cy = startY + i * spacing;
+            var c = Spawn(coinPool, "coin", cy, angle);
+            lastCoinY = cy;
+            if (c) list.Add(c);
+        }
+        return list;
     }
 
     /// Capture helper: place a health pickup at a world Y / yaw so it can sit next to a letter.

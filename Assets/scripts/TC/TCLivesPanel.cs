@@ -44,15 +44,33 @@ public class TCLivesPanel : MonoBehaviour
             }
         }
         life = newLife; max = newMax;
+
+        // When life count is 5 (or more), dynamically tighten spacing and scale down slots
+        // so the panel never encroaches on the center distance pill.
+        float effectiveSpacing = slotSpacing;
+        float effectivePadding = padding;
+        float slotScale = 1f;
+        if (max >= 5)
+        {
+            effectiveSpacing = 48f;
+            effectivePadding = 16f;
+            slotScale = 0.88f;
+        }
+
         for (int i = 0; i < slots.Length; i++)
         {
-            if (slots[i]) slots[i].gameObject.SetActive(i < max);
+            if (slots[i])
+            {
+                slots[i].gameObject.SetActive(i < max);
+                slots[i].anchoredPosition = new Vector2(effectivePadding + effectiveSpacing * (i + 0.5f), 0);
+                slots[i].localScale = new Vector3(slotScale, slotScale, 1f);
+            }
             if (hearts[i]) hearts[i].sprite = i < life ? full : empty;
         }
         if (autoWidth && background && max > 0)
         {
             var r = background.rectTransform;
-            r.sizeDelta = new Vector2(padding * 2 + slotSpacing * max, r.sizeDelta.y);
+            r.sizeDelta = new Vector2(effectivePadding * 2 + effectiveSpacing * max, r.sizeDelta.y);
         }
     }
 

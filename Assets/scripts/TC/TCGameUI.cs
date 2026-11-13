@@ -10,8 +10,7 @@ public class TCGameUI : MonoBehaviour
     public static TCGameUI Instance;
     player pl; playerInteract spider; gameManager gm;
     RectTransform safe, heartsRow, coinIconTarget; TextMeshProUGUI scoreText, coinText, hintText, boostText;
-    RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText, slowmoTimerText, magnetTimerText; GameObject chilliRow, slowmoRow, magnetRow; RectTransform chilliRect, slowmoRect, magnetRect;
-    Button cooldownBtn; TextMeshProUGUI cooldownBadgeText; Image cooldownCooldownOverlay;
+    RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText, slowmoTimerText, magnetTimerText, slowmoStockText; GameObject chilliRow, slowmoRow, magnetRow, slowmoStockRow; RectTransform chilliRect, slowmoRect, magnetRect, slowmoStockRect;
     int lastCooldownCount = -1;
     Vector2 panelNormalSize;
     float currentPanelHeight;
@@ -31,6 +30,7 @@ public class TCGameUI : MonoBehaviour
     bool resuming;
     TextMeshProUGUI[] webLetterText;
     Image[] webLetterBg;
+    RectTransform webLettersRow;
     string lastWebHud = "";
     Camera cam;
     RectTransform fxRoot;
@@ -40,7 +40,7 @@ public class TCGameUI : MonoBehaviour
     int lastSlowmoTenths = -1;
     int lastMagnetTenths = -1;
     Coroutine coinPunchCo;
-    enum HandAnimMode { Horizontal, SwipeUp, PointCooldown, Hidden }
+    enum HandAnimMode { Horizontal, SwipeUp, SwipeDown, PointCooldown, Hidden }
     HandAnimMode handMode = HandAnimMode.Horizontal;
     float currentTargetTimeScale = 1f;
 
@@ -65,7 +65,7 @@ public class TCGameUI : MonoBehaviour
             wb.AddComponent<TCWebBonus>();
         }
         BuildUI();
-        hintText.text = TCSave.TutorialDone ? "TOUCH TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk";
+        hintText.text = "TOUCH TO CLIMB";
         playerInteract.OnEvent += OnGameEvent;
         player.OnTurned += () => turnedOnce = true;
         player.OnJumped += () => jumpedOnce = true;
@@ -238,38 +238,44 @@ public class TCGameUI : MonoBehaviour
                 }
                 magnetRow.SetActive(false);
             }
+
+            // Create or bind SlowmoStockRow segment (shows available slow-motion charges on left HUD)
+            var stRow = speedPanel.Find("SlowmoStockRow");
+            if (stRow == null && cRow != null)
+            {
+                var clone = Instantiate(cRow.gameObject, speedPanel);
+                clone.name = "SlowmoStockRow";
+                stRow = clone.transform;
+            }
+            if (stRow != null)
+            {
+                slowmoStockRow = stRow.gameObject;
+                slowmoStockRect = stRow as RectTransform;
+                if (slowmoStockRect != null)
+                {
+                    slowmoStockRect.anchorMin = new Vector2(0, 1);
+                    slowmoStockRect.anchorMax = new Vector2(1, 1);
+                    slowmoStockRect.pivot = new Vector2(0.5f, 1);
+                    slowmoStockRect.sizeDelta = new Vector2(0, 78);
+                }
+                slowmoStockText = stRow.Find("ChilliTime")?.GetComponent<TextMeshProUGUI>() ?? stRow.Find("SlowmoTime")?.GetComponent<TextMeshProUGUI>() ?? stRow.Find("StockText")?.GetComponent<TextMeshProUGUI>();
+                if (slowmoStockText != null)
+                {
+                    slowmoStockText.name = "StockText";
+                    slowmoStockText.color = TCUI.Hex("#4EA8DE");
+                }
+                var stIcon = stRow.Find("ChilliIcon")?.GetComponent<Image>() ?? stRow.Find("SlowmoIcon")?.GetComponent<Image>() ?? stRow.Find("StockIcon")?.GetComponent<Image>();
+                if (stIcon != null)
+                {
+                    stIcon.name = "StockIcon";
+                    stIcon.sprite = TCUI.Icon("cooldown");
+                }
+                slowmoStockRow.SetActive(false);
+            }
         }
 
         boostText = TCUI.Label("Boost", safe, "BOOST!", 110, TCUI.Peach); TCUI.Place(boostText.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(900, 160));
         TCUI.Outline(boostText, 0.25f); boostText.gameObject.SetActive(false);
-
-        // Cooldown Slow-Mo Button (placed in bottom-right corner for easy thumb reach)
-        cooldownBtn = TCUI.Btn("CooldownBtn", safe, "", TCUI.Hex("#4EA8DE"), OnClickCooldown, 40, TCUI.Icon("cooldown"));
-        var cdRect = (RectTransform)cooldownBtn.transform;
-        TCUI.Place(cdRect, new Vector2(1f, 0f), new Vector2(-110, 140), new Vector2(130, 130));
-
-        // Circular count badge on the button
-        var badgeObj = TCUI.Img("Badge", cdRect, TCUI.Hex("#FF3B30"), TCUI.Icon("round"));
-        TCUI.Place(badgeObj.rectTransform, new Vector2(1f, 1f), new Vector2(-5, -5), new Vector2(46, 46));
-        cooldownBadgeText = TCUI.Label("Count", badgeObj.transform, "1", 28, Color.white);
-        TCUI.Stretch(cooldownBadgeText.rectTransform);
-
-        // Radial / visual cooldown overlay when active
-        cooldownCooldownOverlay = TCUI.Img("Overlay", cdRect, new Color(1f, 1f, 1f, 0.35f), TCUI.Icon("round"));
-        TCUI.Stretch(cooldownCooldownOverlay.rectTransform);
-        cooldownCooldownOverlay.raycastTarget = false;
-        cooldownCooldownOverlay.gameObject.SetActive(false);
-
-        cooldownBtn.gameObject.SetActive(false); // only visible when player holds at least 1 cooldown item or active
-    }
-
-    void OnClickCooldown()
-    {
-        if (!started || pl == null || pl.IsInputBlocked) return;
-        if (playerInteract.CooldownInventory > 0 && TCTimeDilation.TriggerCooldown())
-        {
-            if (cooldownBtn != null) StartCoroutine(TCUI.Punch((RectTransform)cooldownBtn.transform, 0.2f));
-        }
     }
 
     TCLivesPanel livesPanel; bool livesChecked;
@@ -278,10 +284,12 @@ public class TCGameUI : MonoBehaviour
         if (!livesChecked) { livesChecked = true; livesPanel = heartsRow ? heartsRow.GetComponent<TCLivesPanel>() : null; }
         if (livesPanel) { livesPanel.SetLives(spider.life, spider.MaxLife); return; }
         int max = spider.MaxLife;
+        float spacing = max >= 5 ? 50f : 66f;
+        float startX = max >= 5 ? 32f : 40f;
         while (hearts.Count < max)
         {
             var h = TCUI.Img("Heart", heartsRow, Color.white, TCUI.Icon("heart"));
-            TCUI.Place(h.rectTransform, new Vector2(0, 0.5f), new Vector2(40 + hearts.Count * 66, 0), new Vector2(64, 64));
+            TCUI.Place(h.rectTransform, new Vector2(0, 0.5f), new Vector2(startX + hearts.Count * spacing, 0), new Vector2(56, 56));
             hearts.Add(h);
         }
         for (int i = 0; i < hearts.Count; i++)
@@ -396,6 +404,20 @@ public class TCGameUI : MonoBehaviour
                 }
             }
 
+            int cdCount = playerInteract.CooldownInventory;
+            bool slowStockActive = cdCount > 0;
+            if (slowmoStockRow != null && slowmoStockRow.activeSelf != slowStockActive)
+                slowmoStockRow.SetActive(slowStockActive);
+
+            if (slowStockActive && slowmoStockText != null)
+            {
+                if (cdCount != lastCooldownCount)
+                {
+                    lastCooldownCount = cdCount;
+                    slowmoStockText.text = "x" + cdCount;
+                }
+            }
+
             // Sequential layout of active segments below SpeedRow
             float nextY = -88f;
             if (chilliActive && chilliRect != null)
@@ -408,6 +430,11 @@ public class TCGameUI : MonoBehaviour
                 slowmoRect.anchoredPosition = new Vector2(0, nextY);
                 nextY -= 78f;
             }
+            if (slowStockActive && slowmoStockRect != null)
+            {
+                slowmoStockRect.anchoredPosition = new Vector2(0, nextY);
+                nextY -= 78f;
+            }
             if (magnetActive && magnetRect != null)
             {
                 magnetRect.anchoredPosition = new Vector2(0, nextY);
@@ -415,7 +442,7 @@ public class TCGameUI : MonoBehaviour
             }
 
             // Dynamic panel expansion: 88f base + 78f for each active segment
-            float targetHeight = 88f + (chilliActive ? 78f : 0f) + (slowActive ? 78f : 0f) + (magnetActive ? 78f : 0f);
+            float targetHeight = 88f + (chilliActive ? 78f : 0f) + (slowActive ? 78f : 0f) + (slowStockActive ? 78f : 0f) + (magnetActive ? 78f : 0f);
             if (Mathf.Abs(currentPanelHeight - targetHeight) > 0.05f)
             {
                 currentPanelHeight = Mathf.MoveTowards(currentPanelHeight, targetHeight, Time.unscaledDeltaTime * 420f);
@@ -425,45 +452,6 @@ public class TCGameUI : MonoBehaviour
             {
                 currentPanelHeight = targetHeight;
                 speedPanel.sizeDelta = new Vector2(panelNormalSize.x, targetHeight);
-            }
-        }
-
-        // Cooldown Power Up Button & Inventory Display
-        if (cooldownBtn != null)
-        {
-            int cdCount = playerInteract.CooldownInventory;
-            bool slowActive = TCTimeDilation.Instance != null && TCTimeDilation.Instance.IsActive;
-            bool shouldShow = (cdCount > 0) || slowActive;
-
-            if (cooldownBtn.gameObject.activeSelf != shouldShow)
-                cooldownBtn.gameObject.SetActive(shouldShow);
-
-            if (shouldShow)
-            {
-                bool canUseCooldown = started && pl != null && !pl.IsInputBlocked;
-                if (cooldownBtn.interactable != canUseCooldown)
-                    cooldownBtn.interactable = canUseCooldown;
-
-                if (cdCount != lastCooldownCount)
-                {
-                    lastCooldownCount = cdCount;
-                    if (cooldownBadgeText != null) cooldownBadgeText.text = cdCount.ToString();
-                    if (cooldownBadgeText != null) cooldownBadgeText.transform.parent.gameObject.SetActive(cdCount > 0);
-                }
-
-                // If slow-motion is currently active, pulse button slightly and show overlay
-                if (slowActive)
-                {
-                    cooldownBtn.transform.localScale = Vector3.one * (1f + 0.06f * Mathf.Sin(Time.unscaledTime * 10f));
-                    if (cooldownCooldownOverlay != null && !cooldownCooldownOverlay.gameObject.activeSelf)
-                        cooldownCooldownOverlay.gameObject.SetActive(true);
-                }
-                else
-                {
-                    cooldownBtn.transform.localScale = Vector3.one;
-                    if (cooldownCooldownOverlay != null && cooldownCooldownOverlay.gameObject.activeSelf)
-                        cooldownCooldownOverlay.gameObject.SetActive(false);
-                }
             }
         }
 
@@ -496,7 +484,7 @@ public class TCGameUI : MonoBehaviour
                 break;
             case "heart": Pop("+1 HEART", pos, TCUI.Blush); StartCoroutine(TCUI.Punch(heartsRow, 0.25f)); break;
             case "boost": Pop("BOOST", pos, TCUI.Peach); break;
-            case "cooldown": Pop("SLOW-MO +1", pos, TCUI.Hex("#4EA8DE")); if (cooldownBtn) StartCoroutine(TCUI.Punch((RectTransform)cooldownBtn.transform, 0.25f)); break;
+            case "cooldown": Pop("SLOW-MO +1", pos, TCUI.Hex("#4EA8DE")); if (slowmoStockRect) StartCoroutine(TCUI.Punch(slowmoStockRect, 0.25f)); break;
             case "smash": Pop("SMASH!", pos, TCUI.Mint); break;
             case "hit": flash.alpha = 1; StartCoroutine(TCUI.Punch(heartsRow, 0.3f)); break;
         }
@@ -734,7 +722,7 @@ public class TCGameUI : MonoBehaviour
         startOverlay.blocksRaycasts = false;
         var hit = root.GetComponent<Image>(); if (hit) hit.raycastTarget = false;
         var b = root.GetComponent<Button>(); if (b) b.enabled = false;
-        hintText = TCUI.Label("Hint", root, TCSave.TutorialDone ? "TOUCH TO CLIMB" : "DRAG LEFT / RIGHT\nto circle the trunk", 72, Color.white);
+        hintText = TCUI.Label("Hint", root, "TOUCH TO CLIMB", 72, Color.white);
         TCUI.Outline(hintText, 0.25f);
         hintText.raycastTarget = false;
         TCUI.Place(hintText.rectTransform, new Vector2(0.5f, 0.3f), Vector2.zero, new Vector2(1000, 260));
@@ -801,14 +789,29 @@ public class TCGameUI : MonoBehaviour
                         img.color = c;
                     }
                 }
+                else if (handMode == HandAnimMode.SwipeDown)
+                {
+                    if (!hand.gameObject.activeSelf) hand.gameObject.SetActive(true);
+                    hand.localScale = Vector3.one;
+                    hand.localEulerAngles = new Vector3(0, 0, -90f); // point finger downwards
+                    float t = Mathf.Repeat(Time.unscaledTime * 1.6f, 1f);
+                    hand.anchoredPosition = new Vector2(0, Mathf.Lerp(110f, -70f, t));
+                    var img = hand.GetComponent<Image>();
+                    if (img)
+                    {
+                        Color c = Color.white;
+                        c.a = (t < 0.2f) ? t / 0.2f : (t > 0.8f ? (1f - t) / 0.2f : 1f);
+                        img.color = c;
+                    }
+                }
                 else if (handMode == HandAnimMode.PointCooldown)
                 {
                     if (!hand.gameObject.activeSelf) hand.gameObject.SetActive(true);
-                    if (cooldownBtn != null)
+                    if (slowmoStockRect != null)
                     {
-                        var cdPos = ((RectTransform)cooldownBtn.transform).position;
-                        hand.position = cdPos + new Vector3(-35f, 55f, 0f);
-                        hand.localEulerAngles = new Vector3(0, 0, -45f); // point finger down-right at button
+                        var cdPos = slowmoStockRect.position;
+                        hand.position = cdPos + new Vector3(65f, 0f, 0f);
+                        hand.localEulerAngles = new Vector3(0, 0, 180f); // point left towards the HUD row
                         float pulse = 1f + 0.12f * Mathf.Sin(Time.unscaledTime * 8f);
                         hand.localScale = Vector3.one * pulse;
                     }
@@ -835,12 +838,21 @@ public class TCGameUI : MonoBehaviour
         startOverlay.blocksRaycasts = false;
         var b = startOverlay.GetComponentInChildren<Button>(); if (b) b.enabled = false;
         var hit = startOverlay.GetComponent<Image>(); if (hit) hit.raycastTarget = false;
-        if (hintText) hintText.raycastTarget = false;
-        if (hand) { var hi = hand.GetComponent<Image>(); if (hi) hi.raycastTarget = false; }
+        if (hintText)
+        {
+            hintText.raycastTarget = false;
+            hintText.text = "";
+        }
+        handMode = HandAnimMode.Hidden;
+        if (hand)
+        {
+            var hi = hand.GetComponent<Image>(); if (hi) hi.raycastTarget = false;
+            hand.gameObject.SetActive(false);
+        }
         gm.BeginRun();
         if (TCSave.TutorialDone)
         {
-            if (pl) { pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); }
+            if (pl) { pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); pl.SetSlowmoAllowed(true); }
             TCUI.Hide(this, startOverlay);
         }
         else tutorialCo = StartCoroutine(Tutorial());
@@ -849,50 +861,30 @@ public class TCGameUI : MonoBehaviour
     IEnumerator Tutorial()
     {
         // -------------------------------------------------------------
-        // STEP 1: ROTATE LEFT / RIGHT
+        // STEP 1: DODGE THE BRANCH
+        // (Skipped initial free-roam left/right rotation to prevent spider climbing infinitely)
         // -------------------------------------------------------------
-        pl.SetSteerAllowed(true);
+        pl.SetSteerAllowed(false);
         pl.SetJumpAllowed(false);
-        handMode = HandAnimMode.Horizontal;
-        hintText.text = "DRAG LEFT / RIGHT\nto circle the trunk";
+        pl.SetSlowmoAllowed(false);
         startOverlay.gameObject.SetActive(true);
         startOverlay.alpha = 1f;
         startOverlay.interactable = false;
         startOverlay.blocksRaycasts = false;
         startOverlay.transform.SetAsLastSibling();
 
-        float initialYaw = pl.CurrentYaw;
-        turnedOnce = false;
-
-        // Wait until player moves left or right
-        while (!turnedOnce && Mathf.Abs(Mathf.DeltaAngle(initialYaw, pl.CurrentYaw)) < 4f)
-        {
-            if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
-            if (pl.IsInputBlocked) { yield return null; continue; }
-            if (Input.GetAxisRaw("Horizontal") != 0f || (Input.touchCount > 0 && Mathf.Abs(Input.GetTouch(0).deltaPosition.x) > 2f))
-            {
-                break;
-            }
-            yield return null;
-        }
-
-        // As requested: prompt goes away immediately after the player swipes left/right!
-        hintText.text = "";
-        handMode = HandAnimMode.Hidden;
-        pl.SetSteerAllowed(false);
-        pl.SetJumpAllowed(false);
-        yield return new WaitForSeconds(0.7f);
-
-        // -------------------------------------------------------------
-        // STEP 2: DODGE THE BRANCH
-        // -------------------------------------------------------------
-        pl.SetSteerAllowed(false);
-        pl.SetJumpAllowed(false);
-
         // Spawn a spiky branch directly in the spider's path ahead
         float branchAngle = pl.CurrentYaw;
         float branchY = SpiderY + 4.5f;
         var branch = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBranch(branchY, branchAngle) : null;
+
+        // Pre-spawn straight strings of 4 coins on BOTH sides after dodging the branch (left and right)
+        // so whichever side the player dodges toward, coins are already in the scene seamlessly
+        float coinStartY = branchY + 1.0f;
+        float leftCoinAngle = branchAngle - 55f;
+        float rightCoinAngle = branchAngle + 55f;
+        var leftCoins = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialCoins(coinStartY, leftCoinAngle, 4) : null;
+        var rightCoins = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialCoins(coinStartY, rightCoinAngle, 4) : null;
 
         // Approach branch at normal speed until 2.0m away
         while (branch != null && branch.gameObject.activeInHierarchy && (branchY - SpiderY) > 2.0f)
@@ -928,6 +920,21 @@ public class TCGameUI : MonoBehaviour
                 yield return null;
             }
 
+            // Align the dodged side's coins directly down the player's clear line of sight
+            float chosenYaw = pl.CurrentYaw;
+            bool dodgedLeft = Mathf.DeltaAngle(branchAngle, chosenYaw) < 0f;
+            var activeCoins = dodgedLeft ? leftCoins : rightCoins;
+            if (activeCoins != null)
+            {
+                foreach (var c in activeCoins)
+                {
+                    if (c && c.gameObject.activeInHierarchy)
+                    {
+                        c.transform.rotation = Quaternion.Euler(0, chosenYaw, 0);
+                    }
+                }
+            }
+
             // Player moved enough to fully clear the branch! Lock controls and climb straight past safely
             IsTutorialFrozen = false;
             hintText.text = "";
@@ -947,6 +954,13 @@ public class TCGameUI : MonoBehaviour
                 if (IsTutorialAborted) yield break;
                 yield return null;
             }
+
+            // Wait until spider collects the pre-existing coins
+            while (SpiderY < coinStartY + 1.6f)
+            {
+                if (IsTutorialAborted) yield break;
+                yield return null;
+            }
         }
         else
         {
@@ -958,7 +972,7 @@ public class TCGameUI : MonoBehaviour
         // Lock controls again until next step
         pl.SetSteerAllowed(false);
         pl.SetJumpAllowed(false);
-        yield return new WaitForSeconds(0.6f);
+        yield return new WaitForSeconds(0.4f);
 
         // -------------------------------------------------------------
         // STEP 3: DODGE THE WASP
@@ -1043,8 +1057,8 @@ public class TCGameUI : MonoBehaviour
         pl.SetSteerAllowed(false);
         pl.SetJumpAllowed(false);
 
-        // Spawn bees into the scene ahead
-        float beeY = SpiderY + 4.5f;
+        // Spawn bees well outside the camera view ahead (8.0m) so they scroll naturally into view rather than popping in
+        float beeY = SpiderY + 8.0f;
         var bees = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBees(beeY) : null;
 
         // Climb forward until approaching bees (2.0m away)
@@ -1222,13 +1236,13 @@ public class TCGameUI : MonoBehaviour
 
         // Spawn a squirrel directly in the spider's path ahead (falling leaves warning triggers immediately!)
         float squirrelAngle = pl.CurrentYaw;
-        float squirrelY = SpiderY + 5.2f;
+        float squirrelY = SpiderY + 6.0f;
         var squirrel = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialSquirrel(squirrelY, squirrelAngle) : null;
         hintText.text = "WATCH FOR FALLING LEAVES!\nSquirrel incoming!";
         handMode = HandAnimMode.Hidden;
 
         // Climb forward while leaves fall and squirrel begins scampering down
-        while (squirrel != null && squirrel.gameObject.activeInHierarchy && (squirrelY - SpiderY) > 2.2f)
+        while (squirrel != null && squirrel.gameObject.activeInHierarchy && (squirrel.transform.position.y - SpiderY) > 3.0f)
         {
             if (IsTutorialAborted) yield break;
             yield return null;
@@ -1236,7 +1250,7 @@ public class TCGameUI : MonoBehaviour
 
         // Slow down smoothly as squirrel approaches down the trunk
         yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
-        while (squirrel != null && squirrel.gameObject.activeInHierarchy && (squirrelY - SpiderY) > 1.35f)
+        while (squirrel != null && squirrel.gameObject.activeInHierarchy && (squirrel.transform.position.y - SpiderY) > 1.8f)
         {
             if (IsTutorialAborted) yield break;
             yield return null;
@@ -1276,7 +1290,7 @@ public class TCGameUI : MonoBehaviour
             Time.timeScale = 1.0f;
             currentTargetTimeScale = 1.0f;
 
-            while (squirrel != null && squirrel.gameObject.activeInHierarchy && SpiderY < squirrelY + 0.8f)
+            while (squirrel != null && squirrel.gameObject.activeInHierarchy && SpiderY < squirrel.transform.position.y + 0.8f)
             {
                 if (IsTutorialAborted) yield break;
                 yield return null;
@@ -1326,8 +1340,8 @@ public class TCGameUI : MonoBehaviour
         if (IsTutorialAborted) yield break;
         Time.timeScale = 1.0f;
         currentTargetTimeScale = 1.0f;
-        pl.SetSteerAllowed(true);
-        pl.SetJumpAllowed(true);
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
 
         // Wait until spider grabs the chilli
         while (chilli != null && chilli.gameObject.activeInHierarchy && (chilliY - SpiderY) > -0.2f)
@@ -1335,8 +1349,46 @@ public class TCGameUI : MonoBehaviour
             yield return null;
         }
 
+        // Lock steering completely so player cannot move left or right after collecting chilli
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
+        // Spawn a wasp and branch directly in the spider's path to demonstrate chilli invincibility & smash ability
+        float smashLane = pl.CurrentYaw;
+        float waspSmashY = SpiderY + 2.2f;
+        float branchSmashY = SpiderY + 4.4f;
+        var tutWasp = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialWasp(waspSmashY, smashLane) : null;
+        var tutBranch = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialBranch(branchSmashY, smashLane) : null;
+
+        hintText.text = "SMASH THROUGH ENEMIES\nwhile boosting!";
+        // Keep steering aligned down the smash lane so the player collides with both obstacles
+        float smashTimer = 0f;
+        while (smashTimer < 2.0f && !IsTutorialAborted)
+        {
+            pl.SetSteerAllowed(false);
+            smashTimer += Time.deltaTime;
+
+            // When spider reaches the wasp during chilli boost, ensure wasp is smashed and killed
+            if (tutWasp != null && tutWasp.gameObject.activeInHierarchy && SpiderY >= waspSmashY - 0.25f)
+            {
+                tutWasp.Smash();
+            }
+
+            // When spider reaches the branch during chilli boost, smash through it
+            if (tutBranch != null && tutBranch.gameObject.activeInHierarchy && SpiderY >= branchSmashY - 0.25f)
+            {
+                TCHitFlash.FlashAndDestroy(tutBranch.gameObject, 0.12f);
+                TCFx.Spawn(spider != null ? spider.impactParticle : null, tutBranch.transform.position);
+                tutBranch.Release();
+                TCAudio.Play(TCAssets.I != null ? TCAssets.I.purchase : null);
+                TCFx.Shake(0.18f);
+            }
+
+            yield return null;
+        }
+
         hintText.text = "";
-        yield return new WaitForSeconds(1.8f);
+        yield return new WaitForSeconds(0.6f);
 
         // -------------------------------------------------------------
         // STEP 6: SLOW MOTION POWER UP
@@ -1410,9 +1462,9 @@ public class TCGameUI : MonoBehaviour
                 startOverlay.interactable = false;
             }
 
-            // Ease into slow motion and freeze before collision if player takes time to tap the slow-mo button
-            hintText.text = "TAP SLOW-MO BUTTON\nto dodge tricky hurdles!";
-            handMode = HandAnimMode.PointCooldown;
+            // Ease into slow motion and freeze before collision if player takes time to swipe down for slow-mo
+            hintText.text = "SWIPE DOWN\nto trigger slow motion!";
+            handMode = HandAnimMode.SwipeDown;
 
             float slowEaseStart = Time.timeScale;
             float slowEaseElapsed = 0f;
@@ -1425,6 +1477,8 @@ public class TCGameUI : MonoBehaviour
                     IsTutorialFrozen = true;
                     Time.timeScale = 0f;
                     currentTargetTimeScale = 0f;
+                    // Only allow slow-motion activation once the freeze prompt is reached!
+                    if (pl) pl.SetSlowmoAllowed(true);
                 }
                 else
                 {
@@ -1486,6 +1540,7 @@ public class TCGameUI : MonoBehaviour
         {
             pl.SetSteerAllowed(true);
             pl.SetJumpAllowed(true);
+            pl.SetSlowmoAllowed(true);
         }
 
         hintText.text = "ALL SET!\nYOU'RE GOOD TO GO!";
@@ -1613,7 +1668,7 @@ public class TCGameUI : MonoBehaviour
         if (pausePanel != null && pausePanel.gameObject.activeSelf) pausePanel.gameObject.SetActive(false);
         if (gm != null && gm.IsPaused) gm.Pause(false);
         Time.timeScale = 1f;
-        if (pl) { pl.ResetInputState(); pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); }
+        if (pl) { pl.ResetInputState(); pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); pl.SetSlowmoAllowed(true); }
         // A death during the first-run tutorial left its overlay up over the results
         if (tutorialCo != null) { StopCoroutine(tutorialCo); tutorialCo = null; TCSave.TutorialDone = true; }
         if (startOverlay.alpha > 0) TCUI.Hide(this, startOverlay);
@@ -1736,9 +1791,10 @@ public class TCGameUI : MonoBehaviour
         var dbRt = doubleBtn ? (RectTransform)doubleBtn.transform : null;
         Vector2 fromH = resultHomeRt ? resultHomeRt.anchoredPosition : Vector2.zero;
         Vector2 fromA = resultAgainRt ? resultAgainRt.anchoredPosition : Vector2.zero;
-        // Slide Home / Restart up into the x2 button's slot.
-        Vector2 toH = new Vector2(-170, -165);
-        Vector2 toA = new Vector2(170, -165);
+        // Slide Home / Restart downward into the x2 reward button's vertical position
+        float targetY = dbRt ? dbRt.anchoredPosition.y : -409f;
+        Vector2 toH = new Vector2(fromH.x, targetY);
+        Vector2 toA = new Vector2(fromA.x, targetY);
         float dur = 0.4f;
         for (float t = 0; t < dur; t += Time.unscaledDeltaTime)
         {
@@ -1777,6 +1833,7 @@ public class TCGameUI : MonoBehaviour
     void BuildWebHud(Transform top)
     {
         var row = TCUI.Rect("WebLetters", top);
+        webLettersRow = row;
         TCUI.Place(row, new Vector2(0.5f, 0.5f), new Vector2(0, -92), new Vector2(280, 64));
         webLetterText = new TextMeshProUGUI[3];
         webLetterBg = new Image[3];
@@ -1795,8 +1852,16 @@ public class TCGameUI : MonoBehaviour
 
     void RefreshWebHud()
     {
-        if (webLetterText == null) return;
         var w = TCWebBonus.Instance;
+        // Hide and remove the WEB letters panel once the web boost has been used
+        if (w != null && w.SpentThisRun)
+        {
+            if (webLettersRow != null && webLettersRow.gameObject.activeSelf)
+                webLettersRow.gameObject.SetActive(false);
+            return;
+        }
+
+        if (webLetterText == null) return;
         bool hasW = w && w.HasW, hasE = w && w.HasE, hasB = w && w.HasB;
         string key = (hasW ? "W" : ".") + (hasE ? "E" : ".") + (hasB ? "B" : ".");
         if (key == lastWebHud) return;

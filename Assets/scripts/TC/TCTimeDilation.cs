@@ -60,6 +60,8 @@ public class TCTimeDilation : MonoBehaviour
         if (IsPausedNow() || IsDeadOrEnded()) return false;
         if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging) return false;
         if (player.Instance != null && player.Instance.IsInputBlocked) return false;
+        // Do not allow triggering slow motion again while slow motion is already active
+        if (Instance != null && Instance.IsActive) return false;
         if (playerInteract.CooldownInventory <= 0) return false;
         playerInteract.CooldownInventory--;
 

@@ -273,7 +273,55 @@ public class TCWebBonus : MonoBehaviour
         float totalDur = SwingSeconds;
         Vector3 startOutward = new Vector3(Mathf.Sin(yaw0 * Mathf.Deg2Rad), 0f, Mathf.Cos(yaw0 * Mathf.Deg2Rad));
         Quaternion uprightRestRot = Quaternion.LookRotation(Vector3.up, startOutward);
-        Quaternion prevEndRot = uprightRestRot;
+
+        // ------------------------------------------------------------------
+        // PRE-SWING HEROIC LAUNCH JUMP (Seamless spring off trunk into upside-down leap)
+        // ------------------------------------------------------------------
+        const float launchDur = 0.38f;
+        float launchElapsed = 0f;
+        TCSfx.Play("jump", 0.9f, 1.15f);
+        Vector3 launchTangent = Vector3.Cross(Vector3.up, startOutward).normalized;
+
+        while (launchElapsed < launchDur)
+        {
+            float ldt = Time.deltaTime;
+            launchElapsed += ldt;
+            float lu = Mathf.Clamp01(launchElapsed / launchDur);
+
+            // Phase A (0 - 0.25): Crouch spring compression against trunk bark
+            // Phase B (0.25 - 1.0): Spring leap upward and out from trunk, flipping into upside-down hang
+            float jumpCurve = lu < 0.25f
+                ? -0.06f * Mathf.Sin(lu / 0.25f * Mathf.PI)
+                : Mathf.Sin((lu - 0.25f) / 0.75f * Mathf.PI * 0.5f);
+
+            float launchExtraZ = lu < 0.25f ? -0.04f * (lu / 0.25f) : 2.2f * jumpCurve;
+            float launchExtraY = lu < 0.25f ? 0f : 0.65f * jumpCurve;
+            float launchY = y0 + (lu < 0.25f ? 0f : 0.45f * jumpCurve);
+
+            TickSwing(pl, launchY, yaw0, launchExtraZ, launchExtraY, ref yPrev);
+
+            if (cute)
+            {
+                if (lu < 0.25f)
+                {
+                    // Crouch compression
+                    cute.SetSwingWorldOrientation(uprightRestRot, -0.28f, 0.45f);
+                }
+                else
+                {
+                    // Athletic leap flip into upside-down posture
+                    float flipFrac = Smooth((lu - 0.25f) / 0.75f);
+                    Quaternion flipToInverted = Quaternion.AngleAxis(180f * flipFrac, launchTangent) * uprightRestRot;
+                    cute.SetSwingWorldOrientation(flipToInverted, 0.08f * flipFrac, Mathf.Lerp(0.45f, 0.90f, flipFrac));
+                }
+            }
+
+            yield return null;
+        }
+
+        Vector3 initialOutward = new Vector3(Mathf.Sin(yaw0 * Mathf.Deg2Rad), 0f, Mathf.Cos(yaw0 * Mathf.Deg2Rad));
+        Vector3 initialTangent = Vector3.Cross(Vector3.up, initialOutward).normalized;
+        Quaternion prevEndRot = Quaternion.LookRotation(-Vector3.up, initialOutward);
 
         for (int shot = 0; shot < Shots; shot++)
         {
@@ -281,13 +329,13 @@ public class TCWebBonus : MonoBehaviour
             currentThwip = shot + 1;
             float yawStart = yaw0 + shot * OrbitPerSwing;
             float yawLand = yawStart + OrbitPerSwing;
-            float shotDur = last ? cycle * 1.12f : cycle * 0.99f;
+            float shotDur = last ? cycle * 1.15f : cycle * 0.99f;
             float baseFrac0 = shot / (float)Shots;
             float baseFrac1 = (shot + 1) / (float)Shots;
 
-            const float shootFrac = 0.22f;
+            const float shootFrac = 0.20f;
             const float releaseFrac = 0.78f;
-            float releaseCut = last ? 0.74f : releaseFrac;
+            float releaseCut = last ? 0.72f : releaseFrac;
 
             bool splatSpawned = false;
             bool whooshPlayed = false;
@@ -312,9 +360,9 @@ public class TCWebBonus : MonoBehaviour
                 float u = Mathf.Clamp01(t / shotDur);
                 float masterU = Mathf.Clamp01(totalElapsed / Mathf.Max(0.01f, totalDur));
 
-                // Smoothly swing wide out from trunk on launch and settle flush back onto bark at 5000m.
-                float launchEnv = Smooth(Mathf.Clamp01(masterU / 0.05f));
-                float landEnv = last ? 1f - Smooth(Mathf.Clamp01((u - 0.70f) / 0.30f)) : 1f;
+                // Smoothly swing wide out from trunk on launch and settle flush back onto bark on final landing
+                float launchEnv = 1f;
+                float landEnv = last ? (u < releaseCut ? 1f : Mathf.Cos((u - releaseCut) / (1f - releaseCut) * Mathf.PI * 0.5f)) : 1f;
                 float radialEnv = launchEnv * landEnv;
                 camCenterBlend = radialEnv;
 
@@ -339,7 +387,11 @@ public class TCWebBonus : MonoBehaviour
                     ? -0.34f * Mathf.Sin(Mathf.PI * Mathf.Clamp01((u - 0.04f) / Mathf.Max(0.01f, releaseCut - 0.04f)))
                     : 0.28f * Mathf.Sin(Mathf.PI * Mathf.Clamp01((u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut)));
                 float y = camBaselineY + hangDip * radialEnv;
-                if (last && u >= 0.82f) y = Mathf.Lerp(y, yEnd, Smooth((u - 0.82f) / 0.18f));
+                if (last && u >= releaseCut)
+                {
+                    float landingDecel = Smooth((u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut));
+                    y = Mathf.Lerp(y, yEnd, landingDecel);
+                }
 
                 float orbitExtraZ = SwingOrbitExtraZ(relYaw, u) * radialEnv;
                 float orbitExtraY = (0.34f + 0.14f * Mathf.Sin(Mathf.PI * u)) * radialEnv;
@@ -393,7 +445,6 @@ public class TCWebBonus : MonoBehaviour
                 {
                     released = true;
                     releaseRot = cute ? cute.transform.rotation : prevEndRot;
-                    // Compute exact current hang quaternion at release so the flip starts with zero pop.
                     Vector3 relPull = (anchorNow - spiderPos);
                     relPull = relPull.sqrMagnitude > 1e-5f ? relPull.normalized : Vector3.up;
                     Vector3 relDown = (-relPull + tangent * 0.22f + outward * 0.16f).normalized;
@@ -412,33 +463,39 @@ public class TCWebBonus : MonoBehaviour
                     }
                 }
 
-                // Compute true 3D Spider-Man upside-down hanging orientation & somersault flips!
+                // -------------------------------------------------------------
+                // REALISTIC UPSIDE-DOWN SPIDER SWINGING POSE & SEAMLESS FINAL LANDING
+                // -------------------------------------------------------------
                 if (cute)
                 {
                     Vector3 pullDir = anchorNow - spiderPos;
                     pullDir = pullDir.sqrMagnitude > 1e-5f ? pullDir.normalized : Vector3.up;
                     float su = Mathf.Clamp01((u - shootFrac) / Mathf.Max(0.01f, releaseCut - shootFrac));
-                    float swingLag = Mathf.Cos(su * Mathf.PI) * 0.28f; // trails backward early, leads forward at whip exit!
-                    Vector3 hangFwd = (-pullDir + tangent * (0.18f + swingLag) + outward * 0.16f).normalized;
-                    float bankDeg = -34f * Mathf.Sin(Mathf.PI * su);
+                    float swingLag = Mathf.Cos(su * Mathf.PI) * 0.25f;
+
+                    // Real spider hanging from spinneret:
+                    // Head (forward) points DOWNWARD along travel direction (-pullDir + tangent lead)
+                    // Abdomen/spinneret points UP toward web anchor (+pullDir)
+                    // Back (up) faces outward toward the camera with natural pendulum roll banking
+                    Vector3 hangFwd = (-pullDir + tangent * (0.16f + swingLag) + outward * 0.12f).normalized;
+                    float bankDeg = -28f * Mathf.Sin(Mathf.PI * su);
                     Vector3 bankUp = (Quaternion.AngleAxis(bankDeg, hangFwd) * outward).normalized;
                     Quaternion hangRot = Quaternion.LookRotation(hangFwd, bankUp);
 
                     if (u < shootFrac)
                     {
+                        // Maintain consistent upside-down posture between swing cycles
                         float k = Smooth(u / shootFrac);
-                        // First shot flips from upright crawl -> upside-down hang; subsequent shots finish blend cleanly.
-                        Quaternion target = hangRot;
-                        Quaternion cur = shot == 0
-                            ? Quaternion.Slerp(Quaternion.AngleAxis(180f * k, tangent) * uprightRestRot, target, k)
-                            : Quaternion.Slerp(prevEndRot, target, k);
-                        cute.SetSwingWorldOrientation(cur, 0.08f * k, Mathf.Lerp(-0.9f, 0.85f, k));
+                        Quaternion cur = Quaternion.Slerp(prevEndRot, hangRot, k);
+                        cute.SetSwingWorldOrientation(cur, 0.05f * k, 0.90f);
                     }
                     else if (u < releaseCut)
                     {
                         catchAge += dt;
                         float arc = Mathf.Sin(Mathf.PI * su);
-                        cute.SetSwingWorldOrientation(hangRot, 0.06f - 0.16f * arc, 0.90f);
+                        // Silk-hang pose: legs splayed naturally with rear legs following silk line
+                        cute.SetSwingWorldOrientation(hangRot, 0.04f - 0.12f * arc, 0.92f);
+                        prevEndRot = hangRot;
                     }
                     else
                     {
@@ -446,21 +503,23 @@ public class TCWebBonus : MonoBehaviour
                         float sf = Smooth(fu);
                         if (last)
                         {
+                            // FINAL LANDING APPROACH:
+                            // Smoothly flip from upside-down hang into upright landing position on the bark
                             Quaternion landUpright = Quaternion.LookRotation(Vector3.up, outward);
-                            Quaternion flipRot = Quaternion.AngleAxis(180f * sf, tangent) * releaseRot;
-                            Quaternion fin = Quaternion.Slerp(flipRot, landUpright, sf * sf);
-                            float tuck = Mathf.Lerp(0.4f, 0f, sf);
-                            cute.SetSwingWorldOrientation(fin, -0.10f * Mathf.Sin(fu * Mathf.PI), tuck);
-                            prevEndRot = fin;
+                            Quaternion landingRot = Quaternion.Slerp(releaseRot, landUpright, sf);
+                            float landingSquash = Mathf.Lerp(0.05f, -0.22f * Mathf.Sin(sf * Mathf.PI), sf);
+                            cute.SetSwingWorldOrientation(landingRot, landingSquash, Mathf.Lerp(0.85f, 0f, sf));
+                            prevEndRot = landingRot;
                         }
                         else
                         {
-                            // Full 360 Spider-Man somersault out of the upside-down hang, legs flaring wide!
-                            float angle = 360f * sf;
-                            Quaternion flipRot = Quaternion.AngleAxis(angle, releaseTangent) * releaseRot;
-                            float tuck = fu < 0.55f ? Mathf.Lerp(0.6f, -0.85f, fu / 0.55f) : -0.85f;
-                            cute.SetSwingWorldOrientation(flipRot, -0.14f * Mathf.Sin(fu * Mathf.PI), tuck);
-                            prevEndRot = flipRot;
+                            // In-between swings: keep spider upside down in aerodynamic dive!
+                            // Gently pitch with the upward release catapult momentum
+                            Vector3 catapultFwd = (-Vector3.up * 0.7f + tangent * 0.7f + outward * 0.15f).normalized;
+                            Quaternion diveRot = Quaternion.LookRotation(catapultFwd, outward);
+                            Quaternion curDive = Quaternion.Slerp(releaseRot, diveRot, sf);
+                            cute.SetSwingWorldOrientation(curDive, -0.06f * Mathf.Sin(fu * Mathf.PI), 0.88f);
+                            prevEndRot = curDive;
                         }
                     }
                 }

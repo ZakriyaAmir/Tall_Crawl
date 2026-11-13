@@ -211,6 +211,8 @@ public class playerInteract : MonoBehaviour
         {
             if (other.CompareTag("branch"))
             {
+                var branchTarget = (pooled != null && pooled.gameObject != null) ? pooled.gameObject : (other.transform.parent != null ? other.transform.parent.gameObject : other.gameObject);
+                TCHitFlash.FlashAndDestroy(branchTarget, 0.12f);
                 TCFx.Spawn(impactParticle, other.transform.position);
                 if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);
                 Play(TCSfx.Get("thrust") ?? boostSound, 1f);
@@ -294,6 +296,11 @@ public class playerInteract : MonoBehaviour
 
         if (other.CompareTag("branch"))
         {
+            if (boostDuration > 0 || invulnTimer > 0)
+            {
+                var branchTarget = (pooled != null && pooled.gameObject != null) ? pooled.gameObject : (other.transform.parent != null ? other.transform.parent.gameObject : other.gameObject);
+                TCHitFlash.FlashAndDestroy(branchTarget, 0.12f);
+            }
             TCFx.Spawn(impactParticle, other.transform.position);
             if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);
             if (boostDuration > 0)

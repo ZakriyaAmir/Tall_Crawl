@@ -30,7 +30,7 @@ public class TCMenuUI : MonoBehaviour
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
         TCServices.Banner(true);
         if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(3.0f, OpenDaily));
-        if (canvas) TCUI.ApplyReadable(canvas.transform);
+        // Note: Do not change text colors at runtime so baked scene text styling is preserved
         HookPreviewTap(previewImg);
         HookPreviewTap(skinPreviewImg);
     }
@@ -446,6 +446,7 @@ public class TCMenuUI : MonoBehaviour
                     var lk = itemObj.transform.Find("Lock")?.GetComponent<Image>();
                     var ck = itemObj.transform.Find("Check")?.GetComponent<Image>();
 
+                    if (lbl) lbl.color = Color.black;
                     if (accent) accent.color = def.accent;
                     if (cardImg) cardImg.color = def.body;
                     skinCards.Add((cardImg, lbl, lk, ck, idx));
@@ -475,6 +476,7 @@ public class TCMenuUI : MonoBehaviour
             if (c.check) c.check.gameObject.SetActive(TCSave.SelectedSkin == c.idx);
             if (c.label)
             {
+                c.label.color = Color.black;
                 if (owned)
                 {
                     c.label.text = "";
@@ -656,7 +658,7 @@ public class TCMenuUI : MonoBehaviour
         if (fIcon) SetRect(fIcon.rectTransform, new Vector2(0, 0.5f), new Vector2(44, 0), new Vector2(34, 34));
 
         // Bottom Actions (Restore & Close)
-        var restore = TCUI.Btn("Restore", card, "RESTORE", TCUI.Lilac, () => { try { UnityIAP.Instance?.RestorePurchases(); } catch { } Toast("Restoring purchases..."); }, 34);
+        var restore = TCUI.Btn("Restore", card, "RESTORE", TCUI.Lilac, OnRestoreClicked, 34);
         SetRect((RectTransform)restore.transform, new Vector2(0.5f, 0), new Vector2(-185, 70), new Vector2(330, 90));
         var rt = restore.GetComponentInChildren<TextMeshProUGUI>();
         if (rt) rt.fontSize = 34;
@@ -665,6 +667,31 @@ public class TCMenuUI : MonoBehaviour
         SetRect((RectTransform)close.transform, new Vector2(0.5f, 0), new Vector2(185, 70), new Vector2(330, 90));
         var ct = close.GetComponentInChildren<TextMeshProUGUI>();
         if (ct) ct.fontSize = 38;
+    }
+
+    void OnRestoreClicked()
+    {
+        TCUI.Confirm(
+            this,
+            safe,
+            "RESTORE PURCHASES",
+            "Do you want to restore previously purchased items?",
+            "RESTORE",
+            () =>
+            {
+                try
+                {
+                    UnityIAP.Instance?.RestorePurchases();
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning("RestorePurchases failed: " + ex.Message);
+                }
+                Toast("Restoring purchases...");
+            },
+            "CANCEL",
+            null
+        );
     }
 
     void Pack(RectTransform card, Vector2 pos, string title, string btn, int productIndex, System.Action grant)
@@ -678,12 +705,12 @@ public class TCMenuUI : MonoBehaviour
     // ---------- Settings ----------
     void BuildSettings()
     {
-        settingsPanel = TCUI.Panel("Settings", safe, out var card, new Vector2(900, 1240), "SETTINGS");
-        TCGameUI.Toggle(card, "Sound", 380, () => TCSave.Sound, v => { TCSave.Sound = v; if (FeedCheat(TCCheatCode.Kind.Sound)) ActivateCheat(); }, 700);
-        TCGameUI.Toggle(card, "Music", 270, () => TCSave.Music, v => { TCSave.Music = v; ApplyMenuMusic(); FeedCheat(TCCheatCode.Kind.Music); }, 700);
-        TCGameUI.Toggle(card, "Vibration", 160, () => TCSave.Vibration, v => { TCSave.Vibration = v; if (FeedCheat(TCCheatCode.Kind.Vibration)) ActivateCheat(); }, 700);
-        var sl = TCUI.Label("SensL", card, "Control sensitivity", 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Place(sl.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 50), new Vector2(700, 70));
-        var slider = BuildSlider(card, new Vector2(0, -30)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity;
+        settingsPanel = TCUI.Panel("Settings", safe, out var card, new Vector2(900, 960), "SETTINGS");
+        TCGameUI.Toggle(card, "Sound", 335, () => TCSave.Sound, v => { TCSave.Sound = v; if (FeedCheat(TCCheatCode.Kind.Sound)) ActivateCheat(); }, 700);
+        TCGameUI.Toggle(card, "Music", 230, () => TCSave.Music, v => { TCSave.Music = v; ApplyMenuMusic(); FeedCheat(TCCheatCode.Kind.Music); }, 700);
+        TCGameUI.Toggle(card, "Vibration", 125, () => TCSave.Vibration, v => { TCSave.Vibration = v; if (FeedCheat(TCCheatCode.Kind.Vibration)) ActivateCheat(); }, 700);
+        var sl = TCUI.Label("SensL", card, "Control sensitivity", 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Place(sl.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 30), new Vector2(700, 70));
+        var slider = BuildSlider(card, new Vector2(0, -45)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity;
         slider.onValueChanged.RemoveAllListeners();
         System.Action<float> feedSlider = v =>
         {
@@ -699,14 +726,15 @@ public class TCMenuUI : MonoBehaviour
         if (!card.Find("CheatHint"))
         {
             cheatHint = TCUI.Label("CheatHint", card, "", 22, new Color(0.3f, 0.25f, 0.28f, 0.45f));
-            TCUI.Place(cheatHint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, -90), new Vector2(700, 32));
+            TCUI.Place(cheatHint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, -105), new Vector2(700, 32));
             cheatHint.raycastTarget = false;
         }
         else cheatHint = card.Find("CheatHint").GetComponent<TextMeshProUGUI>();
 #endif
-        TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => { FeedCheat(TCCheatCode.Kind.Other); Application.OpenURL(TCAssets.I.privacyUrl); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -170), new Vector2(620, 110));
-        TCUI.Place((RectTransform)TCUI.Btn("Tutorial", card, "REPLAY TUTORIAL", TCUI.Blush, () => { FeedCheat(TCCheatCode.Kind.Other); StartTutorialGame(); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -310), new Vector2(620, 110));
-        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => { FeedCheat(TCCheatCode.Kind.Other); TCUI.Hide(this, settingsPanel); }, 50).transform, new Vector2(0.5f, 0), new Vector2(0, 110), new Vector2(420, 120));
+        TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => { FeedCheat(TCCheatCode.Kind.Other); Application.OpenURL(TCAssets.I.privacyUrl); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -175), new Vector2(620, 110));
+        var tutBtn = card.Find("Tutorial");
+        if (tutBtn) tutBtn.gameObject.SetActive(false);
+        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => { FeedCheat(TCCheatCode.Kind.Other); TCUI.Hide(this, settingsPanel); }, 50).transform, new Vector2(0.5f, 0), new Vector2(0, 95), new Vector2(420, 120));
     }
     Slider BuildSlider(RectTransform parent, Vector2 pos)
     {

@@ -57,6 +57,8 @@ public class TCEnemy : MonoBehaviour
         if (isSmashed) return;
         isSmashed = true;
 
+        TCHitFlash.FlashAndDestroy(gameObject, 0.12f);
+
         if (pooled)
         {
             pooled.Release();
@@ -726,18 +728,109 @@ public class TCSquirrel : TCEnemy
     public float runSpeed = 1.6f;
 
     float delayTimer = 0f;
+    bool hasPlayedSquirrelSound;
+    ParticleSystem warningPS;
+    GameObject warningGO;
+    float warningAngleDeg;
+
+    static player cachedPlayer;
+    static playerInteract cachedInteract;
+
+    static bool IsPlayerInChilliMode()
+    {
+        if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
+        if (cachedPlayer != null)
+        {
+            if (cachedPlayer.boost) return true;
+            if (!cachedInteract) cachedInteract = cachedPlayer.GetComponentInChildren<playerInteract>();
+            if (cachedInteract != null && cachedInteract.boostDuration > 0f) return true;
+        }
+        return false;
+    }
+
+    static float GetPlayerY()
+    {
+        if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
+        return cachedPlayer != null ? cachedPlayer.transform.position.y : 0f;
+    }
+
+    static float GetTopCameraViewY(float laneAngleDeg)
+    {
+        Camera cam = Camera.main;
+        if (!cam)
+        {
+            if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
+            if (cachedPlayer && cachedPlayer.maincam) cam = cachedPlayer.maincam;
+        }
+
+        if (cam != null)
+        {
+            // Viewport point (0.5, 1.02) corresponds to the top center of the camera screen
+            Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 1.02f, 0f));
+            float dx = ray.direction.x;
+            float dz = ray.direction.z;
+            float ox = ray.origin.x;
+            float oz = ray.origin.z;
+            float a = dx * dx + dz * dz;
+            float b = 2f * (ox * dx + oz * dz);
+            float c = ox * ox + oz * oz - (0.603f * 0.603f);
+            float disc = b * b - 4f * a * c;
+            if (a > 0.0001f && disc >= 0f)
+            {
+                float t1 = (-b - Mathf.Sqrt(disc)) / (2f * a);
+                float t2 = (-b + Mathf.Sqrt(disc)) / (2f * a);
+                float t = (t1 > 0f) ? t1 : t2;
+                if (t > 0f)
+                {
+                    return ray.origin.y + ray.direction.y * t;
+                }
+            }
+        }
+        return GetPlayerY() + 5.8f;
+    }
 
     public override void Init(float startY, float startAngle, float sweep = 40f, float spd = 2.2f)
     {
         base.Init(startY, startAngle, sweep, spd);
         runSpeed = Random.Range(1.4f, 1.9f);
-        delayTimer = 1.0f; // 2x earlier advance warning: leaves start falling 1.0s before squirrel scampers into view
-        if (model) model.gameObject.SetActive(false);
-        SpawnFallingLeavesWarning(startY, startAngle);
+        hasPlayedSquirrelSound = false;
+
+        // Clean up any previous warning particles if recycled from pool
+        if (warningPS) { warningPS.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); warningPS = null; }
+        if (warningGO) { Object.Destroy(warningGO); warningGO = null; }
+
+        // If player is already in chilli boost mode, start scampering immediately, play sound, and DO NOT spawn leaves
+        if (IsPlayerInChilliMode())
+        {
+            delayTimer = 0f;
+            if (model) model.gameObject.SetActive(true);
+            SetCollidersActive(true);
+            hasPlayedSquirrelSound = true;
+            TCSfx.Play("squirrel", 0.8f);
+        }
+        else
+        {
+            delayTimer = 2.0f; // Leaves fall from top of camera view 2.0s before squirrel arrives
+            if (model) model.gameObject.SetActive(false);
+            // Disable hit colliders while hidden so no premature collision can happen during the advance warning
+            SetCollidersActive(false);
+            SpawnFallingLeavesWarning(startAngle);
+        }
+    }
+
+    void SetCollidersActive(bool active)
+    {
+        var cols = GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < cols.Length; i++)
+        {
+            if (cols[i]) cols[i].enabled = active;
+        }
     }
 
     static Texture2D _leafTex;
     static Material _leafMat;
+
+    public static Texture2D GenerateLeafTexture() => GetLeafTexture();
 
     static Texture2D GetLeafTexture()
     {
@@ -807,128 +900,121 @@ public class TCSquirrel : TCEnemy
         return _leafMat;
     }
 
-    void SpawnFallingLeavesWarning(float startY, float angleDeg)
+    public override void Smash()
     {
-        var go = new GameObject("SquirrelLeavesWarning");
+        if (warningPS) { warningPS.Stop(true, ParticleSystemStopBehavior.StopEmitting); warningPS = null; }
+        if (warningGO) { Object.Destroy(warningGO, 2.0f); warningGO = null; }
+        base.Smash();
+    }
+
+    void OnDisable()
+    {
+        if (warningPS) { warningPS.Stop(true, ParticleSystemStopBehavior.StopEmitting); warningPS = null; }
+        if (warningGO) { Object.Destroy(warningGO); warningGO = null; }
+    }
+
+    static GameObject warningPrefab;
+
+    void SpawnFallingLeavesWarning(float angleDeg)
+    {
         float rad = angleDeg * Mathf.Deg2Rad;
-        float r = radius + 0.05f;
-        Vector3 spawnWorldPos = new Vector3(Mathf.Sin(rad) * r, startY + 0.15f, Mathf.Cos(rad) * r);
+        float r = radius + 0.04f;
+        float topY = GetTopCameraViewY(angleDeg);
+        Vector3 spawnWorldPos = new Vector3(Mathf.Sin(rad) * r, topY, Mathf.Cos(rad) * r);
         Vector3 outward = new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));
-        Vector3 tangent = new Vector3(-outward.z, 0f, outward.x); // Circumferential direction around trunk
-        go.transform.position = spawnWorldPos;
-        go.transform.rotation = Quaternion.LookRotation(outward, Vector3.up);
+        Quaternion spawnWorldRot = Quaternion.LookRotation(outward, Vector3.up);
 
-        var ps = go.AddComponent<ParticleSystem>();
-        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-
-        var main = ps.main;
-        main.playOnAwake = false;
-        main.loop = false;
-        main.duration = 1.2f;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(1.4f, 2.0f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.08f, 0.28f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.10f, 0.18f);
-        main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-        main.startRotation3D = true;
-        main.startRotationX = new ParticleSystem.MinMaxCurve(-0.5f, 0.5f);
-        main.startRotationY = new ParticleSystem.MinMaxCurve(-0.5f, 0.5f);
-        main.startRotationZ = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-        main.gravityModifier = 0.65f;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-        // Vivid forest leaf palette: fresh lime green, golden yellow-green, and warm autumn russet
-        var grad = new ParticleSystem.MinMaxGradient(
-            new Color(0.42f, 0.86f, 0.22f, 0.98f),
-            new Color(0.88f, 0.74f, 0.16f, 0.98f)
-        );
-        main.startColor = grad;
-
-        var em = ps.emission;
-        em.rateOverTime = 14f;
-        em.SetBursts(new[]
+        // Load prefab from Resources
+        if (!warningPrefab)
         {
-            new ParticleSystem.Burst(0.0f, 8, 12),
-            new ParticleSystem.Burst(0.25f, 5, 8),
-            new ParticleSystem.Burst(0.50f, 3, 6)
-        });
-
-        var sh = ps.shape;
-        sh.shapeType = ParticleSystemShapeType.Sphere;
-        sh.radius = 0.05f; // Tightly pinpointed to the exact squirrel lane
-        sh.position = Vector3.zero;
-
-        // Leaf fluttering sway: tight local flutter aligned with squirrel lane (avoids wide world-space drift)
-        var vel = ps.velocityOverLifetime;
-        vel.enabled = true;
-        vel.space = ParticleSystemSimulationSpace.Local;
-        vel.y = new ParticleSystem.MinMaxCurve(-0.25f, -0.65f); // Gentle downward descent
-        vel.z = new ParticleSystem.MinMaxCurve(0.01f, 0.06f);  // Keep close to bark surface
-        var flutterX = new AnimationCurve();
-        flutterX.AddKey(0f, 0.06f);
-        flutterX.AddKey(0.25f, -0.06f);
-        flutterX.AddKey(0.5f, 0.06f);
-        flutterX.AddKey(0.75f, -0.06f);
-        flutterX.AddKey(1f, 0.02f);
-        vel.x = new ParticleSystem.MinMaxCurve(1f, flutterX);
-
-        // Tumble rotation over lifetime
-        var rot = ps.rotationOverLifetime;
-        rot.enabled = true;
-        rot.separateAxes = true;
-        rot.x = new ParticleSystem.MinMaxCurve(-2.2f, 2.2f);
-        rot.y = new ParticleSystem.MinMaxCurve(-1.8f, 1.8f);
-        rot.z = new ParticleSystem.MinMaxCurve(-3.5f, 3.5f);
-
-        // Size over lifetime: pop into view, flutter down, shrink slightly before dissolving
-        var sol = ps.sizeOverLifetime;
-        sol.enabled = true;
-        var sizeCurve = new AnimationCurve();
-        sizeCurve.AddKey(0f, 0.4f);
-        sizeCurve.AddKey(0.12f, 1.0f);
-        sizeCurve.AddKey(0.80f, 0.95f);
-        sizeCurve.AddKey(1f, 0.2f);
-        sol.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
-
-        // Fade in rapidly, then smooth dissolve at end
-        var col = ps.colorOverLifetime;
-        col.enabled = true;
-        var alphaGrad = new Gradient();
-        alphaGrad.SetKeys(
-            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
-            new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.08f), new GradientAlphaKey(0.95f, 0.72f), new GradientAlphaKey(0f, 1f) }
-        );
-        col.color = alphaGrad;
-
-        var rend = go.GetComponent<ParticleSystemRenderer>();
-        if (rend)
-        {
-            rend.renderMode = ParticleSystemRenderMode.Billboard;
-            rend.material = GetLeafMaterial();
-            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            rend.receiveShadows = false;
+            warningPrefab = Resources.Load<GameObject>("SquirrelLeavesWarning");
+#if UNITY_EDITOR
+            if (!warningPrefab)
+                warningPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/prefabs/SquirrelLeavesWarning.prefab");
+#endif
         }
 
-        ps.Play(true);
-        Object.Destroy(go, 3.8f);
+        if (!warningPrefab) return;
+
+        // Instantiate pure prefab directly with zero runtime property alterations
+        GameObject go = Object.Instantiate(warningPrefab, spawnWorldPos, spawnWorldRot);
+        go.name = "SquirrelLeavesWarning";
+        go.transform.SetParent(null);
+        warningGO = go;
+        warningAngleDeg = angleDeg;
+
+        var ps = go.GetComponent<ParticleSystem>();
+        warningPS = ps;
+        if (ps)
+        {
+            var sh = ps.shape;
+            sh.position = new Vector3(-0.10f, 0f, 0f);
+            ps.Play(true);
+        }
+        Object.Destroy(go, 12.0f);
     }
 
     void Update()
     {
         if (isSmashed) return;
         float dt = Time.deltaTime;
+        bool isChilli = IsPlayerInChilliMode();
+
+        // Never show leaves during chilli mode: clear immediately if player enters chilli mode
+        if (isChilli)
+        {
+            if (warningPS) { warningPS.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); warningPS = null; }
+            if (warningGO) { Object.Destroy(warningGO); warningGO = null; }
+            delayTimer = 0f;
+            if (model && !model.gameObject.activeSelf) model.gameObject.SetActive(true);
+            SetCollidersActive(true);
+            if (!hasPlayedSquirrelSound)
+            {
+                hasPlayedSquirrelSound = true;
+                TCSfx.Play("squirrel", 0.8f);
+            }
+        }
 
         if (delayTimer > 0f)
         {
-            delayTimer -= dt;
-            if (delayTimer <= 0f)
+            // If the player is in chilli mode or has climbed close to the squirrel, immediately wake up and scamper down
+            float distToPlayer = y - GetPlayerY();
+            if (isChilli || distToPlayer < 3.5f)
             {
                 delayTimer = 0f;
-                if (model) model.gameObject.SetActive(true);
-                TCSfx.Play("squirrel", 0.8f);
             }
             else
             {
-                // While waiting during the advance warning, keep transform pinned and model hidden
+                delayTimer -= dt;
+            }
+
+            if (delayTimer <= 0f)
+            {
+                delayTimer = 0f;
+                // Cease warning particle emission when the squirrel arrives from top of camera view
+                if (warningPS) { warningPS.Stop(true, ParticleSystemStopBehavior.StopEmitting); warningPS = null; }
+                if (warningGO) { Object.Destroy(warningGO, 2.5f); warningGO = null; }
+                if (model) model.gameObject.SetActive(true);
+                SetCollidersActive(true);
+                if (!hasPlayedSquirrelSound)
+                {
+                    hasPlayedSquirrelSound = true;
+                    TCSfx.Play("squirrel", 0.8f);
+                }
+            }
+            else
+            {
+                // While waiting during advance warning, keep the falling leaves emitter positioned vertically at top of camera view
+                if (warningGO)
+                {
+                    float rad = warningAngleDeg * Mathf.Deg2Rad;
+                    float r = radius + 0.04f;
+                    float topY = GetTopCameraViewY(warningAngleDeg);
+                    warningGO.transform.position = new Vector3(Mathf.Sin(rad) * r, topY, Mathf.Cos(rad) * r);
+                }
+
+                // While waiting during advance warning, ensure model stays hidden so it never appears as a frozen statue
+                if (model && model.gameObject.activeSelf) model.gameObject.SetActive(false);
                 transform.position = new Vector3(0, y, 0);
                 transform.rotation = Quaternion.Euler(0, baseAngle, 0);
                 return;
@@ -937,11 +1023,12 @@ public class TCSquirrel : TCEnemy
 
         float t = Time.time;
 
-        // 1. Scamper down the tree trunk
-        y -= runSpeed * dt;
+        // 1. Scamper down the tree trunk (accelerated sprint in chilli mode)
+        float moveSpeed = isChilli ? (runSpeed * 1.5f) : runSpeed;
+        y -= moveSpeed * dt;
 
-        // 2. High-speed running leg cycle (quadruped diagonal gait)
-        float runFreq = 18f;
+        // 2. High-speed running leg cycle (quadruped diagonal gait, snappy sprint in chilli mode)
+        float runFreq = isChilli ? 26f : 18f;
         float legCycle = t * runFreq;
         float angleFL = Mathf.Sin(legCycle) * 38f;
         float angleFR = -Mathf.Sin(legCycle) * 38f;
@@ -981,6 +1068,7 @@ public class TCSquirrel : TCEnemy
         // 6. Trunk surface positioning with scamper hop
         if (model)
         {
+            if (!model.gameObject.activeSelf) model.gameObject.SetActive(true);
             float hop = gallop * 0.04f;
             model.localPosition = new Vector3(0, hop, radius);
         }

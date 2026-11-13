@@ -357,8 +357,6 @@ public static class TCUI
             var bb = Add<Button>(rt.gameObject);
             bb.onClick.RemoveAllListeners();
             bb.onClick.AddListener(() => { TCAudio.Click(); onClick?.Invoke(); });
-            var faceImg = rt.GetComponent<Image>();
-            if (faceImg) ApplyReadable(rt, faceImg.color);
             return bb;
         }
         var shadow = Img("Shadow", rt, Color.Lerp(face, Cocoa, 0.35f)); Stretch(shadow.rectTransform, 0, 0, 10, -10);
@@ -387,6 +385,69 @@ public static class TCUI
         rt.gameObject.AddComponent<TCPress>();
         b.onClick.AddListener(() => { TCAudio.Click(); onClick?.Invoke(); });
         return b;
+    }
+
+    /// <summary>
+    /// Shows a modal confirmation dialogue with custom title, message, Confirm, and optional Cancel buttons.
+    /// Paints on top of all existing UI panels (overlay order 95).
+    /// </summary>
+    public static void Confirm(MonoBehaviour host, Transform parent, string title, string message, string confirmText, Action onConfirm, string cancelText = "CANCEL", Action onCancel = null)
+    {
+        if (!host || !parent) return;
+
+        var cg = Panel("ConfirmDialog", parent, out var card, new Vector2(860, 560), title);
+        LiftOverlay(cg.transform, 95);
+
+        // Clear any old runtime children inside Card except the Header and outline/shadow
+        for (int i = card.childCount - 1; i >= 0; i--)
+        {
+            var child = card.GetChild(i);
+            if (child.name != "Header")
+                UnityEngine.Object.Destroy(child.gameObject);
+        }
+
+        var msg = Label("Message", card, message, 38, Cocoa, TextAlignmentOptions.Center);
+        Place(msg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 35), new Vector2(760, 240));
+        msg.enableWordWrapping = true;
+
+        bool hasCancel = !string.IsNullOrEmpty(cancelText);
+
+        if (hasCancel)
+        {
+            var cancelBtn = Btn("CancelBtn", card, cancelText, Grey, () =>
+            {
+                Hide(host, cg, () =>
+                {
+                    onCancel?.Invoke();
+                    UnityEngine.Object.Destroy(cg.gameObject);
+                });
+            }, 40);
+            Place((RectTransform)cancelBtn.transform, new Vector2(0.5f, 0), new Vector2(-190, 85), new Vector2(340, 105));
+
+            var okBtn = Btn("ConfirmBtn", card, confirmText, Mint, () =>
+            {
+                Hide(host, cg, () =>
+                {
+                    onConfirm?.Invoke();
+                    UnityEngine.Object.Destroy(cg.gameObject);
+                });
+            }, 40);
+            Place((RectTransform)okBtn.transform, new Vector2(0.5f, 0), new Vector2(190, 85), new Vector2(340, 105));
+        }
+        else
+        {
+            var okBtn = Btn("ConfirmBtn", card, confirmText, Mint, () =>
+            {
+                Hide(host, cg, () =>
+                {
+                    onConfirm?.Invoke();
+                    UnityEngine.Object.Destroy(cg.gameObject);
+                });
+            }, 44);
+            Place((RectTransform)okBtn.transform, new Vector2(0.5f, 0), new Vector2(0, 85), new Vector2(460, 110));
+        }
+
+        Show(host, cg, true);
     }
 
     public static CanvasGroup Panel(string name, Transform parent, out RectTransform card, Vector2 size, string title)

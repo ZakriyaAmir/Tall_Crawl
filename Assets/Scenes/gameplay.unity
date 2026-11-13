@@ -501,9 +501,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'DRAG LEFT / RIGHT
-
-    to circle the trunk'
+  m_text: TOUCH TO CLIMB
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 1f9eeb0296548ff49811028f1be676d4, type: 2}
   m_sharedMaterial: {fileID: 1737725214}
@@ -16175,7 +16173,7 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 3dbd22ee621b53340ac1805ed119577c, type: 3}
   camera: {fileID: 206422001}
   Sun: {fileID: 705507993}
-  webPickupSpawnProbability: 1
+  webPickupSpawnProbability: 0.15
   coinsCollected: 0
   revivedThisRun: 0
   runEnded: 0
