@@ -745,11 +745,14 @@ public partial class TCCuteSpider : MonoBehaviour
             }
         }
 
-        // Eyes: blink every few seconds
-        blink -= dt;
-        if (blink < -0.14f) blink = Random.Range(1.8f, 4f);
-        float lid = blink < 0 ? 0.12f : 1f;
-        for (int i = 0; i < eyes.Count; i++) if (eyes[i]) { var r = eyeRest[i]; eyes[i].localScale = new Vector3(r.x, r.y * lid, r.z); }
+        // Eyes: blink every few seconds (unless eye override is active)
+        if (!eyeOverrideActive)
+        {
+            blink -= dt;
+            if (blink < -0.14f) blink = Random.Range(1.8f, 4f);
+            float lid = blink < 0 ? 0.12f : 1f;
+            for (int i = 0; i < eyes.Count; i++) if (eyes[i]) { var r = eyeRest[i]; eyes[i].localScale = new Vector3(r.x, r.y * lid, r.z); }
+        }
 
         // Death: roll on the back, cartoon style. Backflip pitch combined with death roll.
         bool dead = pi ? pi.life <= 0 : anim && anim.isActiveAndEnabled && HasBool(anim, "death") && anim.GetBool("death");

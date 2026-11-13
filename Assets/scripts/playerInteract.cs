@@ -224,7 +224,14 @@ public class playerInteract : MonoBehaviour
             if (other.CompareTag("bees"))
             {
                 TCFx.Spawn(BeesimpactParticle, transform.position);
-                Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+                if (boostDuration > 0)
+                {
+                    Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+                }
+                else
+                {
+                    Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+                }
                 if (pooled) pooled.Release();
                 TCFx.Shake(0.18f);
                 TCSave.AddBeeKill(1);
@@ -243,7 +250,16 @@ public class playerInteract : MonoBehaviour
             if (enemy != null)
             {
                 enemy.Smash();
-                Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+                if (boostDuration > 0)
+                {
+                    if (enemy.enemyType == TCEnemyType.Wasp) Play(TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+                    else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+                    else Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+                }
+                else
+                {
+                    Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+                }
                 TCFx.Spawn(impactParticle, other.transform.position);
                 TCFx.Shake(0.2f);
                 if (enemy.enemyType == TCEnemyType.Wasp) TCSave.AddWaspKill(1);
@@ -269,7 +285,9 @@ public class playerInteract : MonoBehaviour
             if (boostDuration > 0)
             {
                 enemy.Smash();
-                Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
+                if (enemy.enemyType == TCEnemyType.Wasp) Play(TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+                else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+                else Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
                 TCFx.Spawn(impactParticle, other.transform.position);
                 TCFx.Shake(0.12f);
                 if (enemy.enemyType == TCEnemyType.Wasp) TCSave.AddWaspKill(1);
@@ -327,9 +345,9 @@ public class playerInteract : MonoBehaviour
             if (jumpTimer > 0) return; // jumped over
             if (boostDuration > 0)
             {
-                // In chilli mode: thrust through bee swarms with punchy thrust sound
+                // In chilli mode: thrust through bee swarms with punchy bee swarm kill sound
                 TCFx.Spawn(BeesimpactParticle, transform.position);
-                Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
+                Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                 if (pooled) pooled.Release();
                 TCSave.AddBeeKill(1);
                 TCSkins.CheckAchievements();

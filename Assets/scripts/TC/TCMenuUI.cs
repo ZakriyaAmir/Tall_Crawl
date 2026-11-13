@@ -177,57 +177,359 @@ public class TCMenuUI : MonoBehaviour
         }
     } // gentle sway, face stays visible
 
-    // ---------- Main menu entrance: drop on a silk thread, somersault, squash landing, dust, wave ----------
+    // ---------- Main menu entrance: 4 random / rotating animations ----------
+    // 1: Drop on a silk thread, somersault, squash landing, dust, wave
+    // 2: Zoom from left to right side, then enter center and wink with sounds & voice
+    // 3: Come from far away, bonk / hit face to camera, recover, wave at camera with sounds & voice
+    // 4: Fall from top, bounce/land dizzy, shake head / regain consciousness, squint eyes, happy smile with sounds & voice
     bool entering; LineRenderer silk; float previewSize = 1;
+
     IEnumerator Entrance()
     {
         if (!previewSpider) yield break;
         entering = true;
         swayBlend = 0f;
-        var cs = previewSpider.GetComponent<TCCuteSpider>();
         float S = previewSize;
-        // Animate a pivot above the spider (its own Animator owns the spider transform).
-        var pivot = new GameObject("DropPivot").transform; pivot.SetParent(previewSpider.transform.parent, false);
-        float h = S * 0.22f; pivot.localPosition = new Vector3(0, h, 0);
+        float h = S * 0.22f;
+        var pivot = new GameObject("DropPivot").transform;
+        pivot.SetParent(previewSpider.transform.parent, false);
+        pivot.localPosition = new Vector3(0, h, 0);
         previewSpider.transform.SetParent(pivot, true);
-        var st = pivot; Vector3 rest = new Vector3(0, h, 0), top = new Vector3(0, h + S * 1.6f, 0);
-        silk = new GameObject("Silk").AddComponent<LineRenderer>(); silk.transform.SetParent(pivot.parent, false); silk.useWorldSpace = false;
+        var st = pivot;
+        Vector3 rest = new Vector3(0, h, 0);
+        var cs = previewSpider.GetComponent<TCCuteSpider>();
+
+        // Pick next entrance style (0..3) sequentially so all 4 are seen cleanly in order
+        int style = PlayerPrefs.GetInt("tc_menu_entrance_style", 0) % 4;
+        PlayerPrefs.SetInt("tc_menu_entrance_style", (style + 1) % 4);
+        PlayerPrefs.Save();
+
+        switch (style)
+        {
+            case 0:
+                yield return EntranceDropWave(st, rest, S, cs);
+                break;
+            case 1:
+                yield return EntranceZoomWink(st, rest, S, cs);
+                break;
+            case 2:
+                yield return EntranceHitCameraWave(st, rest, S, cs);
+                break;
+            case 3:
+                yield return EntranceFallDizzySmile(st, rest, S, cs);
+                break;
+        }
+
+        if (cs)
+        {
+            cs.wave = 0;
+            cs.ClearEyeOverride();
+        }
+        st.localPosition = rest;
+        st.localRotation = Quaternion.identity;
+        st.localScale = Vector3.one;
+        entering = false;
+    }
+
+    // --- Style 1: Classic silk drop, somersault, squash, wave ---
+    IEnumerator EntranceDropWave(Transform st, Vector3 rest, float S, TCCuteSpider cs)
+    {
+        Vector3 top = new Vector3(0, rest.y + S * 1.6f, 0);
+        silk = new GameObject("Silk").AddComponent<LineRenderer>();
+        silk.transform.SetParent(st.parent, false);
+        silk.useWorldSpace = false;
         var silkMat = new Material(Shader.Find("Particles/Standard Unlit") ?? Shader.Find("Mobile/Particles/Alpha Blended") ?? Shader.Find("Sprites/Default"));
         var silkTex = Resources.Load<Texture2D>("SilkWeb");
         if (silkTex) silkMat.mainTexture = silkTex;
         silk.material = silkMat;
         silk.textureMode = LineTextureMode.Tile;
         silk.startColor = silk.endColor = new Color(1, 1, 1, 0.95f);
-        silk.widthMultiplier = S * 0.022f; silk.positionCount = 2; silk.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        st.localPosition = top; st.localScale = Vector3.one;
+        silk.widthMultiplier = S * 0.022f;
+        silk.positionCount = 2;
+        silk.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        st.localPosition = top;
+        st.localScale = Vector3.one;
+
         yield return new WaitForSecondsRealtime(0.25f);
         TCSfx.Play("menu_drop", 0.6f);
         bool flipSfx = false;
         for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.95f)
         {
-            float e = 1 - Mathf.Pow(1 - x, 3);                                 // ease-out drop
+            float e = 1 - Mathf.Pow(1 - x, 3);
             st.localPosition = Vector3.Lerp(top, rest, e);
             float flip = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.25f, 0.8f, x));
             if (!flipSfx && x > 0.25f) { flipSfx = true; TCSfx.Play("menu_flip", 0.6f); }
-            st.localRotation = Quaternion.Euler(-360f * flip, 0, 0) * Quaternion.Euler(0, 0, Mathf.Sin(x * 9) * 8 * (1 - x)); // somersault on the thread
-            float str = 1 + 0.18f * Mathf.Sin(x * Mathf.PI);                    // stretch while falling
+            st.localRotation = Quaternion.Euler(-360f * flip, 0, 0) * Quaternion.Euler(0, 0, Mathf.Sin(x * 9) * 8 * (1 - x));
+            float str = 1 + 0.18f * Mathf.Sin(x * Mathf.PI);
             st.localScale = new Vector3(1 / Mathf.Sqrt(str), str, 1 / Mathf.Sqrt(str));
-            Silk(st, S); yield return null;
+            Silk(st, S);
+            yield return null;
         }
-        st.localPosition = rest; st.localRotation = Quaternion.identity;
-        TCSfx.Play("land", 0.7f); Dust(pivot.parent, S);
-        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.45f)       // squash + wobble settle
+        st.localPosition = rest;
+        st.localRotation = Quaternion.identity;
+        TCSfx.Play("land", 0.7f);
+        Dust(st.parent, S);
+
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.45f)
         {
             float k = Mathf.Sin(x * Mathf.PI * 3) * (1 - x) * 0.3f;
-            st.localScale = new Vector3(1 + k, 1 - k, 1 + k); Silk(st, S);
-            silk.startColor = silk.endColor = new Color(1, 1, 1, 0.95f * (1 - x)); yield return null;
+            st.localScale = new Vector3(1 + k, 1 - k, 1 + k);
+            Silk(st, S);
+            silk.startColor = silk.endColor = new Color(1, 1, 1, 0.95f * (1 - x));
+            yield return null;
         }
-        st.localScale = Vector3.one; Destroy(silk.gameObject);
-        TCSfx.Play("wave", 0.6f);
-        cs = previewSpider.GetComponent<TCCuteSpider>();
-        for (float x = 0; x < 1.4f; x += Time.unscaledDeltaTime) { if (cs) cs.wave = Mathf.Clamp01(Mathf.Min(x * 5, (1.4f - x) * 5)); yield return null; }
+        st.localScale = Vector3.one;
+        if (silk) Destroy(silk.gameObject);
+
+        TCSfx.PlayAction("chime", 0.7f, 1.05f);
+        for (float x = 0; x < 1.4f; x += Time.unscaledDeltaTime)
+        {
+            if (cs) cs.wave = Mathf.Clamp01(Mathf.Min(x * 5, (1.4f - x) * 5));
+            yield return null;
+        }
         if (cs) cs.wave = 0;
-        entering = false;
+    }
+
+    // --- Style 2: Zoom left to right, swoop in to center, cute wink with sounds & happy voice ---
+    IEnumerator EntranceZoomWink(Transform st, Vector3 rest, float S, TCCuteSpider cs)
+    {
+        Vector3 offLeft = rest + new Vector3(-S * 3.4f, 0.15f * S, 0.2f * S);
+        Vector3 offRight = rest + new Vector3(S * 3.4f, 0.15f * S, 0.2f * S);
+        st.localPosition = offLeft;
+        st.localScale = Vector3.one;
+        st.localRotation = Quaternion.identity;
+
+        yield return new WaitForSecondsRealtime(0.2f);
+
+        // Step 1: Fast high-speed zoom from offscreen left across to offscreen right
+        TCSfx.PlayAction("whoosh", 0.85f, 1.25f);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.48f)
+        {
+            float e = Mathf.SmoothStep(0, 1, x);
+            st.localPosition = Vector3.Lerp(offLeft, offRight, e);
+            st.localRotation = Quaternion.Euler(0, 90f, Mathf.Sin(x * Mathf.PI) * 12f);
+            st.localScale = new Vector3(1.35f, 0.85f, 0.85f);
+            yield return null;
+        }
+
+        yield return new WaitForSecondsRealtime(0.12f);
+
+        // Step 2: Swoop gracefully back from right into dead center
+        TCSfx.Play("thrust", 0.7f, 1.15f);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.58f)
+        {
+            float e = 1 - Mathf.Pow(1 - x, 3);
+            st.localPosition = Vector3.Lerp(offRight, rest, e);
+            float rotY = Mathf.Lerp(-90f, 0f, e);
+            st.localRotation = Quaternion.Euler(0, rotY, Mathf.Sin(x * Mathf.PI * 2f) * 6f * (1 - x));
+            float k = 1f + 0.15f * Mathf.Sin(x * Mathf.PI);
+            st.localScale = new Vector3(k, 1f / k, 1f);
+            yield return null;
+        }
+
+        // Skid / settle dust in center
+        st.localPosition = rest;
+        st.localRotation = Quaternion.identity;
+        st.localScale = Vector3.one;
+        TCSfx.Play("land", 0.65f);
+        Dust(st.parent, S * 0.8f);
+
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.35f)
+        {
+            float k = Mathf.Sin(x * Mathf.PI * 3f) * (1 - x) * 0.22f;
+            st.localScale = new Vector3(1 + k, 1 - k, 1 + k);
+            yield return null;
+        }
+        st.localScale = Vector3.one;
+
+        yield return new WaitForSecondsRealtime(0.15f);
+
+        // Step 3: Play wink sound + chatter voice, tip head cute & wink eye
+        TCSfx.PlayAction("wink", 0.85f, 1.30f);
+        int winkEyeIndex = 0; // main eye
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.75f)
+        {
+            float p = Mathf.Sin(x * Mathf.PI);
+            if (cs) cs.SetEyeOverride(1f - 0.95f * p, winkEyeIndex);
+            st.localRotation = Quaternion.Euler(0, 0, -8f * p);
+            yield return null;
+        }
+        if (cs) cs.ClearEyeOverride();
+        st.localRotation = Quaternion.identity;
+
+        yield return new WaitForSecondsRealtime(0.2f);
+    }
+
+    // --- Style 3: Come from far away, bonk / hit camera, bounce back & wave ---
+    IEnumerator EntranceHitCameraWave(Transform st, Vector3 rest, float S, TCCuteSpider cs)
+    {
+        // PreviewCam is at z ~ -4.25, looking at (0, -500, 0).
+        // Rest is z = 0. Far is z = +8.0. Camera close hit is z = -3.2 (right in front of lens).
+        Vector3 farPos = rest + new Vector3(0, 0.4f * S, 7.5f * S);
+        Vector3 camBonkPos = rest + new Vector3(0, 0.05f * S, -2.55f * S);
+        st.localPosition = farPos;
+        st.localRotation = Quaternion.identity;
+        st.localScale = Vector3.one * 0.25f;
+
+        yield return new WaitForSecondsRealtime(0.2f);
+
+        // Rush from far distance towards camera
+        TCSfx.PlayAction("whoosh", 0.8f, 1.1f);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.65f)
+        {
+            float e = x * x; // accelerate towards screen
+            st.localPosition = Vector3.Lerp(farPos, camBonkPos, e);
+            st.localScale = Vector3.Lerp(Vector3.one * 0.25f, Vector3.one * 1.55f, e);
+            st.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(x * 12f) * 6f * (1 - x));
+            yield return null;
+        }
+
+        // BONK! Face hits the camera lens glass
+        st.localPosition = camBonkPos;
+        TCSfx.PlayAction("hit", 0.95f, 1.28f, dizzy: true, voiceVol: 0.6f);
+        if (cs) cs.SetEyeOverride(0.2f); // eyes squished wide on impact
+
+        // Squash flat against screen
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.18f)
+        {
+            float k = Mathf.Sin(x * Mathf.PI);
+            st.localScale = new Vector3(1.8f + k * 0.4f, 1.8f + k * 0.4f, 0.35f);
+            yield return null;
+        }
+
+        // Bounce back from camera to rest position
+        TCSfx.Play("boop", 0.75f, 1.15f);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.6f)
+        {
+            float e = 1 - Mathf.Pow(1 - x, 3);
+            st.localPosition = Vector3.Lerp(camBonkPos, rest, e);
+            st.localScale = Vector3.Lerp(new Vector3(1.6f, 1.6f, 0.5f), Vector3.one, e);
+            st.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(x * Mathf.PI * 4f) * 14f * (1 - x));
+            yield return null;
+        }
+
+        st.localPosition = rest;
+        st.localScale = Vector3.one;
+        st.localRotation = Quaternion.identity;
+        if (cs) cs.ClearEyeOverride();
+
+        // Shake head / blink cute recovery
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.4f)
+        {
+            st.localRotation = Quaternion.Euler(0, Mathf.Sin(x * Mathf.PI * 6f) * 12f * (1 - x), 0);
+            yield return null;
+        }
+        st.localRotation = Quaternion.identity;
+
+        // Friendly wave at camera with happy chatter voice
+        TCSfx.PlayAction("chime", 0.75f, 1.05f);
+        for (float x = 0; x < 1.4f; x += Time.unscaledDeltaTime)
+        {
+            if (cs) cs.wave = Mathf.Clamp01(Mathf.Min(x * 5, (1.4f - x) * 5));
+            yield return null;
+        }
+        if (cs) cs.wave = 0;
+    }
+
+    // --- Style 4: Fall from top, dizzy bounce, shake/regain consciousness, squint & cute smile ---
+    IEnumerator EntranceFallDizzySmile(Transform st, Vector3 rest, float S, TCCuteSpider cs)
+    {
+        Vector3 highTop = rest + new Vector3(0, S * 2.8f, 0);
+        st.localPosition = highTop;
+        st.localRotation = Quaternion.Euler(180f, 0, 45f); // tumbling down
+        st.localScale = Vector3.one;
+
+        yield return new WaitForSecondsRealtime(0.2f);
+
+        // Fall fast without silk
+        TCSfx.Play("menu_drop", 0.75f, 1.15f);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.55f)
+        {
+            float e = x * x; // accelerating gravity drop
+            st.localPosition = Vector3.Lerp(highTop, rest, e);
+            st.localRotation = Quaternion.Euler(Mathf.Lerp(180f, 0f, e), 0, Mathf.Sin(x * 10f) * 18f);
+            float str = 1f + 0.3f * e;
+            st.localScale = new Vector3(1f / Mathf.Sqrt(str), str, 1f / Mathf.Sqrt(str));
+            yield return null;
+        }
+
+        // Hard comical crash landing + dust
+        st.localPosition = rest;
+        st.localRotation = Quaternion.identity;
+        TCSfx.PlayAction("land", 0.9f, 1.05f, dizzy: true, voiceVol: 0.65f);
+        Dust(st.parent, S * 1.2f);
+
+        // Big squash & wobble
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.45f)
+        {
+            float k = Mathf.Sin(x * Mathf.PI * 3f) * (1 - x) * 0.45f;
+            st.localScale = new Vector3(1 + k * 1.2f, Mathf.Max(0.4f, 1 - k * 1.4f), 1 + k * 1.2f);
+            yield return null;
+        }
+        st.localScale = Vector3.one;
+
+        // Comical dizzy state: spinning head/body wobble with dizzy death voice and cute dizzy stars
+        TCSfx.PlayAction("spin_whoosh", 0.65f, 1.15f, dizzy: true, voiceVol: 0.6f);
+        var starMat = TCFxLib.Mat("Star");
+        var stars = new List<Transform>();
+        for (int i = 0; i < 4; i++)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            Destroy(q.GetComponent<Collider>());
+            q.transform.SetParent(st.parent, false);
+            q.GetComponent<Renderer>().sharedMaterial = starMat;
+            stars.Add(q.transform);
+        }
+
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 1.15f)
+        {
+            // Dizzy wobble
+            float sway = Mathf.Sin(x * Mathf.PI * 8f) * (1f - x * 0.5f);
+            st.localRotation = Quaternion.Euler(Mathf.Sin(x * Mathf.PI * 6f) * 12f, sway * 16f, sway * 14f);
+            if (cs) cs.SetEyeOverride(0.25f + 0.15f * Mathf.Sin(x * 20f)); // dizzy flickering squint
+
+            // Orbit dizzy stars above head
+            float orbitAngle = x * Mathf.PI * 4f;
+            for (int i = 0; i < stars.Count; i++)
+            {
+                if (!stars[i]) continue;
+                float a = orbitAngle + i * (Mathf.PI * 2f / stars.Count);
+                stars[i].localPosition = rest + new Vector3(Mathf.Cos(a) * S * 0.32f, S * 0.55f + Mathf.Sin(a * 2f) * S * 0.06f, Mathf.Sin(a) * S * 0.32f);
+                stars[i].localScale = Vector3.one * S * 0.16f * Mathf.Clamp01((1f - x) * 2f);
+                stars[i].localRotation = Quaternion.Euler(20f, 0, a * Mathf.Rad2Deg);
+            }
+            yield return null;
+        }
+
+        foreach (var star in stars) if (star) Destroy(star.gameObject);
+        stars.Clear();
+
+        // Regain consciousness: clear dizzy eyes and shake head clear
+        if (cs) cs.ClearEyeOverride();
+        TCSfx.Play("wiggle", 0.7f, 1.2f);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.45f)
+        {
+            st.localRotation = Quaternion.Euler(0, Mathf.Sin(x * Mathf.PI * 8f) * 16f * (1 - x), 0);
+            yield return null;
+        }
+        st.localRotation = Quaternion.identity;
+
+        // Big cheerful smile to camera (eyes normal/open, cute head bob & happy chatter voice)
+        TCSfx.PlayAction("chime", 0.85f, 1.25f);
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.85f)
+        {
+            float p = Mathf.Sin(x * Mathf.PI);
+            // Happy head bob & tilt smile with eyes normal
+            st.localRotation = Quaternion.Euler(-10f * p, 0, 0);
+            st.localScale = new Vector3(1f + 0.12f * p, 1f + 0.14f * p, 1f);
+            yield return null;
+        }
+
+        if (cs) cs.ClearEyeOverride();
+        st.localRotation = Quaternion.identity;
+        st.localScale = Vector3.one;
+
+        yield return new WaitForSecondsRealtime(0.2f);
     }
     void Silk(Transform st, float S) { if (!silk) return; silk.SetPosition(0, st.localPosition + new Vector3(0, S * 0.5f, 0)); silk.SetPosition(1, new Vector3(0, S * 4f, 0)); }
     void Dust(Transform parent, float S)

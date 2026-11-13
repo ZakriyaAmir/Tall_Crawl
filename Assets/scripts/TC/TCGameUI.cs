@@ -1371,6 +1371,7 @@ public class TCGameUI : MonoBehaviour
             // When spider reaches the wasp during chilli boost, ensure wasp is smashed and killed
             if (tutWasp != null && tutWasp.gameObject.activeInHierarchy && SpiderY >= waspSmashY - 0.25f)
             {
+                TCSfx.Play("wasp_kill", 0.95f);
                 tutWasp.Smash();
             }
 
