@@ -47,7 +47,7 @@ MonoBehaviour:
   baseHearts: 3
   coinValue: 1
   coinsPerHundredMetres: 1
-  gemEveryMetres: 2000
+  gemEveryMetres: 10000
   reviveCostGems: 5
   startingCoins: 50
   dailyRewards: 0f00000014000000190000001e00000028000000640000003c000000

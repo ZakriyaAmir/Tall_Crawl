@@ -45,7 +45,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 62311547766638d47ad8492672f3632c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  testMode: 0
+  testMode: 1
   AdmobBannerUnitId: ca-app-pub-4987175712306793/3348628581
   AdmobInterstitialUnitId: ca-app-pub-4987175712306793/9597523925
   AdmobRewardedUnitId: ca-app-pub-4987175712306793/6984020172

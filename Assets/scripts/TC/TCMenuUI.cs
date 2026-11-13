@@ -20,7 +20,7 @@ public class TCMenuUI : MonoBehaviour
 
     void Start()
     {
-        Application.targetFrameRate = 60; Time.timeScale = 1; TCSave.Apply();
+        TCServices.ApplyMaxDeviceRefreshRate(); Time.timeScale = 1; TCSave.Apply();
         BuildPreview();
         BuildUI();
         TCSave.Changed += Refresh; Refresh();
@@ -165,8 +165,28 @@ public class TCMenuUI : MonoBehaviour
             previewSize = size;
         }
         ApplyPreview(TCSave.SelectedSkin);
+        StripPreviewTrails();
     }
-    void ApplyPreview(int i) { if (previewSpider && previewSkin != i) { previewSkin = i; TCSkins.Apply(previewSpider, i); } }
+    void ApplyPreview(int i)
+    {
+        if (previewSpider && previewSkin != i)
+        {
+            previewSkin = i;
+            TCSkins.Apply(previewSpider, i, enableTrail: false);
+            StripPreviewTrails();
+        }
+    }
+    void StripPreviewTrails()
+    {
+        if (!previewSpider) return;
+        foreach (var tr in previewSpider.GetComponentsInChildren<TrailRenderer>(true))
+        {
+            if (!tr) continue;
+            tr.enabled = false;
+            tr.Clear();
+            Destroy(tr);
+        }
+    }
     float swayBlend = 0f;
     void LateUpdate()
     {

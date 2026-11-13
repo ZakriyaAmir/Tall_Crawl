@@ -57,7 +57,7 @@ public class TCEnemy : MonoBehaviour
         if (isSmashed) return;
         isSmashed = true;
 
-        TCHitFlash.FlashAndDestroy(gameObject, 0.12f);
+        TCHitFlash.FlashAndDestroy(gameObject, 0.5f);
 
         if (pooled)
         {

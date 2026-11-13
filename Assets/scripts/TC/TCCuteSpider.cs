@@ -16,7 +16,10 @@ public partial class TCCuteSpider : MonoBehaviour
     Transform head; Vector3 headRest; readonly List<Transform> eyes = new List<Transform>(); readonly List<Vector3> eyeRest = new List<Vector3>();
     Transform abdomen; readonly List<Transform> spinnerets = new List<Transform>();
     float gaitPhase, gaitOmega, lastYaw;
-    float landBounce, wasJumpBlend;
+    float landBounce;
+    bool wasJumping;
+    float landingTimer;
+    const float LandingDuration = 0.32f;
     float swingLean, swingRoll, swingTwist, swingSquash, swingTuck;
     bool hasSwingWorldRot;
     Quaternion swingWorldRot = Quaternion.identity;
@@ -535,7 +538,11 @@ public partial class TCCuteSpider : MonoBehaviour
         swingLean = swingRoll = swingTwist = swingSquash = swingTuck = 0f;
     }
 
-    public void TriggerLandBounce() { landBounce = 1f; }
+    public void TriggerLandBounce()
+    {
+        landingTimer = LandingDuration;
+        TCSfx.Play("land", 0.5f);
+    }
 
     void LateUpdate()
     {
@@ -560,9 +567,37 @@ public partial class TCCuteSpider : MonoBehaviour
         bool swingingNow = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
         bool isMoving = ((playerComp != null && !playerComp.paused && !playerComp.GameOver && !isJumping) || isIntroWalking) && !swingingNow;
 
-        // Smooth jump/landing blend transition (prevents sudden snapping into or out of jump pose)
+        // Smooth jump/landing blend transition with Hermite curve for zero-hitch motion
         float targetJumpBlend = isJumping ? 1f : 0f;
-        jumpBlend = Mathf.MoveTowards(jumpBlend, targetJumpBlend, dt * (isJumping ? 12f : 7f));
+        jumpBlend = Mathf.MoveTowards(jumpBlend, targetJumpBlend, dt * (isJumping ? 14f : 6.5f));
+        float smoothJump = Mathf.SmoothStep(0f, 1f, jumpBlend);
+
+        // Landing event & juicy spring squash:
+        bool justLanded = wasJumping && !isJumping;
+        wasJumping = isJumping;
+        if (justLanded)
+        {
+            landingTimer = LandingDuration;
+            TCSfx.Play("land", 0.5f);
+        }
+
+        if (landingTimer > 0f)
+        {
+            landingTimer = Mathf.MoveTowards(landingTimer, 0f, dt);
+        }
+
+        float landProgress = 1f - Mathf.Clamp01(landingTimer / LandingDuration); // 0 at touchdown -> 1 when recovered
+        float landSquash = 0f;
+        float landSpread = 0f;
+        float landNod = 0f;
+        if (landingTimer > 0f)
+        {
+            // Damped elastic spring squash: quick impact cushion, then smooth spring rebound into sprint
+            float spring = Mathf.Sin(landProgress * Mathf.PI) * Mathf.Exp(-landProgress * 3.2f);
+            landSquash = spring * 0.22f; // 22% vertical compression
+            landSpread = spring * 0.14f; // 14% lateral cushion spread
+            landNod = spring * 12f;      // 12 deg forward nod absorption
+        }
 
         // Smooth height calculation:
         // Rig jump base height:
@@ -605,10 +640,11 @@ public partial class TCCuteSpider : MonoBehaviour
 
         float hop = Mathf.Clamp01(currentAirHeight * 3.5f);
 
-        // Stride × cadence ≈ climb speed so feet don't slide, including 2.5x cap and chilli boost
-        // (calcSpeed already includes boost). Phase is accumulated so frequency changes stay smooth.
+        // Stride × cadence ≈ climb speed so feet don't slide, including 2.5x cap and chilli boost.
+        // Maintain cadence even during in-air flight so landing connects seamlessly with running stride.
         const float StrideLength = 0.36f; // world units per step cycle
-        float climb = (playerComp && isMoving) ? Mathf.Max(0f, playerComp.calcSpeed) : 0f;
+        bool isActivelyRunning = (playerComp != null && !playerComp.paused && !playerComp.GameOver && !swingingNow);
+        float climb = (isActivelyRunning && (isMoving || isJumping)) ? Mathf.Max(0f, playerComp.calcSpeed) : (isIntroWalking ? 1.5f : 0f);
         float yawNow = playerComp ? playerComp.CurrentYaw : lastYaw;
         float yawRate = Mathf.Abs(Mathf.DeltaAngle(lastYaw, yawNow)) / Mathf.Max(dt, 1e-4f);
         lastYaw = yawNow;
@@ -618,35 +654,30 @@ public partial class TCCuteSpider : MonoBehaviour
         if (yawRate > 25f) steps = Mathf.Max(steps, 4.5f) * 1.08f;
         float targetOmega = steps * (Mathf.PI * 2f);
         gaitOmega = Mathf.Lerp(gaitOmega, targetOmega, 1f - Mathf.Exp(-10f * dt));
-        if (isMoving && gaitOmega > 0.1f) gaitPhase += gaitOmega * dt;
+        if ((isMoving || isJumping) && gaitOmega > 0.1f) gaitPhase += gaitOmega * dt;
         float phWalk = gaitPhase;
         // Keep amplitude readable at high cadence (boost at 2.5x) without jitter.
         float stepRate = gaitOmega / (Mathf.PI * 2f);
         float amp = Mathf.Lerp(1f, 0.72f, Mathf.InverseLerp(10f, 18f, stepRate));
 
-        // Landing bounce: squash then a secondary recover when a jump ends.
-        if (wasJumpBlend > 0.4f && jumpBlend < 0.15f && !isJumping) landBounce = 1f;
-        wasJumpBlend = jumpBlend;
-        float bounce = 0f;
-        if (landBounce > 0f)
-        {
-            float bp = 1f - landBounce;
-            bounce = Mathf.Exp(-5.5f * bp) * Mathf.Sin(bp * Mathf.PI * 2.6f);
-            landBounce = Mathf.MoveTowards(landBounce, 0f, dt * 2.4f);
-        }
-
         // Bob is synced to footsteps (down on plant). Idle is a slow breath. Jump is a soft stretch.
         float bob = isJumping ? 0.06f * Mathf.Sin(t * 14f)
                   : isMoving ? (0.028f - Mathf.Abs(Mathf.Cos(phWalk)) * 0.055f) * amp
                   : Mathf.Sin(t * 2.2f) * 0.014f;
-        bob += bounce * 0.10f + swingSquash * 0.12f;
-        body.localScale = new Vector3(1 + bob - hop * 0.08f, 1 - bob + hop * 0.15f, 1 + bob - hop * 0.08f);
+        bob += swingSquash * 0.12f;
+
+        // Apply landing squash and lateral spread onto body scale
+        float scaleX = (1f + bob - hop * 0.08f) * (1f + landSpread);
+        float scaleY = (1f - bob + hop * 0.15f) * (1f - landSquash);
+        float scaleZ = (1f + bob - hop * 0.08f) * (1f + landSpread);
+        body.localScale = new Vector3(scaleX, scaleY, scaleZ);
+
         if (head) head.localPosition = headRest + new Vector3(
             Mathf.Sin(isMoving ? phWalk : t * 2.2f) * (isMoving ? 0.020f : 0.012f),
             Mathf.Abs(Mathf.Sin(isMoving ? phWalk : t * 2.2f)) * (isMoving ? 0.020f : 0.014f), 0)
             * head.localScale.y;
         float sway = isMoving ? Mathf.Sin(phWalk) * 7.5f * amp : 0f;
-        float nod = isMoving ? Mathf.Cos(phWalk) * 4.5f * amp : 0f;
+        float nod = (isMoving ? Mathf.Cos(phWalk) * 4.5f * amp : 0f) + landNod;
         float yawSway = isMoving ? Mathf.Sin(phWalk) * 5f * amp : 0f;
         // Lean into climb and into the turn (anticipation / follow-through).
         float speedLean = isMoving && playerComp ? Mathf.Clamp(playerComp.calcSpeed * 2.4f, 0f, 14f) : 0f;
@@ -681,6 +712,17 @@ public partial class TCCuteSpider : MonoBehaviour
             // Lateral foot splay/curl during stride (curls inward during lift, splays outward on stance):
             float splay = Mathf.Cos(ph) * (isLeft ? -7f : 7f);
 
+            // Seamless landing blend:
+            if (landingTimer > 0f)
+            {
+                // Firm foot contact on touchdown (damp step lift so feet plant firmly on bark without slipping)
+                stepLift *= Mathf.Lerp(0.2f, 1f, landProgress);
+                // Stride swing accelerates smoothly from solid plant into full sprint stride
+                swing *= Mathf.Lerp(0.45f, 1f, landProgress);
+                // Impact cushion splay
+                splay += landSpread * (isLeft ? -30f : 30f);
+            }
+
             Quaternion moveRot = Quaternion.Euler(0, swing, splay) * legRest[i] * Quaternion.Euler(-stepLift, 0, 0);
 
             // 2. Jumping pose calculation:
@@ -690,7 +732,9 @@ public partial class TCCuteSpider : MonoBehaviour
             float spreadAngle;
             if (legIdx == 0)
             {
-                tuckAngle = -32f + Mathf.Sin(t * 12f + i) * 5f;
+                // As spider descends near landing surface, front legs reach slightly forward in anticipation
+                float preLandReach = (1f - hop) * 8f;
+                tuckAngle = -32f + preLandReach + Mathf.Sin(t * 12f + i) * 5f;
                 spreadAngle = (isLeft ? -18f : 18f);
             }
             else
@@ -704,7 +748,7 @@ public partial class TCCuteSpider : MonoBehaviour
             Quaternion groundRot = isMoving ? moveRot : legRest[i];
 
             // 4. Smooth blend between Ground (walk/run/idle) and Jump poses:
-            Quaternion targetLegPose = Quaternion.Slerp(groundRot, jumpRot, jumpBlend);
+            Quaternion targetLegPose = Quaternion.Slerp(groundRot, jumpRot, smoothJump);
             if (rollBlend > 0.001f)
             {
                 // In Sonic roll attack: tuck legs tightly against the spinning body
@@ -926,18 +970,65 @@ public partial class TCCuteSpider : MonoBehaviour
         return m;
     }
 
-    /// Unit cone: base radius 0.5 at y=0, tip at y=1 (smooth, rounded look via normals).
+    /// Watertight unit cone: base radius 0.5 at y=0 with bottom cap, tip at y=1 (clean outward normals, zero inverted triangles).
     static Mesh MakeCone()
     {
-        const int N = 14; var v = new List<Vector3>(); var n = new List<Vector3>(); var tri = new List<int>();
+        const int N = 16;
+        var v = new List<Vector3>();
+        var n = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var tri = new List<int>();
+
+        // 1. Bottom disc base cap (faces downwards into body)
+        v.Add(Vector3.zero);
+        n.Add(Vector3.down);
+        uvs.Add(new Vector2(0.5f, 0.5f));
+        for (int i = 0; i < N; i++)
+        {
+            float a = i / (float)N * Mathf.PI * 2f;
+            var d = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            v.Add(d * 0.5f);
+            n.Add(Vector3.down);
+            uvs.Add(new Vector2(0.5f + 0.5f * Mathf.Cos(a), 0.5f + 0.5f * Mathf.Sin(a)));
+        }
+        for (int i = 0; i < N; i++)
+        {
+            int next = (i + 1) % N;
+            tri.Add(0);
+            tri.Add(next + 1);
+            tri.Add(i + 1);
+        }
+
+        // 2. Cone sides with outward sloping normals and correct front-facing winding
+        int sideStart = v.Count;
         for (int i = 0; i <= N; i++)
         {
-            float a = i / (float)N * Mathf.PI * 2; var d = new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a));
-            v.Add(d * 0.5f); n.Add((d + Vector3.up * 0.5f).normalized);
-            v.Add(Vector3.up); n.Add((d + Vector3.up * 0.5f).normalized);
+            float a = i / (float)N * Mathf.PI * 2f;
+            var d = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            var sideNormal = (d * 1.0f + Vector3.up * 0.5f).normalized;
+
+            v.Add(d * 0.5f);
+            n.Add(sideNormal);
+            uvs.Add(new Vector2(i / (float)N, 0f));
+
+            v.Add(Vector3.up);
+            n.Add(sideNormal);
+            uvs.Add(new Vector2(i / (float)N, 1f));
         }
-        for (int i = 0; i < N; i++) { int a = i * 2; tri.AddRange(new[] { a, a + 1, a + 2, a, a + 2, a + 1 }); }
-        var m = new Mesh { name = "spike" }; m.SetVertices(v); m.SetNormals(n); m.SetTriangles(tri, 0); m.RecalculateBounds();
+        for (int i = 0; i < N; i++)
+        {
+            int idx = sideStart + i * 2;
+            tri.Add(idx);
+            tri.Add(idx + 1);
+            tri.Add(idx + 2);
+        }
+
+        var m = new Mesh { name = "spike" };
+        m.SetVertices(v);
+        m.SetNormals(n);
+        m.SetUVs(0, uvs);
+        m.SetTriangles(tri, 0);
+        m.RecalculateBounds();
         return m;
     }
 }

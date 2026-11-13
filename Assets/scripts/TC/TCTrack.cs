@@ -215,7 +215,9 @@ public class TCTrack : MonoBehaviour
         }
 
         // Recycle everything far below the player (iterate backwards, no allocations)
-        float cut = py - 3.5f;
+        // Keep trunk chunks buffered much further below (14m) during Web Boost to prevent any bottom pop-out
+        bool webSwinging = TCWebBonus.Instance != null && TCWebBonus.Instance.IsSwinging;
+        float cut = webSwinging ? (py - 14.0f) : (py - 3.5f);
         for (int i = live.Count - 1; i >= 0; i--)
         {
             var p = live[i];
@@ -485,27 +487,39 @@ public class TCTrack : MonoBehaviour
 
         if (!spawnedPowerup && Random.value < C.coinTrailChance)
         {
-            // Spawn smooth, strictly vertical-increasing coin strings:
-            // 0: Standard smooth vertical climbing trail (smoothly interpolates towards safe gap)
-            // 1: Vertical jump arc string (straight vertical constant angle, spider hops over)
-            int pattern = Random.Range(0, 2);
+            // Coin string generation:
+            // Arc / Jump string probability is set to exactly 1/10 (10%).
+            // Remaining 9/10 (90%) is shared among zigzag string, straight string, and curving string.
+            float roll = Random.value;
             int stringCount = Random.Range(6, 11); // 6 to 10 coins
             float trailSpan = (stringCount - 1) * UniformCoinSpacing;
             float trailEndY = y - 0.35f;
             float trailStartY = Mathf.Max(trailEndY - trailSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
 
-            if (pattern == 1)
+            if (roll < 0.10f)
             {
-                // Vertical arc pattern straight upward (constant angle, Subway Surfers style canonical 8-coin jump arc, farthest landing span)
+                // 1/10: Vertical jump arc string (straight vertical constant angle, spider hops in arc)
                 const float jumpSpan = LongestArcSpan;
                 float arcEndY = y - 0.35f;
                 float arcStartY = Mathf.Max(arcEndY - jumpSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
                 SpawnCoinArc(arcStartY, arcEndY, newSafe, SpiderJumpHeight, 8);
             }
+            else if (roll < 0.40f)
+            {
+                // 3/10: Zigzag string (weaves left and right along the climb path)
+                float zigzagAmp = Mathf.Min(14f, window * 0.28f);
+                SpawnCoinZigzag(trailStartY, trailEndY, newSafe, zigzagAmp, stringCount);
+            }
+            else if (roll < 0.70f)
+            {
+                // 3/10: Straight vertical string (dead straight at newSafe angle)
+                SpawnCoinTrail(trailStartY, trailEndY, newSafe, newSafe, stringCount);
+            }
             else
             {
-                // Classic smooth vertical trail (strictly monotonic upward progression)
-                SpawnCoinTrail(trailStartY, trailEndY, Mathf.LerpAngle(safeAngle, newSafe, 0.70f), newSafe, stringCount);
+                // 3/10: Curving string (smoothly curves from previous safe angle towards newSafe)
+                float curveFrom = Mathf.LerpAngle(safeAngle, newSafe, 0.25f);
+                SpawnCoinTrail(trailStartY, trailEndY, curveFrom, newSafe, stringCount);
             }
         }
 

@@ -27,8 +27,7 @@ public class gameManager : MonoBehaviour
     void Awake()
     {
         Instance = this;
-        Application.targetFrameRate = 60;
-        QualitySettings.vSyncCount = 0;
+        TCServices.ApplyMaxDeviceRefreshRate();
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
         TCSave.Apply();
     }
@@ -154,7 +153,7 @@ public class gameManager : MonoBehaviour
         int bonus = metres / 100 * BonusPerHundred;
         // Collected coins are banked 1:1. The ad doubler only ever doubles the distance bonus.
         RunReward = coinsCollected + bonus * (doubled ? 2 : 1);
-        RunGems = TCConfig.I.gemEveryMetres > 0 ? metres / TCConfig.I.gemEveryMetres : 0;
+        RunGems = (TCConfig.I != null && TCConfig.I.gemEveryMetres > 0) ? metres / TCConfig.I.gemEveryMetres : metres / 10000;
         if (RunGems > 0) TCSave.Gems += RunGems;
         TCSave.Coins += RunReward;
         TCSave.LifetimeCoins += RunReward;
@@ -186,7 +185,9 @@ public class gameManager : MonoBehaviour
     public void Home() { MaybeInterstitial(); Time.timeScale = 1; SceneManager.LoadScene("MainMenu"); }
     void MaybeInterstitial()
     {
-        int n = Mathf.Max(1, TCConfig.I.interstitialEveryNRuns);
-        if (TCSave.Runs > 0 && TCSave.Runs % n == 0) TCServices.Interstitial();
+        bool isTest = (AdsManager.Instance != null && AdsManager.Instance.testMode);
+        int n = Mathf.Max(1, TCConfig.I != null ? TCConfig.I.interstitialEveryNRuns : 3);
+        bool shouldShow = isTest || (TCSave.Runs > 0 && TCSave.Runs % n == 0);
+        if (shouldShow) TCServices.Interstitial();
     }
 }

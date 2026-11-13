@@ -127,25 +127,51 @@ public static class TCSkins
 
     /// Applies skin i to a spider (the "newSpider" object or the menu preview copy):
     /// hides the old realistic mesh and (re)builds the round cute spider in that skin.
-    public static void Apply(GameObject spider, int i)
+    public static void Apply(GameObject spider, int i, bool enableTrail = true)
     {
         i = Mathf.Clamp(i, 0, All.Length - 1);
         var def = All[i];
         TCCuteSpider.Build(spider, def, i);
-        // Trail (colour only)
-        var tr = spider.GetComponent<TrailRenderer>();
-        if (def.trail.a > 0.01f)
+
+        // Never show color trails on the main menu
+        bool isMainMenu = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenu";
+        if (isMainMenu || !enableTrail)
         {
-            if (!tr) tr = spider.AddComponent<TrailRenderer>();
-            tr.sharedMaterial = Resources.Load<Material>("Skins/Trail");
-            tr.time = 0.35f; tr.minVertexDistance = 0.05f;
-            tr.widthCurve = new AnimationCurve(new Keyframe(0, 0.12f), new Keyframe(1, 0));
-            var g = new Gradient();
-            g.SetKeys(new[] { new GradientColorKey(def.trail, 0), new GradientColorKey(def.accent, 1) },
-                      new[] { new GradientAlphaKey(0.75f, 0), new GradientAlphaKey(0, 1) });
-            tr.colorGradient = g; tr.enabled = true;
-            tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var trs = spider.GetComponentsInChildren<TrailRenderer>(true);
+            foreach (var t in trs)
+            {
+                if (!t) continue;
+                t.enabled = false;
+                t.Clear();
+                if (Application.isPlaying) Object.Destroy(t);
+                else Object.DestroyImmediate(t);
+            }
         }
+        else
+        {
+            // Trail (colour only in gameplay)
+            var tr = spider.GetComponent<TrailRenderer>();
+            if (def.trail.a > 0.01f)
+            {
+                if (!tr) tr = spider.AddComponent<TrailRenderer>();
+                tr.sharedMaterial = Resources.Load<Material>("Skins/Trail");
+                tr.time = 0.35f; tr.minVertexDistance = 0.05f;
+                tr.widthCurve = new AnimationCurve(new Keyframe(0, 0.12f), new Keyframe(1, 0));
+                var g = new Gradient();
+                g.SetKeys(new[] { new GradientColorKey(def.trail, 0), new GradientColorKey(def.accent, 1) },
+                          new[] { new GradientAlphaKey(0.75f, 0), new GradientAlphaKey(0, 1) });
+                tr.colorGradient = g; tr.enabled = true;
+                tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            else if (tr)
+            {
+                tr.enabled = false;
+                tr.Clear();
+                if (Application.isPlaying) Object.Destroy(tr);
+                else Object.DestroyImmediate(tr);
+            }
+        }
+
         // Clean up any old particle FX
         var oldGoldFx = spider.transform.Find("GoldGleamFx");
         if (oldGoldFx) Object.Destroy(oldGoldFx.gameObject);

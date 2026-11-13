@@ -501,7 +501,7 @@ public class TCGameUI : MonoBehaviour
 
             FlyCoin(coinWorld);
             if (gm) gm.addCoin();
-            TCSfx.Play("coin", 0.65f);
+            TCSfx.Play("coin", 0.38f, 1.0f + i * 0.05f);
             yield return new WaitForSeconds(0.06f);
         }
     }
@@ -1378,11 +1378,12 @@ public class TCGameUI : MonoBehaviour
             // When spider reaches the branch during chilli boost, smash through it
             if (tutBranch != null && tutBranch.gameObject.activeInHierarchy && SpiderY >= branchSmashY - 0.25f)
             {
-                TCHitFlash.FlashAndDestroy(tutBranch.gameObject, 0.12f);
+                TCHitFlash.FlashAndDestroy(tutBranch.gameObject, 0.5f);
                 TCFx.Spawn(spider != null ? spider.impactParticle : null, tutBranch.transform.position);
                 tutBranch.Release();
                 TCAudio.Play(TCAssets.I != null ? TCAssets.I.purchase : null);
                 TCFx.Shake(0.18f);
+                TCServices.LightHaptic();
             }
 
             yield return null;
@@ -1467,6 +1468,9 @@ public class TCGameUI : MonoBehaviour
             hintText.text = "SWIPE DOWN\nto trigger slow motion!";
             handMode = HandAnimMode.SwipeDown;
 
+            // Allow slow-motion swipe down immediately as time starts slowing down before reaching the obstacle!
+            if (pl) pl.SetSlowmoAllowed(true);
+
             float slowEaseStart = Time.timeScale;
             float slowEaseElapsed = 0f;
             while (hurdle != null && hurdle.gameObject.activeInHierarchy && (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive))
@@ -1478,8 +1482,6 @@ public class TCGameUI : MonoBehaviour
                     IsTutorialFrozen = true;
                     Time.timeScale = 0f;
                     currentTargetTimeScale = 0f;
-                    // Only allow slow-motion activation once the freeze prompt is reached!
-                    if (pl) pl.SetSlowmoAllowed(true);
                 }
                 else
                 {

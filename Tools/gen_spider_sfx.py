@@ -21,7 +21,23 @@ save('menu_flip',  cat(squeak(700,1500,0.12),squeak(1500,1900,0.07)),0.4)       
 save('land',       cat(boop(260,0.09),squeak(900,1300,0.09,0.04)),0.45)           # boop + eep
 save('wave',       cat(squeak(1100,1600,0.09),sil(0.04),squeak(1200,1800,0.13,0.05,30)),0.42)  # "hi-hiii!"
 save('jump',       squeak(500,1400,0.16,0,0,1,0.6),0.4)                           # boing-yip
-save('coin',       cat(squeak(1900,2600,0.05),squeak(2400,3000,0.05)),0.3)        # tiny chirp
+def coin_chime():
+    d1 = 0.035; d2 = 0.110; total_dur = d1 + d2; n = int(SR * total_dur); t = np.arange(n) / SR
+    t1 = t[t < d1]; att1 = np.minimum(1.0, t1 / 0.002)
+    s1 = (np.sin(2 * np.pi * 987.77 * t1) + 
+          0.30 * np.sin(2 * np.pi * 1975.54 * t1) * np.exp(-t1 * 15.0) +
+          0.12 * np.sin(2 * np.pi * 2963.31 * t1) * np.exp(-t1 * 30.0))
+    s1 = s1 * att1 * np.exp(-t1 * 20.0)
+    t2 = t[t >= d1] - d1; att2 = np.minimum(1.0, t2 / 0.002)
+    s2 = (np.sin(2 * np.pi * 1318.51 * t2) + 
+          0.35 * np.sin(2 * np.pi * 2637.02 * t2) * np.exp(-t2 * 18.0) +
+          0.15 * np.sin(2 * np.pi * 3955.53 * t2) * np.exp(-t2 * 35.0) +
+          0.08 * np.sin(2 * np.pi * 5274.04 * t2) * np.exp(-t2 * 50.0))
+    decay2 = np.exp(-t2 * 18.0); fade_end = np.clip((d2 - t2) / 0.015, 0, 1)
+    s2 = s2 * att2 * decay2 * fade_end
+    return np.concatenate([s1, s2])
+
+save('coin',       coin_chime(), 0.35)                                             # pleasant sparkle chime
 save('heart',      cat(squeak(900,1200,0.07),squeak(1200,1600,0.07),squeak(1600,2100,0.1)),0.38)
 save('chilli',     cat(boop(320,0.07),boop(300,0.07),squeak(1000,2200,0.14,0.08,40)),0.42)  # nom-nom-yip!
 save('hit',        squeak(1600,700,0.16,0.06,35),0.45)                            # ouch eek

@@ -8,7 +8,7 @@ public class AdsManager : MonoBehaviour
 {
     [Header("Note: Admob ads are first priority,\nApplovinMax ads will load after checking Admob availability")]
 
-    public bool testMode;
+    public bool testMode = true;
 
     [Header("Admob Keys")]
     //public string AndroidGoogleAppID;
@@ -17,11 +17,11 @@ public class AdsManager : MonoBehaviour
     public string AdmobRewardedUnitId;
     public string AdmobRewardedInterstitialUnitId;
     public string AdmobAppOpenAdUnitId;
-    public bool admobInterstitial;
-    public bool admobBanner;
-    public bool admobRewarded;
-    public bool admobRewardedInterstitial;
-    public bool admobOpenAd;
+    public bool admobInterstitial = true;
+    public bool admobBanner = true;
+    public bool admobRewarded = true;
+    public bool admobRewardedInterstitial = false;
+    public bool admobOpenAd = false;
 
     // These ad units are configured to always serve test ads.
     [Header("Max Keys")]
@@ -62,7 +62,34 @@ public class AdsManager : MonoBehaviour
     [HideInInspector]
     //public MaxSdkBase.AdViewPosition MRecPosition;
 
-    public static AdsManager Instance;
+    private static AdsManager _instance;
+    public static AdsManager Instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                _instance = FindObjectOfType<AdsManager>();
+                if (_instance == null)
+                {
+                    var prefab = Resources.Load<GameObject>("Ads+FirebaseManager");
+                    if (prefab != null)
+                    {
+                        var go = Instantiate(prefab);
+                        go.name = "Ads+FirebaseManager";
+                        _instance = go.GetComponent<AdsManager>();
+                    }
+                    else
+                    {
+                        var go = new GameObject("AdsManager");
+                        _instance = go.AddComponent<AdsManager>();
+                    }
+                }
+            }
+            return _instance;
+        }
+        set { _instance = value; }
+    }
     private bool maxBan;
     private bool admobBan;
 
@@ -72,34 +99,25 @@ public class AdsManager : MonoBehaviour
 
     public void Awake()
     {
-        if (Instance != null)
+        if (_instance != null && _instance != this)
         {
             Destroy(gameObject);
             return;
         }
 
-        Instance = this;
+        _instance = this;
         DontDestroyOnLoad(gameObject);
 
         testMode = true;
+        admobInterstitial = true;
+        admobBanner = true;
+        admobRewarded = true;
         ApplyOfficialTestIds();
-        if (testMode)
-        {
-            //AndroidGoogleAppID = "ca-app-pub-3940256099942544~3347511713";
-            AdmobBannerUnitId = "ca-app-pub-3940256099942544/6300978111";
-            AdmobInterstitialUnitId = "ca-app-pub-3940256099942544/1033173712";
-            AdmobRewardedUnitId = "ca-app-pub-3940256099942544/5224354917";
-            AdmobRewardedInterstitialUnitId = "ca-app-pub-3940256099942544/5354046379";
-            AdmobAppOpenAdUnitId = "ca-app-pub-3940256099942544/3419835294";
 
-            MaxSdkKey = "sVWGuOQVG4gzyhb-2Qb6sRTv8qavlPzA-5V-1DcTfCWvHWTNRTTB12ENHdoQyLpX5rp1LVcPGq9Nol8469q4z7";
-            MaxInterstitialAdUnitId = "f7794de01adb3bac";
-            MaxRewardedAdUnitId = "2ac7a59f9db948ee";
-            MaxRewardedInterstitialAdUnitId = "2ac7a59f9db948ee";
-            MaxBannerAdUnitId = "a7b90d54cef49c8a";
-            MaxMRecAdUnitId = "bcb5a19fc4a78113";
+        if (GetComponent<AdmobManager>() == null)
+        {
+            gameObject.AddComponent<AdmobManager>();
         }
-        gameObject.AddComponent<AdmobManager>();
         if (useMaxAds) 
         {
             //gameObject.AddComponent<MediationManager>();
@@ -108,28 +126,26 @@ public class AdsManager : MonoBehaviour
 
     public void RunInterstitialAd()
     {
-        if (PlayerPrefs.GetInt("noAds", 0) == 1) 
+        if (PlayerPrefs.GetInt("noAds", 0) == 1 || TCSave.NoAds) 
         {
-            Debug.Log("No ads bundle bought");
+            Debug.Log("[AdsManager] No ads active — skipping interstitial");
             return;
         }
 
-        if (admobInterstitial)
+        if (admobInterstitial && AdmobManager.Instance != null)
         {
-            if (AdmobManager.Instance.ShowInterstitialAd() == true)
+            if (AdmobManager.Instance.ShowInterstitialAd())
             {
-                Debug.Log("Admob Interstitial Ran");
+                Debug.Log("[AdsManager] Admob Interstitial Ran");
             }
-
-            else if (maxInterstitial)
+            else
             {
-                Debug.Log("Max Interstitial Ran");
-                //MediationManager.instance.ShowInterstitialMax();
+                Debug.LogWarning("[AdsManager] Admob Interstitial was not ready yet — preloading");
             }
         }
         else if (maxInterstitial)
         {
-            Debug.Log("Max Interstitial Ran");
+            Debug.Log("[AdsManager] Max Interstitial Ran");
             //MediationManager.instance.ShowInterstitialMax();
         }
     }
@@ -150,43 +166,29 @@ public class AdsManager : MonoBehaviour
 
     public void RunBannerAd()
     {
-        if (PlayerPrefs.GetInt("noAds", 0) == 1)
+        if (PlayerPrefs.GetInt("noAds", 0) == 1 || TCSave.NoAds)
         {
-            Debug.Log("No ads bundle bought");
+            Debug.Log("[AdsManager] No ads active — skipping banner");
             return;
         }
 
-        if (!admobBan && !maxBan)
+        if (admobBanner && AdmobManager.Instance != null)
         {
-            if (admobBanner)
-            {
-                if (AdmobManager.Instance.showBannerAd() == true)
-                {
-                    Debug.Log("Admob Banner Ran");
-                    admobBan = true;
-                }
-                else if (maxBanner)
-                {
-                    Debug.Log("Max Banner Ran");
-                    //MediationManager.instance.ShowBannerMax();
-                    maxBan = true;
-                }
-            }
-            else if (maxBanner)
-            {
-                Debug.Log("Max Banner Ran");
-                //MediationManager.instance.ShowBannerMax();
-                maxBan = true;
-            }
+            AdmobManager.Instance.showBannerAd();
+            admobBan = true;
+        }
+        else if (maxBanner)
+        {
+            Debug.Log("Max Banner Ran");
+            maxBan = true;
         }
     }
 
     public void HideBanner()
     {
-        if (admobBan)
+        if (admobBan && AdmobManager.Instance != null)
         {
-            AdmobManager.Instance.DestroyBannerView();
-            AdmobManager.Instance.LoadBannerAd();
+            AdmobManager.Instance.HideBannerAd();
             admobBan = false;
         }
         if (maxBan) 
@@ -199,24 +201,22 @@ public class AdsManager : MonoBehaviour
     public bool RunRewardedAd(Action rewardCallback)
     {
         bool available = false;
-        if (admobRewarded)
+        if (admobRewarded && AdmobManager.Instance != null)
         {
-            if (AdmobManager.Instance.ShowRewardedAd(rewardCallback) == true)
+            if (AdmobManager.Instance.ShowRewardedAd(rewardCallback))
             {
-                Debug.Log("Admob Rewarded Ran");
+                Debug.Log("[AdsManager] Admob Rewarded Ran");
                 available = true;
             }
-            else if (maxRewarded)
+            else
             {
-                Debug.Log("Max Rewarded Ran");
-                available = false; // MAX not integrated: report unavailable so caller can fall back
-                //MediationManager.instance.ShowRewardedAdMax();
+                Debug.LogWarning("[AdsManager] Admob Rewarded was not ready yet — preloading");
             }
         }
         else if (maxRewarded)
         {
-            Debug.Log("Max Rewarded Ran");
-            available = false; // MAX not integrated
+            Debug.Log("[AdsManager] Max Rewarded Ran");
+            available = false; // MAX not integrated: report unavailable so caller can fall back
             //MediationManager.instance.ShowRewardedAdMax();
         }
         return available;
@@ -309,13 +309,21 @@ public class AdsManager : MonoBehaviour
         moneytext.text = "Total Reward: " + money.ToString();
     }
 
-    /// Google's documented test units: https://developers.google.com/admob/unity/test-ads
+    /// Google's documented test units for Android & iOS: https://developers.google.com/admob/unity/test-ads
     public void ApplyOfficialTestIds()
     {
+#if UNITY_IOS || UNITY_IPHONE
+        AdmobBannerUnitId = "ca-app-pub-3940256099942544/2934735716";
+        AdmobInterstitialUnitId = "ca-app-pub-3940256099942544/4411468910";
+        AdmobRewardedUnitId = "ca-app-pub-3940256099942544/1712485313";
+        AdmobRewardedInterstitialUnitId = "ca-app-pub-3940256099942544/6978759866";
+        AdmobAppOpenAdUnitId = "ca-app-pub-3940256099942544/5662855259";
+#else
         AdmobBannerUnitId = "ca-app-pub-3940256099942544/6300978111";
         AdmobInterstitialUnitId = "ca-app-pub-3940256099942544/1033173712";
         AdmobRewardedUnitId = "ca-app-pub-3940256099942544/5224354917";
         AdmobRewardedInterstitialUnitId = "ca-app-pub-3940256099942544/5354046379";
         AdmobAppOpenAdUnitId = "ca-app-pub-3940256099942544/3419835294";
+#endif
     }
 }

@@ -30,26 +30,18 @@ public class TCCoinMagnet : MonoBehaviour
     public float AttractionRadius => 40.0f;
     public float AttractionSpeed => 32.0f;
 
-    // Spider Shockwave parameters:
-    // Concentric expanding silver magnetic shockwave rings and 8 electric bolts around the spider
-    const int SubtleWaveCount = 3;
-    const float WaveLoopPeriod = 1.40f;
-    const int BoltCount = 8;
-
-    struct ShockwaveWave
-    {
-        public Transform root;
-        public MeshRenderer renderer;
-        public Material material;
-    }
-
-    struct MagnetBolt
-    {
-        public Transform root;
-        public MeshRenderer renderer;
-        public Material material;
-        public float baseAngle;
-    }
+    // Shield Bubble parameters (electric cyan forcefield bubble around spider, scaled down 40%):
+    const float BaseShieldDiameter = 0.504f; // 0.84f - 40%
+    GameObject shieldObj;
+    MeshRenderer shieldRenderer;
+    Material shieldMat;
+    GameObject shieldInnerObj;
+    MeshRenderer shieldInnerRenderer;
+    Material shieldInnerMat;
+    float shieldSpinAngle = 0f;
+    float shieldInnerAngle = 0f;
+    float shieldPulseTimer = 0f;
+    static Mesh cachedShieldQuadMesh;
 
     struct LightningArc
     {
@@ -61,15 +53,10 @@ public class TCCoinMagnet : MonoBehaviour
     float activeTimeRemaining = 0f;
     float totalActiveDuration = 8f;
     float emissionTimer = 0f;
-    float boltOrbitAngle = 0f;
     Transform spiderTransform;
     GameObject magnetAuraObj;
 
-    ShockwaveWave[] subtleShockwaves;
-    MagnetBolt[] magnetBolts;
     LightningArc[] lightningArcs;
-    static Mesh cachedSubtleWaveMesh;
-    static Mesh cachedBoltQuadMesh;
 
     void Awake()
     {
@@ -105,7 +92,6 @@ public class TCCoinMagnet : MonoBehaviour
         totalActiveDuration = Duration;
         activeTimeRemaining = totalActiveDuration;
         emissionTimer = 0f;
-        boltOrbitAngle = 0f;
         TCSfx.Play("cooldown_activate", 0.9f);
         TCFx.Shake(0.08f);
 
@@ -116,6 +102,8 @@ public class TCCoinMagnet : MonoBehaviour
         if (magnetAuraObj != null)
         {
             magnetAuraObj.SetActive(true);
+            if (shieldObj != null) shieldObj.SetActive(true);
+            if (shieldInnerObj != null) shieldInnerObj.SetActive(true);
         }
     }
 
@@ -147,72 +135,10 @@ public class TCCoinMagnet : MonoBehaviour
                     magnetAuraObj.transform.position = sp.position + sp.up * 0.04f;
                     magnetAuraObj.transform.rotation = sp.rotation;
 
-                    // 1. Shimmering silver circular shockwaves (gleaming platinum / silver-white ripples)
-                    if (subtleShockwaves != null)
-                    {
-                        for (int i = 0; i < subtleShockwaves.Length; i++)
-                        {
-                            var wave = subtleShockwaves[i];
-                            if (wave.root == null || wave.material == null) continue;
+                    // Electric Cyan Shield Bubble around the spider (clean transparent forcefield)
+                    UpdateShieldVisuals(sp, dt, globalEnvelope);
 
-                            float phaseOffset = (float)i / SubtleWaveCount;
-                            float u = Mathf.Repeat((emissionTimer / WaveLoopPeriod) + phaseOffset, 1.0f);
-
-                            // Smooth ease-out expansion from spider body out past the legs (0.10m to 0.32m), scaled by transition envelope
-                            float ease = 1f - Mathf.Pow(1f - u, 2.0f);
-                            float radius = Mathf.Lerp(0.10f, 0.32f, ease) * Mathf.Lerp(0.4f, 1.0f, globalEnvelope);
-                            wave.root.localScale = new Vector3(radius, 1f, radius);
-
-                            // Crisp bell curve with punchy opacity, smoothly faded by ease-in / ease-out
-                            float alpha = Mathf.Sin(u * Mathf.PI);
-                            alpha = Mathf.Pow(alpha, 1.2f) * 0.85f * globalEnvelope;
-
-                            // Metallic platinum / cool steel with a bright chrome crest
-                            Color waveCol = Color.Lerp(
-                                new Color(0.92f, 0.95f, 1.0f, alpha),
-                                new Color(0.55f, 0.62f, 0.72f, alpha * 0.78f),
-                                u
-                            );
-
-                            SetMatColor(wave.material, waveCol);
-                        }
-                    }
-
-                    // 2. 8 Electric Bolt Icons pulsing around the spider in gleaming silver-white
-                    if (magnetBolts != null)
-                    {
-                        boltOrbitAngle += dt * 32f;
-                        float basePulseTime = Time.unscaledTime * 7f;
-
-                        for (int i = 0; i < magnetBolts.Length; i++)
-                        {
-                            var bolt = magnetBolts[i];
-                            if (bolt.root == null || bolt.material == null) continue;
-
-                            float angleDeg = bolt.baseAngle + boltOrbitAngle;
-                            float angleRad = angleDeg * Mathf.Deg2Rad;
-
-                            // Dynamic rhythmic electric pulse for each bolt, scaled by transition envelope
-                            float pulse = 0.5f + 0.5f * Mathf.Sin(basePulseTime + i * 0.785f);
-                            float radius = (0.28f + 0.03f * pulse) * Mathf.Lerp(0.45f, 1.0f, globalEnvelope);
-                            float scale = Mathf.Lerp(0.70f, 0.98f, pulse) * globalEnvelope;
-
-                            bolt.root.localPosition = new Vector3(Mathf.Cos(angleRad) * radius, 0.005f, Mathf.Sin(angleRad) * radius);
-                            // Point the bolt outward radially away from the spider
-                            bolt.root.localRotation = Quaternion.Euler(0f, -angleDeg + 90f, 0f);
-                            bolt.root.localScale = Vector3.one * scale;
-
-                            // Shimmering silver electric bolt color with smooth fade
-                            float alpha = Mathf.Lerp(0.65f, 1.0f, pulse) * globalEnvelope;
-                            Color boltCol = Color.Lerp(
-                                new Color(0.85f, 0.92f, 1.0f, alpha),
-                                new Color(1.0f, 1.0f, 1.0f, alpha),
-                                pulse
-                            );
-                            SetMatColor(bolt.material, boltCol);
-                        }
-                    }
-
+                    // 3D crackling electric discharge arcs
                     TickLightningArcs(dt, globalEnvelope);
                 }
 
@@ -245,68 +171,41 @@ public class TCCoinMagnet : MonoBehaviour
         magnetAuraObj.transform.position = sp.position + sp.up * 0.04f;
         magnetAuraObj.transform.rotation = sp.rotation;
 
-        var waveMesh = GetOrCreateSubtleShockwaveMesh();
-        var addShader = FindAdditiveShader();
+        // 0. Electric Cyan Shield Bubble (camera-facing forcefield bubble with transparent center & perimeter sparks)
+        var shieldMesh = GetOrCreateShieldQuadMesh();
+        var shieldTex = Resources.Load<Texture2D>("TCUI/shield_bubble");
+        var shieldShader = FindShieldShader();
 
-        // 1. Silver Shockwave Ripple Rings (concentric hollow circular rings)
-        subtleShockwaves = new ShockwaveWave[SubtleWaveCount];
-        for (int i = 0; i < SubtleWaveCount; i++)
-        {
-            var waveObj = new GameObject("Subtle_Shockwave_" + i);
-            waveObj.transform.SetParent(magnetAuraObj.transform, false);
-            waveObj.transform.localPosition = new Vector3(0, 0.002f * i, 0);
+        shieldObj = new GameObject("Magnet_Shield_Bubble");
+        shieldObj.transform.SetParent(magnetAuraObj.transform, false);
+        shieldObj.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+        var mfShield = shieldObj.AddComponent<MeshFilter>();
+        mfShield.sharedMesh = shieldMesh;
+        shieldRenderer = shieldObj.AddComponent<MeshRenderer>();
+        shieldMat = new Material(shieldShader) { name = "Magnet_Shield_Mat" };
+        if (shieldTex) shieldMat.mainTexture = shieldTex;
+        ConfigureShieldMaterial(shieldMat);
+        shieldRenderer.sharedMaterial = shieldMat;
+        shieldRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        shieldRenderer.receiveShadows = false;
+        shieldRenderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        shieldRenderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
-            var mf = waveObj.AddComponent<MeshFilter>();
-            mf.sharedMesh = waveMesh;
-
-            var mr = waveObj.AddComponent<MeshRenderer>();
-            var mat = new Material(addShader) { name = "SubtleWave_Mat_" + i };
-            if (mat.HasProperty("_MainTex")) mat.mainTexture = Texture2D.whiteTexture;
-            mr.sharedMaterial = mat;
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-            mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
-
-            subtleShockwaves[i] = new ShockwaveWave
-            {
-                root = waveObj.transform,
-                renderer = mr,
-                material = mat
-            };
-        }
-
-        // 2. 8 Electric Bolt Icons pulsing around the spider
-        var boltMesh = GetOrCreateBoltQuadMesh();
-        var boltTex = Resources.Load<Texture2D>("TCUI/icon_bolt");
-        magnetBolts = new MagnetBolt[BoltCount];
-
-        for (int i = 0; i < BoltCount; i++)
-        {
-            var boltObj = new GameObject("Magnet_Bolt_" + i);
-            boltObj.transform.SetParent(magnetAuraObj.transform, false);
-
-            var mf = boltObj.AddComponent<MeshFilter>();
-            mf.sharedMesh = boltMesh;
-
-            var mr = boltObj.AddComponent<MeshRenderer>();
-            var mat = new Material(addShader) { name = "MagnetBolt_Mat_" + i };
-            if (boltTex) mat.mainTexture = boltTex;
-            mr.sharedMaterial = mat;
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-            mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
-
-            float baseAng = i * (360f / BoltCount);
-            magnetBolts[i] = new MagnetBolt
-            {
-                root = boltObj.transform,
-                renderer = mr,
-                material = mat,
-                baseAngle = baseAng
-            };
-        }
+        // Inner counter-rotating shield layer for rich 3D plasma depth
+        shieldInnerObj = new GameObject("Magnet_Shield_Inner");
+        shieldInnerObj.transform.SetParent(magnetAuraObj.transform, false);
+        shieldInnerObj.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+        var mfInner = shieldInnerObj.AddComponent<MeshFilter>();
+        mfInner.sharedMesh = shieldMesh;
+        shieldInnerRenderer = shieldInnerObj.AddComponent<MeshRenderer>();
+        shieldInnerMat = new Material(shieldShader) { name = "Magnet_Shield_Inner_Mat" };
+        if (shieldTex) shieldInnerMat.mainTexture = shieldTex;
+        ConfigureShieldMaterial(shieldInnerMat);
+        shieldInnerRenderer.sharedMaterial = shieldInnerMat;
+        shieldInnerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        shieldInnerRenderer.receiveShadows = false;
+        shieldInnerRenderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        shieldInnerRenderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
         CreateLightningArcs();
     }
@@ -326,44 +225,45 @@ public class TCCoinMagnet : MonoBehaviour
     {
         if (magnetAuraObj == null) yield break;
         magnetAuraObj.SetActive(true);
-        if (magnetBolts != null)
-            foreach (var b in magnetBolts)
-                if (b.root) b.root.gameObject.SetActive(false);
 
-        float dur = 0.28f;
+        float dur = 0.30f;
         for (float t = 0f; t < dur; t += Time.unscaledDeltaTime)
         {
             float k = t / dur;
-            if (subtleShockwaves != null)
+            float fade = 1f - k;
+
+            // Shield bubble expansion & shatter fade
+            if (shieldObj != null)
             {
-                for (int i = 0; i < subtleShockwaves.Length; i++)
-                {
-                    var wave = subtleShockwaves[i];
-                    if (wave.root == null || wave.material == null) continue;
-                    float radius = Mathf.Lerp(0.22f, 0.55f, k);
-                    wave.root.localScale = new Vector3(radius, 1f, radius);
-                    SetMatColor(wave.material, new Color(1f, 1f, 1f, 1f - k));
-                }
+                float popScale = Mathf.Lerp(BaseShieldDiameter, BaseShieldDiameter * 1.55f, Mathf.Sqrt(k));
+                shieldObj.transform.localScale = Vector3.one * popScale;
+                SetShieldMatColor(shieldMat, new Color(1f, 1f, 1f, fade * 0.95f));
             }
-            TickLightningArcs(0.03f, 1f - k);
+            if (shieldInnerObj != null)
+            {
+                float popInner = Mathf.Lerp(BaseShieldDiameter * 0.88f, BaseShieldDiameter * 1.70f, Mathf.Sqrt(k));
+                shieldInnerObj.transform.localScale = Vector3.one * popInner;
+                SetShieldMatColor(shieldInnerMat, new Color(0.85f, 0.98f, 1f, fade * 0.60f));
+            }
+
+            TickLightningArcs(0.03f, fade);
             yield return null;
         }
+        if (shieldObj != null) shieldObj.SetActive(false);
+        if (shieldInnerObj != null) shieldInnerObj.SetActive(false);
         if (magnetAuraObj) magnetAuraObj.SetActive(false);
-        if (magnetBolts != null)
-            foreach (var b in magnetBolts)
-                if (b.root) b.root.gameObject.SetActive(true);
     }
 
     void CreateLightningArcs()
     {
-        const int n = 5;
+        const int n = 8;
         lightningArcs = new LightningArc[n];
         var shader = FindAdditiveShader();
         for (int i = 0; i < n; i++)
         {
             var go = new GameObject("Magnet_Arc_" + i);
             go.transform.SetParent(magnetAuraObj.transform, false);
-            go.transform.localPosition = new Vector3(0f, -0.018f, 0f);
+            go.transform.localPosition = new Vector3(0f, 0.02f, 0f);
             var lr = go.AddComponent<LineRenderer>();
             lr.positionCount = 6;
             lr.useWorldSpace = false;
@@ -372,18 +272,18 @@ public class TCCoinMagnet : MonoBehaviour
             lr.receiveShadows = false;
             lr.numCapVertices = 2;
             lr.numCornerVertices = 2;
-            lr.widthMultiplier = 0.012f;
+            lr.widthMultiplier = 0.010f;
             var mat = new Material(shader) { name = "MagnetArc_Mat_" + i };
             if (mat.HasProperty("_MainTex")) mat.mainTexture = Texture2D.whiteTexture;
-            SetMatColor(mat, new Color(0.85f, 0.95f, 1f, 0.9f));
+            SetMatColor(mat, new Color(0.4f, 0.92f, 1f, 0.95f));
             lr.sharedMaterial = mat;
-            lr.startColor = new Color(0.95f, 0.98f, 1f, 0.95f);
-            lr.endColor = new Color(0.55f, 0.75f, 1f, 0.15f);
+            lr.startColor = new Color(1f, 1f, 1f, 0.98f);
+            lr.endColor = new Color(0.2f, 0.85f, 1f, 0.5f);
             lightningArcs[i] = new LightningArc
             {
                 line = lr,
                 phase = Random.value * 10f,
-                baseAngle = i * (360f / n) + Random.Range(-12f, 12f)
+                baseAngle = i * (360f / n) + Random.Range(-10f, 10f)
             };
         }
     }
@@ -395,146 +295,32 @@ public class TCCoinMagnet : MonoBehaviour
         {
             var arc = lightningArcs[i];
             if (arc.line == null) continue;
-            arc.phase += dt * 18f;
-            // Flicker: some frames the bolt is hidden so it crackles.
-            bool on = Mathf.Sin(arc.phase * 7.3f + i) > -0.15f;
+            arc.phase += dt * 24f;
+            // Flicker: some frames the bolt is hidden so it crackles realistically.
+            bool on = Mathf.Sin(arc.phase * 8.5f + i * 1.3f) > -0.2f;
             arc.line.enabled = on && alphaMul > 0.05f;
             if (!on) continue;
-            float ang = (arc.baseAngle + emissionTimer * 40f + i * 8f) * Mathf.Deg2Rad;
-            float inner = 0.08f;
-            float outer = 0.26f + 0.04f * Mathf.Sin(arc.phase);
+            float ang = (arc.baseAngle + emissionTimer * 45f + i * 15f) * Mathf.Deg2Rad;
+            float inner = 0.024f;
+            float outer = 0.216f + 0.024f * Mathf.Sin(arc.phase);
             var pts = new Vector3[6];
             for (int s = 0; s < 6; s++)
             {
                 float u = s / 5f;
                 float r = Mathf.Lerp(inner, outer, u);
-                float jag = (s > 0 && s < 5) ? (Mathf.PerlinNoise(arc.phase * 0.7f, s * 1.7f + i) - 0.5f) * 0.07f : 0f;
+                float jag = (s > 0 && s < 5) ? (Mathf.PerlinNoise(arc.phase * 0.9f, s * 1.8f + i) - 0.5f) * 0.054f : 0f;
+                float jagY = (s > 0 && s < 5) ? (Mathf.PerlinNoise(s * 2.1f, arc.phase * 0.9f + i) - 0.5f) * 0.048f : 0f;
                 float a = ang + jag * 3f;
-                // Sit under the ring, slightly dropped on Y.
-                pts[s] = new Vector3(Mathf.Cos(a) * r, -0.01f - 0.012f * u, Mathf.Sin(a) * r);
+                pts[s] = new Vector3(Mathf.Cos(a) * r, 0.02f + jagY, Mathf.Sin(a) * r);
             }
             arc.line.SetPositions(pts);
-            float aCol = Mathf.Clamp01(alphaMul) * (0.55f + 0.45f * Random.value);
-            var c0 = new Color(0.95f, 0.98f, 1f, aCol);
-            var c1 = new Color(0.55f, 0.78f, 1f, aCol * 0.2f);
+            float aCol = Mathf.Clamp01(alphaMul) * (0.65f + 0.35f * Random.value);
+            var c0 = new Color(1.0f, 1.0f, 1.0f, aCol);
+            var c1 = new Color(0.2f, 0.85f, 1.0f, aCol * 0.7f);
             arc.line.startColor = c0;
             arc.line.endColor = c1;
             lightningArcs[i] = arc;
         }
-    }
-
-    /// <summary>
-    /// Creates a smooth, planar annulus ripple mesh with soft radial alpha falloff and silver-white vertex tint.
-    /// Double-ring crest: Inner rim (0.80) = alpha 0, Crest (0.90 to 0.95) = alpha 0.9, Outer rim (1.00) = alpha 0.
-    /// Completely hollow middle so there is zero obstruction in the center.
-    /// </summary>
-    static Mesh GetOrCreateSubtleShockwaveMesh()
-    {
-        if (cachedSubtleWaveMesh != null) return cachedSubtleWaveMesh;
-
-        int segments = 48;
-        var mesh = new Mesh { name = "Subtle_Shockwave_Mesh" };
-
-        // Defined ring thickness (20% of radius) for sharp, clear visibility on mobile screens
-        float[] radii = { 0.80f, 0.90f, 0.95f, 1.00f };
-        Color[] baseColors = {
-            new Color(0.70f, 0.76f, 0.85f, 0.0f),  // inner edge (transparent steel)
-            new Color(0.98f, 0.99f, 1.0f, 1.00f), // sharp inner crest (chrome highlight)
-            new Color(0.62f, 0.70f, 0.82f, 0.95f), // outer crest (cool metal)
-            new Color(0.40f, 0.48f, 0.58f, 0.0f)  // outer edge
-        };
-
-        int ringCount = radii.Length;
-        int vertCount = (segments + 1) * ringCount;
-        var vertices = new Vector3[vertCount];
-        var colors = new Color[vertCount];
-        var uvs = new Vector2[vertCount];
-
-        for (int r = 0; r < ringCount; r++)
-        {
-            float rad = radii[r];
-            Color c = baseColors[r];
-            for (int s = 0; s <= segments; s++)
-            {
-                float angle = (s / (float)segments) * Mathf.PI * 2f;
-                int idx = r * (segments + 1) + s;
-                vertices[idx] = new Vector3(Mathf.Cos(angle) * rad, 0f, Mathf.Sin(angle) * rad);
-                colors[idx] = c;
-                uvs[idx] = new Vector2(s / (float)segments, r / (float)(ringCount - 1));
-            }
-        }
-
-        int quadCount = (ringCount - 1) * segments;
-        var triangles = new int[quadCount * 12]; // double-sided
-        int tIdx = 0;
-
-        for (int r = 0; r < ringCount - 1; r++)
-        {
-            int rowA = r * (segments + 1);
-            int rowB = (r + 1) * (segments + 1);
-            for (int s = 0; s < segments; s++)
-            {
-                int a0 = rowA + s;
-                int a1 = rowA + s + 1;
-                int b0 = rowB + s;
-                int b1 = rowB + s + 1;
-
-                // Front
-                triangles[tIdx++] = a0; triangles[tIdx++] = b0; triangles[tIdx++] = a1;
-                triangles[tIdx++] = a1; triangles[tIdx++] = b0; triangles[tIdx++] = b1;
-
-                // Back
-                triangles[tIdx++] = a0; triangles[tIdx++] = a1; triangles[tIdx++] = b0;
-                triangles[tIdx++] = a1; triangles[tIdx++] = b1; triangles[tIdx++] = b0;
-            }
-        }
-
-        mesh.vertices = vertices;
-        mesh.colors = colors;
-        mesh.uv = uvs;
-        mesh.triangles = triangles;
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-
-        cachedSubtleWaveMesh = mesh;
-        return cachedSubtleWaveMesh;
-    }
-
-    static Mesh GetOrCreateBoltQuadMesh()
-    {
-        if (cachedBoltQuadMesh != null) return cachedBoltQuadMesh;
-
-        var mesh = new Mesh { name = "Magnet_Bolt_Quad" };
-        float halfW = 0.050f;
-        float halfH = 0.075f;
-        mesh.vertices = new Vector3[]
-        {
-            new Vector3(-halfW, 0f, -halfH),
-            new Vector3( halfW, 0f, -halfH),
-            new Vector3(-halfW, 0f,  halfH),
-            new Vector3( halfW, 0f,  halfH)
-        };
-        mesh.uv = new Vector2[]
-        {
-            new Vector2(0f, 0f),
-            new Vector2(1f, 0f),
-            new Vector2(0f, 1f),
-            new Vector2(1f, 1f)
-        };
-        mesh.normals = new Vector3[]
-        {
-            Vector3.up, Vector3.up, Vector3.up, Vector3.up
-        };
-        mesh.triangles = new int[]
-        {
-            // Front (visible from +Y)
-            0, 2, 1, 2, 3, 1,
-            // Back (visible from -Y)
-            0, 1, 2, 2, 1, 3
-        };
-        mesh.RecalculateBounds();
-        cachedBoltQuadMesh = mesh;
-        return cachedBoltQuadMesh;
     }
 
     static void SetMatColor(Material mat, Color c)
@@ -553,6 +339,106 @@ public class TCCoinMagnet : MonoBehaviour
             ?? Shader.Find("Particles/Standard Unlit")
             ?? Shader.Find("Universal Render Pipeline/Unlit")
             ?? Shader.Find("Sprites/Default");
+    }
+
+    void UpdateShieldVisuals(Transform sp, float dt, float globalEnvelope)
+    {
+        if (shieldObj == null || sp == null) return;
+
+        // Position shield centered on spider body
+        Vector3 spiderCenter = sp.position + sp.up * 0.07f;
+        shieldObj.transform.position = spiderCenter;
+
+        // Animate smooth rotation of outer electric lightning rim and inner energy
+        shieldSpinAngle += dt * 22f;
+        shieldInnerAngle -= dt * 15f;
+        shieldPulseTimer += dt * 4.5f;
+
+        // Breathing electric pulse + micro-vibration
+        float pulse = 1f + 0.035f * Mathf.Sin(shieldPulseTimer);
+        float jitter = (Mathf.PerlinNoise(shieldPulseTimer * 3.2f, 0f) - 0.5f) * 0.015f;
+        float currentDiameter = (BaseShieldDiameter * (pulse + jitter)) * globalEnvelope;
+
+        var cam = Camera.main;
+        Quaternion camRot = (cam != null) ? cam.transform.rotation : sp.rotation;
+
+        // Outer shield: camera-facing billboard quad
+        shieldObj.transform.rotation = camRot * Quaternion.Euler(0f, 0f, shieldSpinAngle);
+        shieldObj.transform.localScale = Vector3.one * currentDiameter;
+
+        // Vibrant cyan-electric glow tint with smooth envelope fade
+        Color outerColor = new Color(1f, 1f, 1f, globalEnvelope);
+        SetShieldMatColor(shieldMat, outerColor);
+
+        // Inner shield: slightly smaller counter-rotating layer for 3D plasma depth
+        if (shieldInnerObj != null)
+        {
+            shieldInnerObj.transform.position = spiderCenter;
+            shieldInnerObj.transform.rotation = camRot * Quaternion.Euler(0f, 0f, shieldInnerAngle);
+            float innerDiameter = currentDiameter * 0.88f * (1f + 0.02f * Mathf.Cos(shieldPulseTimer * 1.4f));
+            shieldInnerObj.transform.localScale = Vector3.one * innerDiameter;
+
+            Color innerColor = new Color(0.85f, 0.98f, 1f, globalEnvelope * 0.50f);
+            SetShieldMatColor(shieldInnerMat, innerColor);
+        }
+    }
+
+    static void ConfigureShieldMaterial(Material mat)
+    {
+        if (!mat) return;
+        if (mat.HasProperty("_Additive")) mat.SetFloat("_Additive", 0.40f);
+        if (mat.HasProperty("_Boost")) mat.SetFloat("_Boost", 1.20f);
+        if (mat.HasProperty("_DepthPull")) mat.SetFloat("_DepthPull", 0.10f);
+    }
+
+    static Shader FindShieldShader()
+    {
+        return Shader.Find("TallCrawl/FX Particle")
+            ?? Shader.Find("Legacy Shaders/Particles/Alpha Blended Premultiply")
+            ?? Shader.Find("Sprites/Default")
+            ?? Shader.Find("Mobile/Particles/Alpha Blended")
+            ?? FindAdditiveShader();
+    }
+
+    static void SetShieldMatColor(Material mat, Color c)
+    {
+        if (!mat) return;
+        if (mat.HasProperty("_TintColor")) mat.SetColor("_TintColor", c);
+        if (mat.HasProperty("_Color")) mat.SetColor("_Color", c);
+        mat.color = c;
+    }
+
+    static Mesh GetOrCreateShieldQuadMesh()
+    {
+        if (cachedShieldQuadMesh != null) return cachedShieldQuadMesh;
+        var mesh = new Mesh { name = "Magnet_Shield_Quad_Mesh" };
+        float h = 0.5f;
+        mesh.vertices = new Vector3[]
+        {
+            new Vector3(-h, -h, 0f),
+            new Vector3( h, -h, 0f),
+            new Vector3(-h,  h, 0f),
+            new Vector3( h,  h, 0f)
+        };
+        mesh.uv = new Vector2[]
+        {
+            new Vector2(0f, 0f),
+            new Vector2(1f, 0f),
+            new Vector2(0f, 1f),
+            new Vector2(1f, 1f)
+        };
+        mesh.normals = new Vector3[]
+        {
+            -Vector3.forward, -Vector3.forward, -Vector3.forward, -Vector3.forward
+        };
+        mesh.triangles = new int[]
+        {
+            0, 2, 1, 2, 3, 1,
+            0, 1, 2, 2, 1, 3
+        };
+        mesh.RecalculateBounds();
+        cachedShieldQuadMesh = mesh;
+        return cachedShieldQuadMesh;
     }
 
     // =========================================================================

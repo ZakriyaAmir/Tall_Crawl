@@ -42,140 +42,211 @@ public class TCFx : MonoBehaviour
 
 /// <summary>
 /// Arcade-style pure white flash mask when enemies or branches are smashed/destroyed.
-/// Uses an unlit white material over a temporary ghost hierarchy of the target,
-/// so the original target can immediately disable/pool while a brilliant pure-white mask
-/// flashes for a fraction of a second and cleanly self-destructs.
+/// <summary>
+/// Spawns a smooth fade-away ghost for branches or enemies when hit/destroyed by the spider.
+/// Clones the renderers, preserving their textures and colors with a transparent fade shader,
+/// and smoothly animates alpha from 1.0 down to 0.0 over 0.5s before cleanly destroying itself.
 /// </summary>
 public static class TCHitFlash
 {
-    static Material whiteMaskMat;
+    static Shader fadeShader;
 
-    public static Material WhiteMaskMat
+    public static Shader FadeShader
     {
         get
         {
-            if (!whiteMaskMat)
+            if (!fadeShader)
             {
-                Shader s = Shader.Find("Universal Render Pipeline/Unlit")
-                    ?? Shader.Find("Unlit/Color")
+                fadeShader = Shader.Find("TallCrawl/TCFadeEntity")
                     ?? Shader.Find("Sprites/Default")
-                    ?? Shader.Find("Mobile/Particles/Alpha Blended");
-
-                whiteMaskMat = new Material(s);
-                whiteMaskMat.name = "TC_HitFlash_WhiteMask";
-
-                if (whiteMaskMat.HasProperty("_Color")) whiteMaskMat.SetColor("_Color", Color.white);
-                if (whiteMaskMat.HasProperty("_BaseColor")) whiteMaskMat.SetColor("_BaseColor", Color.white);
-                if (whiteMaskMat.HasProperty("_EmissionColor"))
-                {
-                    whiteMaskMat.SetColor("_EmissionColor", Color.white * 2f);
-                    whiteMaskMat.EnableKeyword("_EMISSION");
-                }
+                    ?? Shader.Find("Mobile/Particles/Alpha Blended")
+                    ?? Shader.Find("Unlit/Transparent");
             }
-            return whiteMaskMat;
+            return fadeShader;
         }
     }
 
     /// <summary>
-    /// Spawns an immediate pure white flash mask for the given target GameObject.
-    /// Clones renderers into a temporary flash ghost that holds pure white for duration, then destroys itself.
+    /// Backward-compatible alias for FadeAndDestroy.
     /// </summary>
-    public static void FlashAndDestroy(GameObject target, float duration = 0.12f)
+    public static void FlashAndDestroy(GameObject target, float duration = 0.5f)
+    {
+        FadeAndDestroy(target, duration);
+    }
+
+    /// <summary>
+    /// Spawns an immediate visual ghost of the target GameObject that smoothly fades away over duration (0.5f).
+    /// Preserves original mesh, baked skinned poses, textures, and color tints while fading alpha to zero.
+    /// </summary>
+    public static void FadeAndDestroy(GameObject target, float duration = 0.5f)
     {
         if (!target) return;
 
         var renderers = target.GetComponentsInChildren<Renderer>(false);
         if (renderers == null || renderers.Length == 0) return;
 
-        var flashHost = new GameObject("HitFlash_" + target.name);
-        flashHost.transform.position = target.transform.position;
-        flashHost.transform.rotation = target.transform.rotation;
-        flashHost.transform.localScale = target.transform.lossyScale;
+        var fadeHost = new GameObject("HitFade_" + target.name);
+        fadeHost.transform.position = Vector3.zero;
+        fadeHost.transform.rotation = Quaternion.identity;
+        fadeHost.transform.localScale = Vector3.one;
 
-        Material wMat = WhiteMaskMat;
-        var createdRenderers = new List<Renderer>();
+        Shader shader = FadeShader;
+        var createdMats = new List<Material>();
+        var baseColors = new List<Color>();
+        var bakedMeshes = new List<Mesh>();
+        int renderersCloned = 0;
 
         foreach (var r in renderers)
         {
             if (!r || !r.enabled || !r.gameObject.activeInHierarchy) continue;
             if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer) continue;
 
+            Mesh meshToRender = null;
             if (r is MeshRenderer mr)
             {
                 var mf = mr.GetComponent<MeshFilter>();
                 if (!mf || !mf.sharedMesh) continue;
-
-                var go = new GameObject(mr.name + "_Flash");
-                go.transform.SetParent(flashHost.transform, false);
-                go.transform.position = mr.transform.position;
-                go.transform.rotation = mr.transform.rotation;
-                go.transform.localScale = mr.transform.lossyScale;
-
-                var nmf = go.AddComponent<MeshFilter>();
-                nmf.sharedMesh = mf.sharedMesh;
-
-                var nmr = go.AddComponent<MeshRenderer>();
-                int matCount = mr.sharedMaterials != null ? Mathf.Max(1, mr.sharedMaterials.Length) : 1;
-                var mats = new Material[matCount];
-                for (int m = 0; m < matCount; m++) mats[m] = wMat;
-                nmr.sharedMaterials = mats;
-                nmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                nmr.receiveShadows = false;
-                createdRenderers.Add(nmr);
+                meshToRender = mf.sharedMesh;
             }
             else if (r is SkinnedMeshRenderer smr)
             {
                 if (!smr.sharedMesh) continue;
-
-                var go = new GameObject(smr.name + "_Flash");
-                go.transform.SetParent(flashHost.transform, false);
-                go.transform.position = smr.transform.position;
-                go.transform.rotation = smr.transform.rotation;
-                go.transform.localScale = smr.transform.lossyScale;
-
-                var nmf = go.AddComponent<MeshFilter>();
-                Mesh bakedMesh = new Mesh();
-                smr.BakeMesh(bakedMesh);
-                nmf.sharedMesh = bakedMesh;
-
-                var nmr = go.AddComponent<MeshRenderer>();
-                int matCount = smr.sharedMaterials != null ? Mathf.Max(1, smr.sharedMaterials.Length) : 1;
-                var mats = new Material[matCount];
-                for (int m = 0; m < matCount; m++) mats[m] = wMat;
-                nmr.sharedMaterials = mats;
-                nmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                nmr.receiveShadows = false;
-                createdRenderers.Add(nmr);
+                Mesh baked = new Mesh();
+                smr.BakeMesh(baked);
+                bakedMeshes.Add(baked);
+                meshToRender = baked;
             }
+
+            if (!meshToRender) continue;
+
+            var go = new GameObject(r.name + "_FadeGhost");
+            go.transform.position = r.transform.position;
+            go.transform.rotation = r.transform.rotation;
+            go.transform.localScale = r.transform.lossyScale;
+            go.transform.SetParent(fadeHost.transform, true);
+
+            var nmf = go.AddComponent<MeshFilter>();
+            nmf.sharedMesh = meshToRender;
+
+            var nmr = go.AddComponent<MeshRenderer>();
+            var sharedMats = r.sharedMaterials;
+            int matCount = (sharedMats != null && sharedMats.Length > 0) ? sharedMats.Length : 1;
+            var matsForR = new Material[matCount];
+
+            for (int m = 0; m < matCount; m++)
+            {
+                Material orig = (sharedMats != null && m < sharedMats.Length) ? sharedMats[m] : null;
+                Material fMat = (shader != null) ? new Material(shader) : new Material(Shader.Find("Sprites/Default"));
+                fMat.name = "FadeMat_" + (orig ? orig.name : "Default");
+
+                Color col = Color.white;
+                Texture tex = null;
+                if (orig != null)
+                {
+                    if (orig.HasProperty("_MainTex") && orig.mainTexture != null)
+                        tex = orig.mainTexture;
+                    else if (orig.HasProperty("_BaseMap") && orig.GetTexture("_BaseMap") != null)
+                        tex = orig.GetTexture("_BaseMap");
+
+                    if (orig.HasProperty("_Color"))
+                        col = orig.GetColor("_Color");
+                    else if (orig.HasProperty("_BaseColor"))
+                        col = orig.GetColor("_BaseColor");
+                }
+
+                if (tex != null)
+                {
+                    fMat.mainTexture = tex;
+                    if (fMat.HasProperty("_BaseMap")) fMat.SetTexture("_BaseMap", tex);
+                }
+                if (fMat.HasProperty("_Color")) fMat.SetColor("_Color", col);
+                if (fMat.HasProperty("_BaseColor")) fMat.SetColor("_BaseColor", col);
+
+                matsForR[m] = fMat;
+                createdMats.Add(fMat);
+                baseColors.Add(col);
+            }
+
+            nmr.sharedMaterials = matsForR;
+            nmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            nmr.receiveShadows = false;
+            renderersCloned++;
         }
 
-        if (createdRenderers.Count == 0)
+        if (renderersCloned == 0)
         {
-            Object.Destroy(flashHost);
+            Object.Destroy(fadeHost);
             return;
         }
 
-        var runner = flashHost.AddComponent<TCHitFlashRunner>();
-        runner.StartFlash(flashHost, duration);
+        var runner = fadeHost.AddComponent<TCHitFlashRunner>();
+        runner.StartFade(fadeHost, createdMats, baseColors, bakedMeshes, duration);
+    }
+}
+
+public static class TCHitFade
+{
+    public static void FadeAndDestroy(GameObject target, float duration = 0.5f)
+    {
+        TCHitFlash.FadeAndDestroy(target, duration);
     }
 }
 
 public class TCHitFlashRunner : MonoBehaviour
 {
-    public void StartFlash(GameObject host, float duration)
+    public void StartFade(GameObject host, List<Material> mats, List<Color> baseColors, List<Mesh> bakedMeshes, float duration)
     {
-        StartCoroutine(FlashRoutine(host, duration));
+        StartCoroutine(FadeRoutine(host, mats, baseColors, bakedMeshes, duration));
     }
 
-    IEnumerator FlashRoutine(GameObject host, float duration)
+    IEnumerator FadeRoutine(GameObject host, List<Material> mats, List<Color> baseColors, List<Mesh> bakedMeshes, float duration)
     {
+        if (duration <= 0.001f) duration = 0.5f;
         float elapsed = 0f;
+
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float alpha = 1f - t;
+
+            if (mats != null && baseColors != null)
+            {
+                int count = Mathf.Min(mats.Count, baseColors.Count);
+                for (int i = 0; i < count; i++)
+                {
+                    var m = mats[i];
+                    if (m != null)
+                    {
+                        Color c = baseColors[i];
+                        c.a *= alpha;
+                        if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+                        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+                    }
+                }
+            }
             yield return null;
         }
 
-        Destroy(host);
+        // Clean up created material instances and baked meshes
+        if (mats != null)
+        {
+            for (int i = 0; i < mats.Count; i++)
+            {
+                if (mats[i] != null) Destroy(mats[i]);
+            }
+        }
+        if (bakedMeshes != null)
+        {
+            for (int i = 0; i < bakedMeshes.Count; i++)
+            {
+                if (bakedMeshes[i] != null) Destroy(bakedMeshes[i]);
+            }
+        }
+
+        if (host != null)
+        {
+            Destroy(host);
+        }
     }
 }

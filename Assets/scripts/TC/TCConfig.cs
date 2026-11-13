@@ -53,7 +53,7 @@ public class TCConfig : ScriptableObject
     // everything bought with coins only after ~4-5 weeks of a 20-runs-a-day player.
     [Tooltip("Legacy, ignored: one collected coin always adds exactly 1 coin")] public int coinValue = 1;
     [Tooltip("Distance bonus coins per 100 m (Climb Bonus upgrade adds +1 per level)")] public int coinsPerHundredMetres = 1;
-    [Tooltip("Gems awarded per this many metres in one run (0 = off)")] public int gemEveryMetres = 2000;
+    [Tooltip("Gems awarded per this many metres in one run (0 = off)")] public int gemEveryMetres = 10000;
     public int reviveCostGems = 5;
     public int startingCoins = 50;
     public int[] dailyRewards = { 15, 20, 25, 30, 40, 100, 60 /*gems*/ };

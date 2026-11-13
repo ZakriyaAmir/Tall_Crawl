@@ -35,7 +35,8 @@ public class playerInteract : MonoBehaviour
     public CapsuleCollider PointsCollider { get; private set; }
 
     AudioSource audioSource; player p; Animator animator; Renderer[] renderers;
-    float invulnTimer, jumpTimer, rollTimer; bool blinking, initialized;
+    float invulnTimer, jumpTimer, rollTimer, lastChilliHapticTime; bool blinking, initialized;
+    int coinStreak; float lastCoinCollectTime;
 
     void Awake()
     {
@@ -130,6 +131,21 @@ public class playerInteract : MonoBehaviour
 
     void Play(AudioClip c, float vol = 1f) { if (c && audioSource) audioSource.PlayOneShot(c, vol); }
 
+    void PlayCoinCollect()
+    {
+        float now = Time.unscaledTime;
+        if (now - lastCoinCollectTime > 0.55f) coinStreak = 0;
+        lastCoinCollectTime = now;
+        float pitch = 1.0f + Mathf.Min(coinStreak, 7) * 0.045f;
+        coinStreak++;
+
+        var clip = TCSfx.Get("coin") ?? coinSound;
+        if (clip != null)
+        {
+            TCAudio.Play(clip, 0.38f, pitch);
+        }
+    }
+
     public bool HandlePickup(Collider other)
     {
         if (IsDead || (p != null && p.GameOver)) return false;
@@ -143,7 +159,7 @@ public class playerInteract : MonoBehaviour
         if (other.CompareTag("points"))
         {
             other.gameObject.SetActive(false);
-            Play(TCSfx.Get("coin") ?? coinSound, 0.55f);
+            PlayCoinCollect();
             gameManager.Instance?.addCoin();
             OnEvent?.Invoke("coin", other.transform.position);
             return true;
@@ -203,6 +219,13 @@ public class playerInteract : MonoBehaviour
         if (HandlePickup(other)) return;
         if (TCWebBonus.Instance && TCWebBonus.Instance.IsInvincible) return;
 
+        // In chilli mode: play a very little vibration when colliding with any object/obstacle
+        if (boostDuration > 0 && Time.unscaledTime - lastChilliHapticTime > 0.04f)
+        {
+            lastChilliHapticTime = Time.unscaledTime;
+            TCServices.LightHaptic();
+        }
+
         var pooled = other.GetComponentInParent<TCPooled>();
         var enemy = other.GetComponentInParent<TCEnemy>();
 
@@ -212,7 +235,7 @@ public class playerInteract : MonoBehaviour
             if (other.CompareTag("branch"))
             {
                 var branchTarget = (pooled != null && pooled.gameObject != null) ? pooled.gameObject : (other.transform.parent != null ? other.transform.parent.gameObject : other.gameObject);
-                TCHitFlash.FlashAndDestroy(branchTarget, 0.12f);
+                TCHitFlash.FlashAndDestroy(branchTarget, 0.5f);
                 TCFx.Spawn(impactParticle, other.transform.position);
                 if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);
                 Play(TCSfx.Get("thrust") ?? boostSound, 1f);
@@ -317,7 +340,7 @@ public class playerInteract : MonoBehaviour
             if (boostDuration > 0 || invulnTimer > 0)
             {
                 var branchTarget = (pooled != null && pooled.gameObject != null) ? pooled.gameObject : (other.transform.parent != null ? other.transform.parent.gameObject : other.gameObject);
-                TCHitFlash.FlashAndDestroy(branchTarget, 0.12f);
+                TCHitFlash.FlashAndDestroy(branchTarget, 0.5f);
             }
             TCFx.Spawn(impactParticle, other.transform.position);
             if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);

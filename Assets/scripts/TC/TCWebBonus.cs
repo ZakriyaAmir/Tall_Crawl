@@ -245,9 +245,12 @@ public class TCWebBonus : MonoBehaviour
             camDampedReady = false;
             camRelRotRest = Quaternion.Inverse(Quaternion.Euler(0f, yaw, 0f)) * camWorldRotRest;
             Vector3 flatFwd = Vector3.ProjectOnPlane(camRelRotRest * Vector3.forward, Vector3.up);
-            camLevelRelRot = flatFwd.sqrMagnitude > 1e-4f
+            Quaternion baseFwd = flatFwd.sqrMagnitude > 1e-4f
                 ? Quaternion.LookRotation(flatFwd.normalized, Vector3.up)
                 : Quaternion.Euler(0f, 180f, 0f);
+            // Maintain heroic upward pitch (+22 deg) along the trunk during swings,
+            // preventing the camera from looking down at tree chunks being removed from the bottom.
+            camLevelRelRot = baseFwd * Quaternion.Euler(-22f, 0f, 0f);
             camBaselineY = y0;
             camWorldOffsetRest = cam.transform.position - new Vector3(axis.x, y0, axis.z);
             cam.transform.SetParent(null, true);
@@ -736,7 +739,7 @@ public class TCWebBonus : MonoBehaviour
         Vector3 axis = pl && pl.p1 ? pl.p1.position : spiderPos;
 
         // Orbit the camera around the tree with smooth rotational and relative-follow delay,
-        // level horizon pitch (no upward tilt), 25% closer distance (1.556m), and 15% higher (+0.45 vs +0.30).
+        // upward pitch angle framing the spider and oncoming trunk, cutting off bottom chunk recycling.
         Vector3 trackedSpiderPos = camDampedReady
             ? new Vector3(
                 axis.x + Mathf.Sin(camDampedYaw * Mathf.Deg2Rad) * camDampedRadius,
@@ -751,9 +754,9 @@ public class TCWebBonus : MonoBehaviour
         Vector3 restPos = new Vector3(axis.x, camBaselineY, axis.z) + (yawDeltaRot * camWorldOffsetRest);
         Vector3 camFwd = orbitedRot * Vector3.forward;
         Vector3 camUp = orbitedRot * Vector3.up;
-        const float FollowDistance = 1.050f; // 10% closer than 1.167f
+        const float FollowDistance = 1.120f;
         float halfViewH = FollowDistance * Mathf.Tan(fovRest * 0.5f * Mathf.Deg2Rad);
-        Vector3 centeredPos = trackedSpiderPos - camFwd * FollowDistance + camUp * (halfViewH * 0.55f);
+        Vector3 centeredPos = trackedSpiderPos - camFwd * FollowDistance + camUp * (halfViewH * 0.15f);
 
         cam.transform.position = Vector3.Lerp(restPos, centeredPos, cBlend);
         cam.transform.rotation = orbitedRot;
