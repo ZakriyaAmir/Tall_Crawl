@@ -221,10 +221,10 @@ public partial class TCCuteSpider
 
             case TouchAct.Wink:
                 {
-                    float w = Pulse(u, 0.2f, 0.45f);
-                    eyeLidMul = 1f - 0.92f * w;
+                    float w = Pulse(u, 0.18f, 0.45f);
+                    eyeLidMul = 1f - 0.94f * w;
                     eyeLidOnly = winkEye;
-                    bodyTouchRot = Quaternion.Euler(0, 0, 6f * w * (winkEye == 0 ? 1f : -1f));
+                    bodyTouchRot = Quaternion.identity; // Comfortable happy wink without tilting body
                 }
                 break;
 

@@ -81,27 +81,20 @@ public class TCMenuUI : MonoBehaviour
         ApplyMenuMusic(); // keep bgm in sync with the saved setting whatever changed it
     }
 
-    // ---------- Background (pastel gradient + floating leaves) ----------
+    // ---------- Background (stylized toon spider forest) ----------
     void BuildBackground()
     {
         var bg = TCUI.Rect("BG", canvas.transform); TCUI.Stretch(bg);
+        // Hide legacy flat bubbles so the toonish background artwork shines cleanly
+        for (int i = 0; i < bg.childCount; i++)
+        {
+            var ch = bg.GetChild(i);
+            if (ch.name.StartsWith("Bubble")) ch.gameObject.SetActive(false);
+        }
         if (TCUI.Fresh(bg))
         {
             var tex = Resources.Load<Texture2D>("TCUI/menu_gradient");
-            if (!tex)
-            {
-                tex = new Texture2D(2, 64) { wrapMode = TextureWrapMode.Clamp };
-                for (int y = 0; y < 64; y++) { var c = Color.Lerp(TCUI.Hex("#FFD3B8"), TCUI.Hex("#7FD0FF"), y / 63f); tex.SetPixel(0, y, c); tex.SetPixel(1, y, c); }
-                tex.Apply();
-            }
             var ri = bg.gameObject.AddComponent<RawImage>(); ri.texture = tex; ri.raycastTarget = false;
-
-            for (int i = 0; i < 14; i++)
-            {
-                var dot = TCUI.Img("Bubble", bg, new Color(1, 1, 1, Random.Range(0.18f, 0.4f)), TCUI.Circle);
-                float s = Random.Range(40, 160); dot.rectTransform.sizeDelta = new Vector2(s, s);
-                dot.rectTransform.anchorMin = dot.rectTransform.anchorMax = new Vector2(Random.value, Random.value);
-            }
         }
     }
     IEnumerator Float(RectTransform r, float speed)
@@ -364,17 +357,42 @@ public class TCMenuUI : MonoBehaviour
 
         yield return new WaitForSecondsRealtime(0.15f);
 
-        // Step 3: Play wink sound + chatter voice, tip head cute & wink eye
+        // Step 3: Play wink sound + chatter voice, wink comfortably and happily without tilting body
         TCSfx.PlayAction("wink", 0.85f, 1.30f);
         int winkEyeIndex = 0; // main eye
-        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.75f)
+        st.localRotation = Quaternion.identity;
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.70f)
         {
-            float p = Mathf.Sin(x * Mathf.PI);
-            if (cs) cs.SetEyeOverride(1f - 0.95f * p, winkEyeIndex);
-            st.localRotation = Quaternion.Euler(0, 0, -8f * p);
+            float lid;
+            if (x < 0.18f)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, x / 0.18f);
+                lid = Mathf.Lerp(1.0f, 0.06f, k);
+            }
+            else if (x < 0.52f)
+            {
+                lid = 0.06f; // comfortable happy wink hold
+            }
+            else if (x < 0.78f)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, (x - 0.52f) / 0.26f);
+                lid = Mathf.Lerp(0.06f, 1.0f, k);
+            }
+            else
+            {
+                lid = 1.0f;
+            }
+
+            if (cs) cs.SetEyeOverride(lid, winkEyeIndex);
+
+            // Subtle happy perky breath, upright without any body tilting
+            float happyPulse = (x >= 0.15f && x <= 0.60f) ? Mathf.Sin((x - 0.15f) / 0.45f * Mathf.PI) * 0.05f : 0f;
+            st.localScale = new Vector3(1f - happyPulse * 0.4f, 1f + happyPulse, 1f - happyPulse * 0.4f);
+            st.localRotation = Quaternion.identity;
             yield return null;
         }
         if (cs) cs.ClearEyeOverride();
+        st.localScale = Vector3.one;
         st.localRotation = Quaternion.identity;
 
         yield return new WaitForSecondsRealtime(0.2f);
@@ -640,8 +658,8 @@ public class TCMenuUI : MonoBehaviour
         { var glow = TCUI.Img("Glow", safe, new Color(1f, 0.95f, 0.55f, 0.55f), TCUI.Circle); glow.raycastTarget = false;
           TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(820, 290)); if (TCUI.Fresh(glow)) glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1); }
 
-        SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 110), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel); });
-        SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 110), () => TCUI.Show(this, shopPanel));
+        SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 110), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel, pop: true, animateContents: false); });
+        SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 110), () => TCUI.Show(this, shopPanel, pop: true, animateContents: false));
         var daily = SmallBtn("Daily", "DAILY", TCUI.Sky, "gift", new Vector2(330, 110), OpenDaily);
         dailyBadge = TCUI.Img("Badge", daily.transform, TCUI.Hex("#FF6F8E"), TCUI.Circle); TCUI.Place(dailyBadge.rectTransform, new Vector2(1, 1), new Vector2(-10, -10), new Vector2(46, 46));
     }
@@ -689,6 +707,7 @@ public class TCMenuUI : MonoBehaviour
         skinsPanel = TCUI.Panel("Skins", safe, out var card, new Vector2(980, 1500), "SKINS");
         skinPreviewImg = TCUI.Add<RawImage>(TCUI.Rect("Preview", card).gameObject);
         skinPreviewImg.texture = rt; skinPreviewImg.raycastTarget = false; TCUI.Place(skinPreviewImg.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -330), new Vector2(460, 460));
+        skinPreviewImg.rectTransform.localScale = new Vector3(3f, 3f, 3f);
         skinName = TCUI.Label("Name", card, "", 56, TCUI.Cocoa); TCUI.Place(skinName.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -580), new Vector2(800, 80));
 
         // Locate existing hierarchy if already configured in scene/inspector

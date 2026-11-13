@@ -486,11 +486,13 @@ public static class TCUI
     }
 
     // ---------- Transitions ----------
-    public static void Show(MonoBehaviour host, CanvasGroup cg, bool pop = true)
+    public static void Show(MonoBehaviour host, CanvasGroup cg, bool pop = true, bool animateContents = true)
     {
         hiding.Remove(cg);
         cg.gameObject.SetActive(true); cg.transform.SetAsLastSibling();
-        host.StartCoroutine(Anim(cg, true, pop));
+        // Do not animate UI buttons/contents for Shop and Skins panels when opened
+        if (cg != null && (cg.name == "Shop" || cg.name == "Skins")) animateContents = false;
+        host.StartCoroutine(Anim(cg, true, pop, null, animateContents));
     }
     public static void Outline(TMP_Text t, float w)
     {
@@ -509,13 +511,13 @@ public static class TCUI
         if (!hiding.Add(cg)) return;
         host.StartCoroutine(Anim(cg, false, true, () => { hiding.Remove(cg); done?.Invoke(); }));
     }
-    static IEnumerator Anim(CanvasGroup cg, bool show, bool pop, Action done = null)
+    static IEnumerator Anim(CanvasGroup cg, bool show, bool pop, Action done = null, bool animateContents = true)
     {
         var card = cg.transform.Find("Card");
         cg.interactable = false; cg.blocksRaycasts = true;
-        // polish2: jelly card pop (squash & stretch) + staggered pop-in of the card's contents
+        // polish2: jelly card pop (squash & stretch) + optional staggered pop-in of the card's contents
         Transform[] kids = null; Vector3[] kidBase = null;
-        if (card && pop && show)
+        if (card && pop && show && animateContents)
         {
             kids = new Transform[card.childCount]; kidBase = new Vector3[card.childCount];
             for (int i = 0; i < card.childCount; i++) { kids[i] = card.GetChild(i); kidBase[i] = kids[i].localScale; }

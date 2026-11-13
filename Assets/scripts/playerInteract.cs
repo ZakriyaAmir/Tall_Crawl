@@ -234,10 +234,12 @@ public class playerInteract : MonoBehaviour
         {
             if (other.CompareTag("branch"))
             {
-                var branchTarget = (pooled != null && pooled.gameObject != null) ? pooled.gameObject : (other.transform.parent != null ? other.transform.parent.gameObject : other.gameObject);
-                TCHitFlash.FlashAndDestroy(branchTarget, 0.5f);
-                TCFx.Spawn(impactParticle, other.transform.position);
-                if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);
+                // Disappear instantly upon collision with wood particles spawning at the collision point
+                Vector3 hitPoint = other.ClosestPoint(transform.position);
+                if (hitPoint == Vector3.zero || (hitPoint - transform.position).sqrMagnitude > 4f)
+                    hitPoint = other.bounds.ClosestPoint(transform.position);
+                TCFx.Spawn(impactParticle, hitPoint);
+                if (pooled) pooled.Release(); else (other.transform.parent ? other.transform.parent.gameObject : other.gameObject).SetActive(false);
                 Play(TCSfx.Get("thrust") ?? boostSound, 1f);
                 OnEvent?.Invoke("smash", transform.position);
                 TCFx.Shake(0.18f);
@@ -337,13 +339,12 @@ public class playerInteract : MonoBehaviour
 
         if (other.CompareTag("branch"))
         {
-            if (boostDuration > 0 || invulnTimer > 0)
-            {
-                var branchTarget = (pooled != null && pooled.gameObject != null) ? pooled.gameObject : (other.transform.parent != null ? other.transform.parent.gameObject : other.gameObject);
-                TCHitFlash.FlashAndDestroy(branchTarget, 0.5f);
-            }
-            TCFx.Spawn(impactParticle, other.transform.position);
-            if (pooled) pooled.Release(); else other.transform.parent.gameObject.SetActive(false);
+            // Disappear instantly upon collision with wood particles spawning at the collision point
+            Vector3 hitPoint = other.ClosestPoint(transform.position);
+            if (hitPoint == Vector3.zero || (hitPoint - transform.position).sqrMagnitude > 4f)
+                hitPoint = other.bounds.ClosestPoint(transform.position);
+            TCFx.Spawn(impactParticle, hitPoint);
+            if (pooled) pooled.Release(); else (other.transform.parent ? other.transform.parent.gameObject : other.gameObject).SetActive(false);
             if (boostDuration > 0)
             {
                 // In chilli mode: smash through with a powerful thrust sound (no sad/hurt sound)

@@ -45,11 +45,16 @@ public class player : MonoBehaviour
         axisLock = GestureAxis.None;
         lastTapTime = -1f;
         targetYaw = yaw;
+        currentTurnAngle = 0f;
         if (p1)
         {
             var e = p1.localEulerAngles;
             e.y = yaw;
             p1.localEulerAngles = e;
+        }
+        if (spider && hasSpiderBaseRot)
+        {
+            spider.transform.localRotation = spiderBaseRot;
         }
     }
 
@@ -86,6 +91,9 @@ public class player : MonoBehaviour
     GestureAxis axisLock;
     float gestureStartYaw;
     playerInteract spider;
+    Quaternion spiderBaseRot = Quaternion.identity;
+    bool hasSpiderBaseRot;
+    float currentTurnAngle;
 
     void Awake()
     {
@@ -96,6 +104,11 @@ public class player : MonoBehaviour
         if (!maincam) maincam = Camera.main;
         if (maincam) camAnim = maincam.GetComponent<Animator>();
         spider = GetComponentInChildren<playerInteract>();
+        if (spider)
+        {
+            spiderBaseRot = spider.transform.localRotation;
+            hasSpiderBaseRot = true;
+        }
         yaw = targetYaw = p1.localEulerAngles.y;
         startY = p1.position.y;
     }
@@ -153,11 +166,40 @@ public class player : MonoBehaviour
             // no input mid-swing
         }
         else HandleInput(effectiveDt);
+        float prevYaw = yaw;
         if (!(TCWebBonus.Instance && TCWebBonus.Instance.OwnsMotion))
         {
             yaw = Mathf.LerpAngle(yaw, targetYaw, 1f - Mathf.Exp(-C.rotationSmoothing * effectiveDt));
             var e = p1.localEulerAngles; e.y = yaw; p1.localEulerAngles = e;
         }
+
+        // Swiftly and smoothly rotate spider a little towards the direction the player moves
+        if (!spider) spider = GetComponentInChildren<playerInteract>();
+        if (spider && !hasSpiderBaseRot)
+        {
+            spiderBaseRot = spider.transform.localRotation;
+            hasSpiderBaseRot = true;
+        }
+
+        float targetTurnAngle = 0f;
+        if (!paused && !GameOver && !(TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging))
+        {
+            float yawDelta = Mathf.DeltaAngle(prevYaw, yaw);
+            float steerDelta = Mathf.DeltaAngle(yaw, targetYaw);
+            float turnVelocity = yawDelta / Mathf.Max(1e-4f, effectiveDt);
+
+            // Responsive angle lean: inverted to tilt directly towards movement direction
+            float steerPull = Mathf.Clamp(steerDelta * 1.5f, -16f, 16f);
+            float velPull = Mathf.Clamp(turnVelocity * 0.14f, -16f, 16f);
+            targetTurnAngle = -Mathf.Clamp(steerPull * 0.45f + velPull * 0.55f, -14f, 14f);
+        }
+        currentTurnAngle = Mathf.Lerp(currentTurnAngle, targetTurnAngle, 1f - Mathf.Exp(-15f * effectiveDt));
+
+        if (spider && hasSpiderBaseRot)
+        {
+            spider.transform.localRotation = spiderBaseRot * Quaternion.Euler(0f, currentTurnAngle, 0f);
+        }
+
         if (jumpCooldown > 0) jumpCooldown -= effectiveDt;
         if (spider && !spider.IsJumping) canDoubleJump = false;
 

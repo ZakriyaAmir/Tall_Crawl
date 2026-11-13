@@ -1378,7 +1378,6 @@ public class TCGameUI : MonoBehaviour
             // When spider reaches the branch during chilli boost, smash through it
             if (tutBranch != null && tutBranch.gameObject.activeInHierarchy && SpiderY >= branchSmashY - 0.25f)
             {
-                TCHitFlash.FlashAndDestroy(tutBranch.gameObject, 0.5f);
                 TCFx.Spawn(spider != null ? spider.impactParticle : null, tutBranch.transform.position);
                 tutBranch.Release();
                 TCAudio.Play(TCAssets.I != null ? TCAssets.I.purchase : null);

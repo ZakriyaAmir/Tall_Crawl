@@ -30,8 +30,8 @@ public class TCCoinMagnet : MonoBehaviour
     public float AttractionRadius => 40.0f;
     public float AttractionSpeed => 32.0f;
 
-    // Shield Bubble parameters (electric cyan forcefield bubble around spider, scaled down 40%):
-    const float BaseShieldDiameter = 0.504f; // 0.84f - 40%
+    // Shield Bubble parameters (electric cyan forcefield bubble around spider, scaled down 40% then adjusted +15%):
+    const float BaseShieldDiameter = 0.580f; // 0.504f + 15%
     GameObject shieldObj;
     MeshRenderer shieldRenderer;
     Material shieldMat;
@@ -272,7 +272,7 @@ public class TCCoinMagnet : MonoBehaviour
             lr.receiveShadows = false;
             lr.numCapVertices = 2;
             lr.numCornerVertices = 2;
-            lr.widthMultiplier = 0.010f;
+            lr.widthMultiplier = 0.012f;
             var mat = new Material(shader) { name = "MagnetArc_Mat_" + i };
             if (mat.HasProperty("_MainTex")) mat.mainTexture = Texture2D.whiteTexture;
             SetMatColor(mat, new Color(0.4f, 0.92f, 1f, 0.95f));
@@ -301,15 +301,15 @@ public class TCCoinMagnet : MonoBehaviour
             arc.line.enabled = on && alphaMul > 0.05f;
             if (!on) continue;
             float ang = (arc.baseAngle + emissionTimer * 45f + i * 15f) * Mathf.Deg2Rad;
-            float inner = 0.024f;
-            float outer = 0.216f + 0.024f * Mathf.Sin(arc.phase);
+            float inner = 0.028f;
+            float outer = 0.248f + 0.028f * Mathf.Sin(arc.phase);
             var pts = new Vector3[6];
             for (int s = 0; s < 6; s++)
             {
                 float u = s / 5f;
                 float r = Mathf.Lerp(inner, outer, u);
-                float jag = (s > 0 && s < 5) ? (Mathf.PerlinNoise(arc.phase * 0.9f, s * 1.8f + i) - 0.5f) * 0.054f : 0f;
-                float jagY = (s > 0 && s < 5) ? (Mathf.PerlinNoise(s * 2.1f, arc.phase * 0.9f + i) - 0.5f) * 0.048f : 0f;
+                float jag = (s > 0 && s < 5) ? (Mathf.PerlinNoise(arc.phase * 0.9f, s * 1.8f + i) - 0.5f) * 0.062f : 0f;
+                float jagY = (s > 0 && s < 5) ? (Mathf.PerlinNoise(s * 2.1f, arc.phase * 0.9f + i) - 0.5f) * 0.055f : 0f;
                 float a = ang + jag * 3f;
                 pts[s] = new Vector3(Mathf.Cos(a) * r, 0.02f + jagY, Mathf.Sin(a) * r);
             }

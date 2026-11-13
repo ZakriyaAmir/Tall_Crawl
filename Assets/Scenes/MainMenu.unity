@@ -15460,7 +15460,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &853242775
 RectTransform:
   m_ObjectHideFlags: 0
@@ -19712,7 +19712,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RawImage
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.4339623, g: 0.4339623, b: 0.4339623, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -33937,8 +33937,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5059992, y: 0.7111198}
   m_AnchorMax: {x: 0.5059992, y: 0.7111198}
-  m_AnchoredPosition: {x: 0, y: 1.3516846}
-  m_SizeDelta: {x: 760, y: 428}
+  m_AnchoredPosition: {x: 0, y: 80}
+  m_SizeDelta: {x: 1117.3622, y: 629.2513}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2095476348
 MonoBehaviour:
@@ -33960,7 +33960,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 4592696516646909484, guid: 6e5f8978aaa57cf9f9ec06a64a5ec19e,
+  m_Sprite: {fileID: -4392582807621852676, guid: d7426d74829fd416b9243a5c06f33d46,
     type: 3}
   m_Type: 0
   m_PreserveAspect: 1

@@ -69,10 +69,13 @@ public static class TCUIBake
         TCUI.Readable = true; TCUI.ResetSpriteCache();
         Save(TCUI.Round, "round", 26); Save(TCUI.Circle, "circle", 0);
         foreach (var n in IconNames) Save(TCUI.Icon(n), "icon_" + n, 0);
-        // menu background gradient
-        var tex = new Texture2D(2, 64);
-        for (int y = 0; y < 64; y++) { var c = Color.Lerp(TCUI.Hex("#FFD3B8"), TCUI.Hex("#7FD0FF"), y / 63f); tex.SetPixel(0, y, c); tex.SetPixel(1, y, c); }
-        File.WriteAllBytes(SpriteDir + "/menu_gradient.png", tex.EncodeToPNG());
+        // menu background gradient (only create fallback if none exists)
+        if (!File.Exists(SpriteDir + "/menu_gradient.png"))
+        {
+            var tex = new Texture2D(2, 64);
+            for (int y = 0; y < 64; y++) { var c = Color.Lerp(TCUI.Hex("#FFD3B8"), TCUI.Hex("#7FD0FF"), y / 63f); tex.SetPixel(0, y, c); tex.SetPixel(1, y, c); }
+            File.WriteAllBytes(SpriteDir + "/menu_gradient.png", tex.EncodeToPNG());
+        }
         TCUI.Readable = false; TCUI.ResetSpriteCache();
         AssetDatabase.Refresh();
         foreach (var f in Directory.GetFiles(SpriteDir, "*.png"))
