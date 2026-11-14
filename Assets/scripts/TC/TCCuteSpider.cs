@@ -465,6 +465,9 @@ public partial class TCCuteSpider : MonoBehaviour
 
     [System.NonSerialized] public float wave; // 0..1, menu wave (front leg up)
     public Bounds cachedBounds; public Vector3 cachedCenter; public bool hasRestRoot; Transform root; public Vector3 restRoot;
+    public Transform BodyTransform => body != null ? body : (root != null ? root : transform);
+    public Transform CuteRoot => root;
+    public float CurrentAirHeight => currentAirHeight;
     bool isRainbow;
     readonly List<MeshRenderer> rainbowRenderers = new List<MeshRenderer>();
     readonly List<Material> rainbowOriginalMats = new List<Material>();
@@ -488,6 +491,7 @@ public partial class TCCuteSpider : MonoBehaviour
     public Vector3 VisualCenter()
     {
         if (body) return body.position;
+        if (root) return root.position;
         if (abdomen) return abdomen.position;
         return transform.position;
     }

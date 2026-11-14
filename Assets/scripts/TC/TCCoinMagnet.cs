@@ -7,6 +7,7 @@ using UnityEngine;
 /// while emitting a subtle, elegant, 70% transparent yellow circular ripple around the spider.
 /// Duration scales with Store Upgrade ID 6: 8.0s base up to 20.0s at Max Level 5 (+2.4s per level).
 /// </summary>
+[DefaultExecutionOrder(100)]
 public class TCCoinMagnet : MonoBehaviour
 {
     public static TCCoinMagnet Instance { get; private set; }
@@ -54,6 +55,7 @@ public class TCCoinMagnet : MonoBehaviour
     float totalActiveDuration = 8f;
     float emissionTimer = 0f;
     Transform spiderTransform;
+    TCCuteSpider cuteSpider;
     GameObject magnetAuraObj;
 
     LightningArc[] lightningArcs;
@@ -78,22 +80,64 @@ public class TCCoinMagnet : MonoBehaviour
     {
         if (spiderTransform != null) return spiderTransform;
         var sp = FindObjectOfType<playerInteract>();
-        if (sp != null) spiderTransform = sp.transform;
+        if (sp != null)
+        {
+            spiderTransform = sp.transform;
+            cuteSpider = sp.GetComponentInChildren<TCCuteSpider>();
+        }
         else
         {
             var pl = FindObjectOfType<player>();
-            if (pl != null) spiderTransform = pl.transform;
+            if (pl != null)
+            {
+                spiderTransform = pl.transform;
+                cuteSpider = pl.GetComponentInChildren<TCCuteSpider>();
+            }
         }
         return spiderTransform;
     }
 
+    public Vector3 GetSpiderVisualCenter()
+    {
+        var sp = ResolveSpider();
+        if (sp == null) return transform.position;
+
+        if (cuteSpider == null) cuteSpider = sp.GetComponentInChildren<TCCuteSpider>();
+        if (cuteSpider != null)
+        {
+            return cuteSpider.VisualCenter();
+        }
+
+        var cuteRoot = sp.Find("__cute");
+        if (cuteRoot != null)
+        {
+            var body = cuteRoot.Find("body");
+            if (body != null) return body.position;
+            return cuteRoot.position;
+        }
+
+        return sp.position + sp.up * 0.07f;
+    }
+
     public void Activate()
     {
+        bool wasActive = activeTimeRemaining > 0f && magnetAuraObj != null && magnetAuraObj.activeSelf;
         totalActiveDuration = Duration;
-        activeTimeRemaining = totalActiveDuration;
-        emissionTimer = 0f;
-        TCSfx.Play("cooldown_activate", 0.9f);
-        TCFx.Shake(0.08f);
+        activeTimeRemaining = Mathf.Max(activeTimeRemaining, totalActiveDuration);
+
+        if (!wasActive)
+        {
+            emissionTimer = 0f;
+            TCSfx.Play("cooldown_activate", 0.9f);
+            TCFx.Shake(0.08f);
+        }
+        else
+        {
+            // When already active, keep VFX going seamlessly without restarting ease-in, shrinking, or flickering
+            if (emissionTimer < 0.6f) emissionTimer = 0.6f; // ensure fully opened
+            TCSfx.Play("cooldown_activate", 0.8f);
+            TCFx.Shake(0.05f);
+        }
 
         if (magnetAuraObj == null)
         {
@@ -120,6 +164,8 @@ public class TCCoinMagnet : MonoBehaviour
             {
                 if (magnetAuraObj == null) CreateMagnetAura();
 
+                Vector3 spiderCenter = GetSpiderVisualCenter();
+
                 if (magnetAuraObj != null)
                 {
                     // Compute smooth ease-in on activation and ease-out on expiration (0.6s transitions)
@@ -131,12 +177,12 @@ public class TCCoinMagnet : MonoBehaviour
 
                     float globalEnvelope = easeIn * easeOut;
 
-                    // Situate the aura directly on the spider carapace plane (does not float high or block camera)
-                    magnetAuraObj.transform.position = sp.position + sp.up * 0.04f;
+                    // Situate the aura directly on the spider center (follows jumping spider into the air)
+                    magnetAuraObj.transform.position = spiderCenter;
                     magnetAuraObj.transform.rotation = sp.rotation;
 
                     // Electric Cyan Shield Bubble around the spider (clean transparent forcefield)
-                    UpdateShieldVisuals(sp, dt, globalEnvelope);
+                    UpdateShieldVisuals(spiderCenter, sp, dt, globalEnvelope);
 
                     // 3D crackling electric discharge arcs
                     TickLightningArcs(dt, globalEnvelope);
@@ -145,7 +191,7 @@ public class TCCoinMagnet : MonoBehaviour
                 // Attract nearby coins along trunk towards spider (strictly within 40m distance)
                 if (TCTrack.Instance != null)
                 {
-                    TCTrack.Instance.AttractCoins(sp.position, AttractionRadius, AttractionSpeed * Time.deltaTime);
+                    TCTrack.Instance.AttractCoins(spiderCenter, AttractionRadius, AttractionSpeed * Time.deltaTime);
                 }
             }
 
@@ -154,6 +200,36 @@ public class TCCoinMagnet : MonoBehaviour
                 activeTimeRemaining = 0f;
                 if (magnetAuraObj != null) magnetAuraObj.SetActive(false);
                 TCSfx.Play("menu_drop", 0.75f, 0.95f);
+            }
+        }
+    }
+
+    void LateUpdate()
+    {
+        // Keep Coin Magnet VFX (shield bubble and crackling lightning arcs) perfectly locked to
+        // the spider's 3D visual position during jump, double jump backflip, and landing.
+        if (activeTimeRemaining > 0f && magnetAuraObj != null && magnetAuraObj.activeSelf)
+        {
+            var sp = ResolveSpider();
+            if (sp != null)
+            {
+                Vector3 spiderCenter = GetSpiderVisualCenter();
+                magnetAuraObj.transform.position = spiderCenter;
+                magnetAuraObj.transform.rotation = sp.rotation;
+
+                var cam = Camera.main;
+                Quaternion camRot = (cam != null) ? cam.transform.rotation : sp.rotation;
+
+                if (shieldObj != null)
+                {
+                    shieldObj.transform.position = spiderCenter;
+                    shieldObj.transform.rotation = camRot * Quaternion.Euler(0f, 0f, shieldSpinAngle);
+                }
+                if (shieldInnerObj != null)
+                {
+                    shieldInnerObj.transform.position = spiderCenter;
+                    shieldInnerObj.transform.rotation = camRot * Quaternion.Euler(0f, 0f, shieldInnerAngle);
+                }
             }
         }
     }
@@ -168,7 +244,8 @@ public class TCCoinMagnet : MonoBehaviour
 
         magnetAuraObj = new GameObject("Magnet_Active_Aura");
         if (auraParent) magnetAuraObj.transform.SetParent(auraParent, true);
-        magnetAuraObj.transform.position = sp.position + sp.up * 0.04f;
+        Vector3 spiderCenter = GetSpiderVisualCenter();
+        magnetAuraObj.transform.position = spiderCenter;
         magnetAuraObj.transform.rotation = sp.rotation;
 
         // 0. Electric Cyan Shield Bubble (camera-facing forcefield bubble with transparent center & perimeter sparks)
@@ -232,15 +309,25 @@ public class TCCoinMagnet : MonoBehaviour
             float k = t / dur;
             float fade = 1f - k;
 
+            Vector3 spiderCenter = GetSpiderVisualCenter();
+            var sp = ResolveSpider();
+            if (magnetAuraObj != null)
+            {
+                magnetAuraObj.transform.position = spiderCenter;
+                if (sp != null) magnetAuraObj.transform.rotation = sp.rotation;
+            }
+
             // Shield bubble expansion & shatter fade
             if (shieldObj != null)
             {
+                shieldObj.transform.position = spiderCenter;
                 float popScale = Mathf.Lerp(BaseShieldDiameter, BaseShieldDiameter * 1.55f, Mathf.Sqrt(k));
                 shieldObj.transform.localScale = Vector3.one * popScale;
                 SetShieldMatColor(shieldMat, new Color(1f, 1f, 1f, fade * 0.95f));
             }
             if (shieldInnerObj != null)
             {
+                shieldInnerObj.transform.position = spiderCenter;
                 float popInner = Mathf.Lerp(BaseShieldDiameter * 0.88f, BaseShieldDiameter * 1.70f, Mathf.Sqrt(k));
                 shieldInnerObj.transform.localScale = Vector3.one * popInner;
                 SetShieldMatColor(shieldInnerMat, new Color(0.85f, 0.98f, 1f, fade * 0.60f));
@@ -341,12 +428,11 @@ public class TCCoinMagnet : MonoBehaviour
             ?? Shader.Find("Sprites/Default");
     }
 
-    void UpdateShieldVisuals(Transform sp, float dt, float globalEnvelope)
+    void UpdateShieldVisuals(Vector3 spiderCenter, Transform sp, float dt, float globalEnvelope)
     {
         if (shieldObj == null || sp == null) return;
 
-        // Position shield centered on spider body
-        Vector3 spiderCenter = sp.position + sp.up * 0.07f;
+        // Position shield centered on spider body (follows jumping spider into the air)
         shieldObj.transform.position = spiderCenter;
 
         // Animate smooth rotation of outer electric lightning rim and inner energy
