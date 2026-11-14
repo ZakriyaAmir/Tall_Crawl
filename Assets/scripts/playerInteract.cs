@@ -193,8 +193,10 @@ public class playerInteract : MonoBehaviour
         else if (other.CompareTag("magnet"))
         {
             other.gameObject.SetActive(false);
-            Play(TCSfx.Get("cooldown_collect") ?? TCSfx.Get("coin"), 0.85f);
-            TCCoinMagnet.Instance?.Activate();
+            if (TCCoinMagnet.Instance != null)
+                TCCoinMagnet.Instance.Activate();
+            else
+                TCSfx.Play("magnet_activate", 0.85f);
             OnEvent?.Invoke("magnet", transform.position);
             TCFx.Shake(0.08f);
             return true;

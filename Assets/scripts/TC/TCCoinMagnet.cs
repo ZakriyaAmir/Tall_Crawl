@@ -128,14 +128,14 @@ public class TCCoinMagnet : MonoBehaviour
         if (!wasActive)
         {
             emissionTimer = 0f;
-            TCSfx.Play("cooldown_activate", 0.9f);
+            TCSfx.Play("magnet_activate", 0.85f);
             TCFx.Shake(0.08f);
         }
         else
         {
             // When already active, keep VFX going seamlessly without restarting ease-in, shrinking, or flickering
             if (emissionTimer < 0.6f) emissionTimer = 0.6f; // ensure fully opened
-            TCSfx.Play("cooldown_activate", 0.8f);
+            TCSfx.Play("magnet_activate", 0.75f, 1.05f);
             TCFx.Shake(0.05f);
         }
 

@@ -506,18 +506,8 @@ public class TCMenuUI : MonoBehaviour
         }
         st.localScale = Vector3.one;
 
-        // Comical dizzy state: spinning head/body wobble with dizzy death voice and cute dizzy stars
+        // Comical dizzy state: spinning head/body wobble with dizzy voice
         TCSfx.PlayAction("spin_whoosh", 0.65f, 1.15f, dizzy: true, voiceVol: 0.6f);
-        var starMat = TCFxLib.Mat("Star");
-        var stars = new List<Transform>();
-        for (int i = 0; i < 4; i++)
-        {
-            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            Destroy(q.GetComponent<Collider>());
-            q.transform.SetParent(st.parent, false);
-            q.GetComponent<Renderer>().sharedMaterial = starMat;
-            stars.Add(q.transform);
-        }
 
         for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 1.15f)
         {
@@ -525,22 +515,8 @@ public class TCMenuUI : MonoBehaviour
             float sway = Mathf.Sin(x * Mathf.PI * 8f) * (1f - x * 0.5f);
             st.localRotation = Quaternion.Euler(Mathf.Sin(x * Mathf.PI * 6f) * 12f, sway * 16f, sway * 14f);
             if (cs) cs.SetEyeOverride(0.25f + 0.15f * Mathf.Sin(x * 20f)); // dizzy flickering squint
-
-            // Orbit dizzy stars above head
-            float orbitAngle = x * Mathf.PI * 4f;
-            for (int i = 0; i < stars.Count; i++)
-            {
-                if (!stars[i]) continue;
-                float a = orbitAngle + i * (Mathf.PI * 2f / stars.Count);
-                stars[i].localPosition = rest + new Vector3(Mathf.Cos(a) * S * 0.32f, S * 0.55f + Mathf.Sin(a * 2f) * S * 0.06f, Mathf.Sin(a) * S * 0.32f);
-                stars[i].localScale = Vector3.one * S * 0.16f * Mathf.Clamp01((1f - x) * 2f);
-                stars[i].localRotation = Quaternion.Euler(20f, 0, a * Mathf.Rad2Deg);
-            }
             yield return null;
         }
-
-        foreach (var star in stars) if (star) Destroy(star.gameObject);
-        stars.Clear();
 
         // Regain consciousness: clear dizzy eyes and shake head clear
         if (cs) cs.ClearEyeOverride();
@@ -1225,6 +1201,7 @@ public class TCMenuUI : MonoBehaviour
     void OnPreviewTapped()
     {
         if (entering || !previewSpider) return;
+        TCServices.LightHaptic();
         var cs = previewSpider.GetComponent<TCCuteSpider>();
         if (cs) cs.PlayRandomTouch();
     }

@@ -16172,6 +16172,8 @@ MonoBehaviour:
   BGM:
   - {fileID: 8300000, guid: 089a948969a14c043b2b5d513bc9ddb9, type: 3}
   - {fileID: 8300000, guid: 3dbd22ee621b53340ac1805ed119577c, type: 3}
+  - {fileID: 8300000, guid: 4a9b2c8e15db47348a623b01ea51a999, type: 3}
+  roosterSound: {fileID: 8300000, guid: 8e9f2b3c15db47348a623b01ea51a888, type: 3}
   camera: {fileID: 206422001}
   Sun: {fileID: 705507993}
   webPickupSpawnProbability: 0.32

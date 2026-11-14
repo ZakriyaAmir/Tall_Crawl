@@ -7,6 +7,7 @@ public class gameManager : MonoBehaviour
 {
     public Material[] bgImage;
     public AudioClip[] BGM;
+    public AudioClip roosterSound;
     public Camera camera;
     public GameObject Sun;
 
@@ -24,14 +25,23 @@ public class gameManager : MonoBehaviour
     bool doubledClaimed;
     player p; AudioSource music; playerInteract spider;
 
+    public enum DiurnalAudioTheme
+    {
+        Day,   // Birds chirping (DayBG.wav) - for CloudyCrown_Evening & CloudyCrown_Midday
+        Dusk,  // Crows cawing in a loop (DuskBG.wav) - for CloudyCrown_Daybreak & CloudyCrown_Sunset
+        Night  // Night ambience (NightBG.wav) - for CloudyCrown_Midnight
+    }
+
     [System.Serializable]
     public struct DiurnalPhase
     {
         public string name;
         public int bgIndex;
         public bool isNight;
+        public DiurnalAudioTheme audioTheme;
         public Color sunColor;
         public float sunIntensity;
+        public float ambientIntensity;
         public Color ambientSky;
         public Color ambientEquator;
         public Color ambientGround;
@@ -54,6 +64,7 @@ public class gameManager : MonoBehaviour
     AudioSource musicPrimary;
     AudioSource musicSecondary;
     AudioClip dayMusicClip;
+    AudioClip duskMusicClip;
     AudioClip nightMusicClip;
     AudioClip currentBgmClip;
     bool isAudioCrossfading;
@@ -77,6 +88,7 @@ public class gameManager : MonoBehaviour
         SetupDiurnalPhases();
         SetupSkyboxAndLighting();
         SetupMusic();
+        TCFireflySwarm.Ensure();
 
         TCServices.Banner(true);
         TCServices.Log("run_start");
@@ -108,8 +120,10 @@ public class gameManager : MonoBehaviour
                 name = "CloudyCrown_Evening",
                 bgIndex = idxEvening,
                 isNight = false,
+                audioTheme = DiurnalAudioTheme.Day,
                 sunColor = new Color(1f, 0.95f, 0.88f),
                 sunIntensity = 1.22f,
+                ambientIntensity = 0.85f,
                 ambientSky = new Color(0.60f, 0.68f, 0.74f),
                 ambientEquator = new Color(0.46f, 0.50f, 0.54f),
                 ambientGround = new Color(0.35f, 0.35f, 0.38f)
@@ -119,8 +133,10 @@ public class gameManager : MonoBehaviour
                 name = "CloudyCrown_Midday",
                 bgIndex = idxMidday,
                 isNight = false,
+                audioTheme = DiurnalAudioTheme.Day,
                 sunColor = new Color(1f, 0.98f, 0.92f),
                 sunIntensity = 1.30f,
+                ambientIntensity = 1.0f,
                 ambientSky = new Color(0.65f, 0.70f, 0.78f),
                 ambientEquator = new Color(0.48f, 0.52f, 0.56f),
                 ambientGround = new Color(0.35f, 0.35f, 0.38f)
@@ -130,8 +146,10 @@ public class gameManager : MonoBehaviour
                 name = "CloudyCrown_Daybreak",
                 bgIndex = idxDaybreak,
                 isNight = false,
+                audioTheme = DiurnalAudioTheme.Dusk,
                 sunColor = new Color(1.0f, 0.78f, 0.55f),
                 sunIntensity = 1.25f,
+                ambientIntensity = 0.80f,
                 ambientSky = new Color(0.72f, 0.54f, 0.46f),
                 ambientEquator = new Color(0.54f, 0.42f, 0.40f),
                 ambientGround = new Color(0.36f, 0.30f, 0.32f)
@@ -141,8 +159,10 @@ public class gameManager : MonoBehaviour
                 name = "CloudyCrown_Sunset",
                 bgIndex = idxSunset,
                 isNight = true,
+                audioTheme = DiurnalAudioTheme.Dusk,
                 sunColor = new Color(0.85f, 0.70f, 0.92f),
                 sunIntensity = 1.05f,
+                ambientIntensity = 0.70f,
                 ambientSky = new Color(0.54f, 0.46f, 0.62f),
                 ambientEquator = new Color(0.40f, 0.36f, 0.48f),
                 ambientGround = new Color(0.28f, 0.26f, 0.32f)
@@ -152,8 +172,10 @@ public class gameManager : MonoBehaviour
                 name = "CloudyCrown_Midnight",
                 bgIndex = idxMidnight,
                 isNight = true,
+                audioTheme = DiurnalAudioTheme.Night,
                 sunColor = new Color(0.70f, 0.82f, 1.0f),
                 sunIntensity = 0.92f,
+                ambientIntensity = 0.625f,
                 ambientSky = new Color(0.38f, 0.42f, 0.55f),
                 ambientEquator = new Color(0.30f, 0.33f, 0.42f),
                 ambientGround = new Color(0.22f, 0.24f, 0.28f)
@@ -226,6 +248,20 @@ public class gameManager : MonoBehaviour
         ApplyPhaseImmediate(currentPhaseIndex);
     }
 
+    AudioClip GetMusicClipForPhase(DiurnalPhase phase)
+    {
+        switch (phase.audioTheme)
+        {
+            case DiurnalAudioTheme.Dusk:
+                return duskMusicClip != null ? duskMusicClip : dayMusicClip;
+            case DiurnalAudioTheme.Night:
+                return nightMusicClip != null ? nightMusicClip : dayMusicClip;
+            case DiurnalAudioTheme.Day:
+            default:
+                return dayMusicClip;
+        }
+    }
+
     void SetupMusic()
     {
         musicPrimary = GetComponent<AudioSource>();
@@ -239,26 +275,36 @@ public class gameManager : MonoBehaviour
 
         music = musicPrimary;
 
-        // Resolve Day and Night music clips
+        // Resolve Day, Dusk (Crows cawing), and Night music clips
         dayMusicClip = null;
+        duskMusicClip = null;
         nightMusicClip = null;
         if (BGM != null)
         {
             for (int i = 0; i < BGM.Length; i++)
             {
                 if (BGM[i] == null) continue;
-                if (BGM[i].name.IndexOf("night", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                string n = BGM[i].name;
+                if (n.IndexOf("night", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     nightMusicClip = BGM[i];
-                else if (BGM[i].name.IndexOf("day", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                else if (n.IndexOf("dusk", System.StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("crow", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    duskMusicClip = BGM[i];
+                else if (n.IndexOf("day", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     dayMusicClip = BGM[i];
             }
         }
+
+        if (!duskMusicClip) duskMusicClip = Resources.Load<AudioClip>("sounds/DuskBG");
+        if (!duskMusicClip) duskMusicClip = Resources.Load<AudioClip>("DuskBG");
+
         if (!dayMusicClip && BGM != null && BGM.Length > 0) dayMusicClip = BGM[0];
+        if (!dayMusicClip) dayMusicClip = Resources.Load<AudioClip>("sounds/DayBG");
         if (!nightMusicClip && BGM != null && BGM.Length > 1) nightMusicClip = BGM[1];
-        if (!nightMusicClip) nightMusicClip = dayMusicClip;
+        if (!nightMusicClip) nightMusicClip = Resources.Load<AudioClip>("sounds/NightBG");
+        if (!duskMusicClip) duskMusicClip = dayMusicClip;
 
         var curPhase = diurnalPhases[currentPhaseIndex];
-        currentBgmClip = curPhase.isNight ? nightMusicClip : dayMusicClip;
+        currentBgmClip = GetMusicClipForPhase(curPhase);
 
         if (currentBgmClip != null)
         {
@@ -296,9 +342,17 @@ public class gameManager : MonoBehaviour
             sunLight.color = p.sunColor;
             sunLight.intensity = p.sunIntensity;
         }
+        RenderSettings.ambientIntensity = p.ambientIntensity;
+        RenderSettings.reflectionIntensity = p.ambientIntensity;
         RenderSettings.ambientSkyColor = p.ambientSky;
         RenderSettings.ambientEquatorColor = p.ambientEquator;
         RenderSettings.ambientGroundColor = p.ambientGround;
+
+        // Set firefly intensity for current phase
+        if (TCFireflySwarm.Instance)
+        {
+            TCFireflySwarm.Instance.SetIntensity(p.name == "CloudyCrown_Midnight" ? 1f : 0f);
+        }
     }
 
     void ApplySkyboxFaceTextures(Material targetMat, Material srcMat, bool isSlot2)
@@ -322,6 +376,36 @@ public class gameManager : MonoBehaviour
             targetMat.SetFloat("_Exposure" + suffix, 1f);
     }
 
+    AudioClip roosterClip;
+    Coroutine roosterCoroutine;
+    void PlayRoosterVoice()
+    {
+        AudioClip clip = roosterSound;
+        if (!clip) clip = roosterClip;
+        if (!clip)
+        {
+            roosterClip = Resources.Load<AudioClip>("sounds/Rooster") ?? Resources.Load<AudioClip>("Sfx/rooster");
+            clip = roosterClip;
+        }
+        if (clip && TCSave.Sound)
+        {
+            TCAudio.Play(clip, 0.9f);
+        }
+    }
+
+    void ScheduleRoosterVoice(float delay)
+    {
+        if (roosterCoroutine != null) StopCoroutine(roosterCoroutine);
+        roosterCoroutine = StartCoroutine(PlayRoosterDelayed(delay));
+    }
+
+    IEnumerator PlayRoosterDelayed(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        PlayRoosterVoice();
+        roosterCoroutine = null;
+    }
+
     void StartTransitionToNextPhase()
     {
         if (diurnalPhases == null || diurnalPhases.Length == 0) return;
@@ -342,7 +426,7 @@ public class gameManager : MonoBehaviour
             RenderSettings.skybox = blendedSkyboxMat;
         }
 
-        AudioClip targetClip = nxtPhase.isNight ? nightMusicClip : dayMusicClip;
+        AudioClip targetClip = GetMusicClipForPhase(nxtPhase);
         if (targetClip != null && targetClip != currentBgmClip)
         {
             StartAudioCrossfade(targetClip, PhaseTransitionDuration);
@@ -412,6 +496,8 @@ public class gameManager : MonoBehaviour
             }
 
             // 3. Smooth Ambient light lerp
+            RenderSettings.ambientIntensity = Mathf.Lerp(curP.ambientIntensity, nxtP.ambientIntensity, blendK);
+            RenderSettings.reflectionIntensity = Mathf.Lerp(curP.ambientIntensity, nxtP.ambientIntensity, blendK);
             RenderSettings.ambientSkyColor = Color.Lerp(curP.ambientSky, nxtP.ambientSky, blendK);
             RenderSettings.ambientEquatorColor = Color.Lerp(curP.ambientEquator, nxtP.ambientEquator, blendK);
             RenderSettings.ambientGroundColor = Color.Lerp(curP.ambientGround, nxtP.ambientGround, blendK);
@@ -448,8 +534,37 @@ public class gameManager : MonoBehaviour
                 currentPhaseIndex = nextPhaseIndex;
                 phaseTimer = 0f;
                 ApplyPhaseImmediate(currentPhaseIndex);
+
+                if (diurnalPhases != null && currentPhaseIndex < diurnalPhases.Length &&
+                    diurnalPhases[currentPhaseIndex].name == "CloudyCrown_Evening")
+                {
+                    ScheduleRoosterVoice(1.0f);
+                }
             }
         }
+
+        // Firefly particle swarm around spider during CloudyCrown_Midnight
+        float fireflyTarget = 0f;
+        if (diurnalPhases != null && currentPhaseIndex < diurnalPhases.Length)
+        {
+            var cPhase = diurnalPhases[currentPhaseIndex];
+            if (!isTransitioning)
+            {
+                if (cPhase.name == "CloudyCrown_Midnight") fireflyTarget = 1f;
+            }
+            else
+            {
+                var nPhase = diurnalPhases[nextPhaseIndex];
+                float progress = Mathf.Clamp01(transitionTimer / PhaseTransitionDuration);
+                float blendK = Mathf.SmoothStep(0f, 1f, progress);
+
+                if (cPhase.name == "CloudyCrown_Midnight")
+                    fireflyTarget = 1f - blendK;
+                else if (nPhase.name == "CloudyCrown_Midnight")
+                    fireflyTarget = blendK;
+            }
+        }
+        if (TCFireflySwarm.Instance) TCFireflySwarm.Instance.SetIntensity(fireflyTarget);
     }
 
     /// Called by the UI after the "tap to start"/tutorial.
@@ -457,6 +572,13 @@ public class gameManager : MonoBehaviour
     {
         p.paused = false;
         if (p.anim) p.anim.SetBool("started", true);
+        if (diurnalPhases != null && currentPhaseIndex >= 0 && currentPhaseIndex < diurnalPhases.Length)
+        {
+            if (diurnalPhases[currentPhaseIndex].name == "CloudyCrown_Evening")
+            {
+                ScheduleRoosterVoice(1.0f);
+            }
+        }
     }
 
     /// One collected coin = exactly one coin in the wallet (no multipliers, no doubling).
