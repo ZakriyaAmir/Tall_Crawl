@@ -53,8 +53,8 @@ public class gameManager : MonoBehaviour
     bool isTransitioning;
     float transitionTimer;
     float phaseTimer;
-    const float PhaseStayDuration = 20.0f;       // Daytime changes every 20 seconds
-    const float PhaseTransitionDuration = 5.5f;  // Smooth crossfade duration between times of day
+    const float PhaseStayDuration = 20.0f;       // Daytime stays steady between transitions
+    const float PhaseTransitionDuration = 22.0f; // 4x slower transition duration (was 5.5s) for smooth, gradual time of day blend
 
     Material blendedSkyboxMat;
     Skybox cameraSkybox;
@@ -389,7 +389,8 @@ public class gameManager : MonoBehaviour
         }
         if (clip && TCSave.Sound)
         {
-            TCAudio.Play(clip, 0.9f);
+            // Reduced volume by an additional 60% (0.315f * 0.40f = ~0.126f)
+            TCAudio.Play(clip, 0.126f);
         }
     }
 

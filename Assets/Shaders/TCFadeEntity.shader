@@ -6,6 +6,8 @@ Shader "TallCrawl/TCFadeEntity"
         _BaseColor ("Base Color", Color) = (1,1,1,1)
         _MainTex ("Base (RGB) Trans (A)", 2D) = "white" {}
         _BaseMap ("Base Map", 2D) = "white" {}
+        _FlashColor ("Flash Color", Color) = (1,1,1,1)
+        _FlashAmount ("Flash Amount", Range(0, 1)) = 0
     }
     SubShader
     {
@@ -39,6 +41,8 @@ Shader "TallCrawl/TCFadeEntity"
             sampler2D _MainTex;
             float4 _MainTex_ST;
             fixed4 _Color;
+            fixed4 _FlashColor;
+            float _FlashAmount;
 
             v2f vert (appdata_t v)
             {
@@ -51,6 +55,7 @@ Shader "TallCrawl/TCFadeEntity"
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed4 col = tex2D(_MainTex, i.texcoord) * _Color;
+                col.rgb = lerp(col.rgb, _FlashColor.rgb, _FlashAmount);
                 return col;
             }
             ENDCG

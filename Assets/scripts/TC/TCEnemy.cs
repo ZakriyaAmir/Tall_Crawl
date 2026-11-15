@@ -52,12 +52,20 @@ public class TCEnemy : MonoBehaviour
     /// <summary>
     /// Smashed to pieces by the Sonic-style Roll Attack or Chilli Boost!
     /// </summary>
-    public virtual void Smash()
+    public virtual void Smash(Vector3? hitSourcePos = null)
     {
         if (isSmashed) return;
         isSmashed = true;
 
-        TCHitFlash.FlashAndDestroy(gameObject, 0.5f);
+        if (IsPlayerInChilliMode())
+        {
+            Vector3 sPos = hitSourcePos ?? (player.Instance != null ? player.Instance.transform.position : transform.position - Vector3.up);
+            TCHitFlash.ChilliKnockbackAndDestroy(gameObject, sPos, 0.3f);
+        }
+        else
+        {
+            TCHitFlash.FlashAndDestroy(gameObject, 0.5f);
+        }
 
         if (pooled)
         {
@@ -67,6 +75,18 @@ public class TCEnemy : MonoBehaviour
         {
             gameObject.SetActive(false);
         }
+    }
+
+    protected static bool IsPlayerInChilliMode()
+    {
+        var p = player.Instance != null ? player.Instance : FindObjectOfType<player>();
+        if (p != null)
+        {
+            if (p.boost) return true;
+            var pi = p.GetComponentInChildren<playerInteract>();
+            if (pi != null && pi.boostDuration > 0f) return true;
+        }
+        return false;
     }
 
     // ---------------- Procedural Materials & Textures ----------------
@@ -637,10 +657,10 @@ public class TCWasp : TCEnemy
         if (audioSrc && audioSrc.isPlaying) audioSrc.Stop();
     }
 
-    public override void Smash()
+    public override void Smash(Vector3? hitSourcePos = null)
     {
         if (audioSrc && audioSrc.isPlaying) audioSrc.Stop();
-        base.Smash();
+        base.Smash(hitSourcePos);
     }
 
     void PlayBuzz()
@@ -900,11 +920,11 @@ public class TCSquirrel : TCEnemy
         return _leafMat;
     }
 
-    public override void Smash()
+    public override void Smash(Vector3? hitSourcePos = null)
     {
         if (warningPS) { warningPS.Stop(true, ParticleSystemStopBehavior.StopEmitting); warningPS = null; }
         if (warningGO) { Object.Destroy(warningGO, 2.0f); warningGO = null; }
-        base.Smash();
+        base.Smash(hitSourcePos);
     }
 
     void OnDisable()

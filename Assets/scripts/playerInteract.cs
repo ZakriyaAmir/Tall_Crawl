@@ -250,13 +250,15 @@ public class playerInteract : MonoBehaviour
             }
             if (other.CompareTag("bees"))
             {
-                TCFx.Spawn(BeesimpactParticle, transform.position);
                 if (boostDuration > 0)
                 {
+                    GameObject beeObj = pooled != null ? pooled.gameObject : (other.transform.parent ? other.transform.parent.gameObject : other.gameObject);
+                    TCFx.ScatterBeeSwarm(beeObj, transform.position, 1.0f);
                     Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                 }
                 else
                 {
+                    TCFx.Spawn(BeesimpactParticle, transform.position);
                     Play(TCSfx.Get("thrust") ?? boostSound, 1f);
                 }
                 if (pooled) pooled.Release();
@@ -276,7 +278,7 @@ public class playerInteract : MonoBehaviour
             }
             if (enemy != null)
             {
-                enemy.Smash();
+                enemy.Smash(transform.position);
                 if (boostDuration > 0)
                 {
                     if (enemy.enemyType == TCEnemyType.Wasp) Play(TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
@@ -311,7 +313,7 @@ public class playerInteract : MonoBehaviour
         {
             if (boostDuration > 0)
             {
-                enemy.Smash();
+                enemy.Smash(transform.position);
                 if (enemy.enemyType == TCEnemyType.Wasp) Play(TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                 else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                 else Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
@@ -371,8 +373,9 @@ public class playerInteract : MonoBehaviour
             if (jumpTimer > 0) return; // jumped over
             if (boostDuration > 0)
             {
-                // In chilli mode: thrust through bee swarms with punchy bee swarm kill sound
-                TCFx.Spawn(BeesimpactParticle, transform.position);
+                // In chilli mode: active bees fly away scattering off the tree trunk with bee swarm kill sound
+                GameObject beeObj = pooled != null ? pooled.gameObject : (other.transform.parent ? other.transform.parent.gameObject : other.gameObject);
+                TCFx.ScatterBeeSwarm(beeObj, transform.position, 1.0f);
                 Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                 if (pooled) pooled.Release();
                 TCSave.AddBeeKill(1);
