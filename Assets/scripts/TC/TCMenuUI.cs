@@ -806,9 +806,10 @@ public class TCMenuUI : MonoBehaviour
                         SkinUnlock.Ads => "AD " + TCSave.SkinAdsWatched(c.idx) + "/" + def.amount,
                         SkinUnlock.BestScore => def.amount + "M",
                         SkinUnlock.Runs => def.amount + " runs",
-                        SkinUnlock.KillBees => Mathf.Min(TCSave.BeesKilled, def.amount) + "/" + def.amount + " killed",
-                        SkinUnlock.KillWasps => Mathf.Min(TCSave.WaspsKilled, def.amount) + "/" + def.amount + " killed",
-                        SkinUnlock.KillSquirrels => Mathf.Min(TCSave.SquirrelsKilled, def.amount) + "/" + def.amount + " killed",
+                        SkinUnlock.KillBees => Mathf.Min(TCSave.BeesKnocked, def.amount) + "/" + def.amount + " knocked",
+                        SkinUnlock.KillWasps => Mathf.Min(TCSave.WaspsKnocked, def.amount) + "/" + def.amount + " knocked",
+                        SkinUnlock.KillSquirrels => Mathf.Min(TCSave.SquirrelsKnocked, def.amount) + "/" + def.amount + " knocked",
+                        SkinUnlock.KnockBats => Mathf.Min(TCSave.BatsKnocked, def.amount) + "/" + def.amount + " knocked",
                         _ => "Free"
                     };
                 }

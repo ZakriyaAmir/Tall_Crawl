@@ -263,7 +263,7 @@ public class playerInteract : MonoBehaviour
                 }
                 if (pooled) pooled.Release();
                 TCFx.Shake(0.18f);
-                TCSave.AddBeeKill(1);
+                TCSave.AddBeeKnock(1);
                 TCSkins.CheckAchievements();
                 if (boostDuration > 0)
                 {
@@ -297,8 +297,14 @@ public class playerInteract : MonoBehaviour
                 }
                 TCFx.Spawn(impactParticle, other.transform.position);
                 TCFx.Shake(0.2f);
-                if (enemy.enemyType == TCEnemyType.Wasp) TCSave.AddWaspKill(1);
-                else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKill(1);
+                if (enemy.enemyType == TCEnemyType.Wasp)
+                {
+                    var waspComp = enemy as TCWasp;
+                    bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
+                    if (isBat) TCSave.AddBatKnock(1);
+                    else TCSave.AddWaspKnock(1);
+                }
+                else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKnock(1);
                 TCSkins.CheckAchievements();
 
                 if (boostDuration > 0)
@@ -331,8 +337,14 @@ public class playerInteract : MonoBehaviour
                 else Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
                 TCFx.Spawn(impactParticle, other.transform.position);
                 TCFx.Shake(0.12f);
-                if (enemy.enemyType == TCEnemyType.Wasp) TCSave.AddWaspKill(1);
-                else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKill(1);
+                if (enemy.enemyType == TCEnemyType.Wasp)
+                {
+                    var waspComp = enemy as TCWasp;
+                    bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
+                    if (isBat) TCSave.AddBatKnock(1);
+                    else TCSave.AddWaspKnock(1);
+                }
+                else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKnock(1);
                 TCSkins.CheckAchievements();
                 OnEvent?.Invoke("chilli_kill", other.transform.position);
                 return;
@@ -392,7 +404,7 @@ public class playerInteract : MonoBehaviour
                 TCFx.ScatterBeeSwarm(beeObj, transform.position, 1.0f);
                 Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                 if (pooled) pooled.Release();
-                TCSave.AddBeeKill(1);
+                TCSave.AddBeeKnock(1);
                 TCSkins.CheckAchievements();
                 OnEvent?.Invoke("chilli_kill", transform.position);
                 TCFx.Shake(0.1f);

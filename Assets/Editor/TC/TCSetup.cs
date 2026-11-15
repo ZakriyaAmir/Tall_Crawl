@@ -270,6 +270,34 @@ public static class TCSetup
                 t.SetPixel(x, y, baseCol);
                 continue;
             }
+            if (d.name == "Bat")
+            {
+                float d_spine = Mathf.Abs(u - 0.25f);
+                if (d_spine > 0.5f) d_spine = 1.0f - d_spine;
+                float d_belly = Mathf.Abs(u - 0.75f);
+                if (d_belly > 0.5f) d_belly = 1.0f - d_belly;
+
+                // Scalloped gothic bat wing ribs and midnight purple membrane
+                float ribPhase = v * 5.0f;
+                float ribWave = Mathf.Abs(Mathf.Repeat(ribPhase + d_spine * 2.5f, 1f) - 0.5f) * 2f;
+                bool isRib = ribWave < 0.22f && d_spine > 0.05f;
+
+                Color midnightBase = new Color(0.14f, 0.11f, 0.17f); // Deep velvety midnight violet
+                Color purpleMembrane = new Color(0.48f, 0.24f, 0.58f); // Royal purple wing membrane
+                Color spineDusk = new Color(0.24f, 0.18f, 0.28f);
+
+                Color baseCol = isRib ? purpleMembrane : (d_spine < 0.08f ? spineDusk : midnightBase);
+                if (d_belly < 0.20f)
+                {
+                    baseCol = Color.Lerp(baseCol, new Color(0.22f, 0.16f, 0.26f), (0.20f - d_belly) / 0.20f);
+                }
+
+                float curv = 0.74f + 0.26f * Mathf.Sin(v * Mathf.PI * 0.5f);
+                float s = 0.94f + 0.06f * Mathf.Cos(d_spine * Mathf.PI * 2f);
+                baseCol *= curv * s; baseCol.a = 1f;
+                t.SetPixel(x, y, baseCol);
+                continue;
+            }
             if (d.name == "Ladybug")
             {
                 float d_spine = Mathf.Abs(u - 0.25f);

@@ -15,6 +15,9 @@ public partial class TCCuteSpider : MonoBehaviour
     float rollTimer, rollDuration, rollSpinAngle;
     Transform head; Vector3 headRest; readonly List<Transform> eyes = new List<Transform>(); readonly List<Vector3> eyeRest = new List<Vector3>();
     Transform abdomen; readonly List<Transform> spinnerets = new List<Transform>();
+    Transform wingPivotL, wingPivotR;
+    Quaternion wingRestL = Quaternion.identity, wingRestR = Quaternion.identity;
+    string wingType;
     float gaitPhase, gaitOmega, lastYaw;
     float landBounce;
     bool wasJumping;
@@ -65,6 +68,7 @@ public partial class TCCuteSpider : MonoBehaviour
         root.localPosition = cs.hasRestRoot ? cs.restRoot : (center - up * Vector3.Dot(center, up) + up * Mathf.Min(Vector3.Dot(center, up), R * 0.2f));
         root.localRotation = Quaternion.LookRotation(fwd, up);
         cs.legs.Clear(); cs.legRest.Clear(); cs.eyeRest.Clear(); cs.spinnerets.Clear();
+        cs.wingPivotL = null; cs.wingPivotR = null; cs.wingType = null;
 
         var bodyMat = Resources.Load<Material>("Skins/Skin_" + skin);
         if (!bodyMat) bodyMat = Flat(def.body * 0.85f, null, 0, def.metallic, def.gloss);
@@ -112,8 +116,13 @@ public partial class TCCuteSpider : MonoBehaviour
         }
         else if (def.name == "Lava")
         {
-            headBodyCol = new Color(0.12f, 0.09f, 0.11f); // Dark basalt volcanic rock cephalothorax
-            legCol = new Color(0.14f, 0.10f, 0.12f);      // Obsidian legs with glowing tips
+            headBodyCol = new Color(0.72f, 0.14f, 0.10f); // Glowing volcanic magma red cephalothorax & head
+            legCol = new Color(0.58f, 0.12f, 0.08f);      // Deep molten crimson legs
+        }
+        else if (def.name == "Bat")
+        {
+            headBodyCol = new Color(0.18f, 0.14f, 0.22f); // Deep velvety midnight-violet bat head & cephalothorax
+            legCol = new Color(0.15f, 0.12f, 0.18f);      // Dusky midnight legs
         }
 
         var plain = Flat(headBodyCol, null, def.emission * 0.5f, def.metallic, def.gloss);
@@ -230,6 +239,113 @@ public partial class TCCuteSpider : MonoBehaviour
             tooth.name = "fang_tip";
         }
 
+        // --- Character Ears for Animal Skins (Squirrel & Tiger) ---
+        if (def.name == "Squirrel")
+        {
+            // Perked, tufted squirrel ears sitting proudly on the dorsal-lateral crown of the head
+            var earBaseMat = Flat(headBodyCol, null, def.emission * 0.4f, def.metallic, def.gloss);
+            var earInnerMat = Flat(new Color(0.98f, 0.88f, 0.78f, 1f), null, 0f, 0.05f, 0.90f);
+            var tuftMat = Flat(new Color(0.52f, 0.18f, 0.06f, 1f), null, 0f, def.metallic, def.gloss);
+
+            for (int sgn = -1; sgn <= 1; sgn += 2)
+            {
+                // Main upright ear body tilted charmingly outward
+                var earPos = new Vector3(0.35f * sgn, 0.46f, 0.04f);
+                var ear = Part(PrimitiveType.Capsule, headT, earPos, new Vector3(0.22f, 0.38f, 0.15f), earBaseMat).transform;
+                ear.localRotation = Quaternion.Euler(-8f, 16f * sgn, -24f * sgn);
+                ear.name = sgn < 0 ? "ear_squirrel_L" : "ear_squirrel_R";
+
+                // Soft warm cream inner ear fold
+                var inner = Part(PrimitiveType.Capsule, ear, new Vector3(0, -0.02f, 0.22f), new Vector3(0.65f, 0.72f, 0.45f), earInnerMat).transform;
+                inner.name = "inner_ear";
+
+                // Signature squirrel ear tuft / fluffy fur tip at the pointed apex
+                var tuft = Part(PrimitiveType.Sphere, ear, new Vector3(0, 0.46f, 0.02f), new Vector3(0.48f, 0.44f, 0.40f), tuftMat).transform;
+                tuft.name = "ear_tuft";
+            }
+        }
+        else if (def.name == "Tiger")
+        {
+            // Rounded, alert predator tiger ears with black outer rim and soft cream inner cup
+            var earOuterMat = Flat(headBodyCol, null, def.emission * 0.4f, def.metallic, def.gloss);
+            var earRimMat = Flat(new Color(0.12f, 0.10f, 0.12f, 1f), null, 0f, 0.05f, 0.85f); // Black tiger ear back / rim
+            var earInnerMat = Flat(new Color(0.98f, 0.96f, 0.90f, 1f), null, 0f, 0.05f, 0.92f); // Fluffy white/cream inner cup
+
+            for (int sgn = -1; sgn <= 1; sgn += 2)
+            {
+                // Rounded ear cup perched on the lateral crown of the head
+                var earPos = new Vector3(0.38f * sgn, 0.44f, 0.06f);
+                var ear = Part(PrimitiveType.Sphere, headT, earPos, new Vector3(0.28f, 0.26f, 0.14f), earOuterMat).transform;
+                ear.localRotation = Quaternion.Euler(14f, 22f * sgn, -16f * sgn);
+                ear.name = sgn < 0 ? "ear_tiger_L" : "ear_tiger_R";
+
+                // Black back-shell and rim marking
+                var rim = Part(PrimitiveType.Sphere, ear, new Vector3(0, 0, -0.15f), new Vector3(0.98f, 0.98f, 0.75f), earRimMat).transform;
+                rim.name = "ear_rim";
+
+                // Fluffy white/cream inner cup
+                var inner = Part(PrimitiveType.Sphere, ear, new Vector3(0, 0, 0.22f), new Vector3(0.68f, 0.68f, 0.50f), earInnerMat).transform;
+                inner.name = "inner_ear";
+            }
+        }
+        else if (def.name == "Ruby")
+        {
+            if (!gemMesh) gemMesh = MakeGemMesh();
+            var foreheadGemMat = Flat(new Color(1.0f, 0.22f, 0.40f, 1f), null, 0.65f, 0.3f, 0.98f);
+            if (foreheadGemMat.HasProperty("_OutlineWidth")) foreheadGemMat.SetFloat("_OutlineWidth", 1.2f);
+            if (foreheadGemMat.HasProperty("_OutlineColor")) foreheadGemMat.SetColor("_OutlineColor", new Color(0.22f, 0.02f, 0.06f, 1f));
+
+            // Forehead crown royal ruby gemstone
+            var headGem = new GameObject("ruby_forehead_gem");
+            headGem.transform.SetParent(headT, false);
+            headGem.transform.localPosition = new Vector3(0, 0.38f, 0.32f);
+            headGem.transform.localRotation = Quaternion.Euler(-32f, 0, 0);
+            headGem.transform.localScale = new Vector3(0.18f, 0.16f, 0.18f);
+
+            headGem.AddComponent<MeshFilter>().sharedMesh = gemMesh;
+            var mr = headGem.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = foreheadGemMat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+        else if (def.name == "Bat")
+        {
+            if (!cone) cone = MakeCone();
+            // Authentic cute stylized pointy bat ears: tall, razor-pointy alert pinnae with dusky mauve inner ear canal
+            var earBaseMat = Flat(headBodyCol, null, def.emission * 0.4f, def.metallic, def.gloss);
+            var earInnerMat = Flat(new Color(0.72f, 0.45f, 0.62f, 1f), null, 0f, 0.05f, 0.90f);
+            var tragusMat = Flat(new Color(0.62f, 0.38f, 0.54f, 1f), null, 0f, def.metallic, def.gloss);
+
+            for (int sgn = -1; sgn <= 1; sgn += 2)
+            {
+                // Main pointy bat ear (positioned right on the top-front crown of the head, framing the eyes)
+                var earPos = new Vector3(0.22f * sgn, 0.38f, 0.14f);
+                var ear = new GameObject(sgn < 0 ? "ear_bat_L" : "ear_bat_R");
+                ear.transform.SetParent(headT, false);
+                ear.transform.localPosition = earPos;
+                ear.transform.localRotation = Quaternion.Euler(8f, 10f * sgn, -22f * sgn);
+                ear.transform.localScale = new Vector3(0.20f, 0.48f, 0.12f);
+                ear.AddComponent<MeshFilter>().sharedMesh = cone;
+                var mrEar = ear.AddComponent<MeshRenderer>();
+                mrEar.sharedMaterial = earBaseMat;
+                mrEar.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+                // Inner pointed ear cavity (scalloped dusky mauve membrane with sharp tip)
+                var inner = new GameObject("inner_ear");
+                inner.transform.SetParent(ear.transform, false);
+                inner.transform.localPosition = new Vector3(0, 0.015f, 0.02f);
+                inner.transform.localRotation = Quaternion.identity;
+                inner.transform.localScale = new Vector3(0.72f, 0.82f, 0.60f);
+                inner.AddComponent<MeshFilter>().sharedMesh = cone;
+                var mrInner = inner.AddComponent<MeshRenderer>();
+                mrInner.sharedMaterial = earInnerMat;
+                mrInner.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+                // Cute bat tragus notch on the inner margin of the ear lobe
+                var tragus = Part(PrimitiveType.Sphere, ear.transform, new Vector3(-0.06f * sgn, 0.06f, 0.05f), new Vector3(0.28f, 0.22f, 0.22f), tragusMat).transform;
+                tragus.name = "ear_tragus";
+            }
+        }
+
         // --- 6 Sleek, Slender Legs (3 on each side uniformly spaced) Seamlessly Attached with Smooth Tips ---
         float[] legZ = { 0.28f, 0.00f, -0.28f };
         float[] legX = { 0.40f, 0.45f, 0.41f };
@@ -328,15 +444,94 @@ public partial class TCCuteSpider : MonoBehaviour
                     float thickness = 0.22f * (distFromCenter == 0 ? 1.25f : 1.0f);
                     g.transform.localScale = new Vector3(thickness, len, thickness);
 
-                    // Gleaming 24k gold royal crown spikes - all rich gold, zero white bleaching
-                    Color spkColor = (distFromCenter == 0) ? new Color(1.0f, 0.88f, 0.10f) : ((k % 2 == 0) ? new Color(0.98f, 0.82f, 0.08f) : new Color(0.95f, 0.76f, 0.04f));
-                    float spkEmis = (distFromCenter == 0) ? 0.45f : 0.30f;
+                    // Distinct royal imperial amber-gold crown spikes - clearly distinct from bright canary-gold spider body
+                    Color spkColor = (distFromCenter == 0)
+                        ? new Color(1.0f, 0.65f, 0.04f)   // Majestic central spire: Deep Imperial Amber Gold (#FFA60A)
+                        : ((k % 2 == 0)
+                            ? new Color(0.96f, 0.58f, 0.02f) // Flanking spires: Warm Burnished Gold (#F59405)
+                            : new Color(1.0f, 0.72f, 0.08f)); // Outer spires: Radiant Honey Gold (#FFB814)
+
+                    float spkEmis = (distFromCenter == 0) ? 0.28f : 0.20f;
                     var crownMat = Flat(spkColor, null, spkEmis, 0.95f, 0.98f);
+                    if (crownMat.HasProperty("_OutlineWidth")) crownMat.SetFloat("_OutlineWidth", 1.4f);
+                    if (crownMat.HasProperty("_OutlineColor")) crownMat.SetColor("_OutlineColor", new Color(0.18f, 0.10f, 0.04f, 1f));
 
                     g.AddComponent<MeshFilter>().sharedMesh = cone;
                     var mr = g.AddComponent<MeshRenderer>();
                     mr.sharedMaterial = crownMat;
                     mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
+            }
+            else if (def.name == "Ruby")
+            {
+                if (!gemMesh) gemMesh = MakeGemMesh();
+
+                // Ruby Gem Material: luminous pigeon-blood ruby red with glowing facet luster
+                var rubyGemMat = Flat(new Color(0.92f, 0.10f, 0.28f, 1f), null, 0.45f, 0.2f, 0.95f);
+                if (rubyGemMat.HasProperty("_OutlineWidth")) rubyGemMat.SetFloat("_OutlineWidth", 1.2f);
+                if (rubyGemMat.HasProperty("_OutlineColor")) rubyGemMat.SetColor("_OutlineColor", new Color(0.22f, 0.02f, 0.06f, 1f));
+
+                // Secondary alternating garnet/rose sapphire gem material for rich jewelry contrast
+                var roseGemMat = Flat(new Color(1.0f, 0.25f, 0.42f, 1f), null, 0.55f, 0.25f, 0.98f);
+                if (roseGemMat.HasProperty("_OutlineWidth")) roseGemMat.SetFloat("_OutlineWidth", 1.2f);
+                if (roseGemMat.HasProperty("_OutlineColor")) roseGemMat.SetColor("_OutlineColor", new Color(0.22f, 0.02f, 0.06f, 1f));
+
+                // Helper to compute exact dorsal surface height at local (gx, gz) on the sculpted abdomen
+                float GetDorsalSurfaceY(float gx, float gz)
+                {
+                    float cT = Mathf.Clamp((gz + 0.03f) / 0.52f, -0.99f, 0.99f);
+                    float theta = Mathf.Acos(cT);
+                    float sT = Mathf.Sin(theta);
+                    float vT = theta / Mathf.PI;
+                    float wM = 1.0f + 0.16f * cT - 0.05f * (cT * cT);
+                    float rxT = sT * wM * 0.52f;
+                    float ryT = sT * wM * 0.40f;
+                    float ycT = sT * sT * 0.04f - 0.02f * vT;
+                    float term = Mathf.Max(0f, 1.0f - (gx * gx) / Mathf.Max(0.0001f, rxT * rxT));
+                    return ycT + ryT * Mathf.Sqrt(term);
+                }
+
+                // Royal Gemstone Brooch Formation:
+                // 1 Grand Majestic Centerpiece Ruby crowned at dorsal apex + 6 Halo Gemstones in an elegant symmetrical ring
+                // All gems sit strictly UPRIGHT with their sparkling flat table facets facing skyward (+Y).
+                float apexV = 0.42f;
+                float cApex = Mathf.Cos(apexV * Mathf.PI);
+                float zApex = cApex * 0.52f - 0.03f;
+                float yApex = GetDorsalSurfaceY(0f, zApex);
+
+                // 1. Grand Centerpiece Ruby
+                var centerGem = new GameObject("ruby_centerpiece");
+                centerGem.transform.SetParent(abd, false);
+                centerGem.transform.localPosition = new Vector3(0f, yApex - 0.01f, zApex);
+                // abd is pitched by -2 deg; rotate +2 deg around X so the table facet is 100% upright in world space
+                centerGem.transform.localRotation = Quaternion.Euler(2f, 0f, 0f);
+                centerGem.transform.localScale = new Vector3(0.27f, 0.23f, 0.27f);
+
+                centerGem.AddComponent<MeshFilter>().sharedMesh = gemMesh;
+                var mrCenter = centerGem.AddComponent<MeshRenderer>();
+                mrCenter.sharedMaterial = rubyGemMat;
+                mrCenter.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+                // 2. Halo of 6 Sparkling Gemstones in a symmetrical oval ring around the centerpiece
+                float haloRx = 0.175f;
+                float haloRz = 0.185f;
+                for (int i = 0; i < 6; i++)
+                {
+                    float ang = i * Mathf.PI * 2.0f / 6.0f;
+                    float gx = Mathf.Sin(ang) * haloRx;
+                    float gz = zApex + Mathf.Cos(ang) * haloRz;
+                    float gy = GetDorsalSurfaceY(gx, gz) - 0.015f;
+
+                    var haloGem = new GameObject("ruby_halo_gem_" + i);
+                    haloGem.transform.SetParent(abd, false);
+                    haloGem.transform.localPosition = new Vector3(gx, gy, gz);
+                    haloGem.transform.localRotation = Quaternion.Euler(2f, 0f, 0f);
+                    haloGem.transform.localScale = new Vector3(0.165f, 0.14f, 0.165f);
+
+                    haloGem.AddComponent<MeshFilter>().sharedMesh = gemMesh;
+                    var mrHalo = haloGem.AddComponent<MeshRenderer>();
+                    mrHalo.sharedMaterial = (i % 2 == 0) ? roseGemMat : rubyGemMat;
+                    mrHalo.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 }
             }
             else
@@ -443,6 +638,172 @@ public partial class TCCuteSpider : MonoBehaviour
                     mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 }
             }
+        }
+
+        // Character wings on spider's back (Bee, Wasp, Bat)
+        if (def.name == "Bee")
+        {
+            var wingLMesh = MakeBeeWingMesh(true);
+            var wingRMesh = MakeBeeWingMesh(false);
+
+            var beeTex = Resources.Load<Texture2D>("Enemies/Bee_Wing");
+#if UNITY_EDITOR
+            if (!beeTex) beeTex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/TC/Resources/Enemies/Bee_Wing.png");
+#endif
+            // Transparent alpha-blended material with translucent silver-grey membrane and cellular venation
+            var transShader = Shader.Find("TallCrawl/TCFadeEntity")
+                ?? Shader.Find("Unlit/Transparent")
+                ?? Shader.Find("Mobile/Particles/Alpha Blended")
+                ?? Shader.Find("Sprites/Default");
+            var beeWingMat = new Material(transShader);
+            if (beeTex) beeWingMat.mainTexture = beeTex;
+            beeWingMat.color = Color.white;
+
+            // Left Wing Pivot & Mesh (3x smaller than 7.6f, perched upright on abdomen)
+            var wingPivotL = new GameObject("bee_wing_pivot_L");
+            wingPivotL.transform.SetParent(abd, false);
+            wingPivotL.transform.localPosition = new Vector3(-0.18f, 0.42f, 0.16f);
+            wingPivotL.transform.localRotation = Quaternion.Euler(22f, -26f, 18f);
+            cs.wingPivotL = wingPivotL.transform;
+            cs.wingRestL = wingPivotL.transform.localRotation;
+            cs.wingType = "Bee";
+
+            var wingMeshL = new GameObject("wing_mesh_L");
+            wingMeshL.transform.SetParent(wingPivotL.transform, false);
+            wingMeshL.transform.localScale = Vector3.one * 2.5f; // 3x smaller!
+            var mfL = wingMeshL.AddComponent<MeshFilter>();
+            mfL.sharedMesh = wingLMesh;
+            var mrL = wingMeshL.AddComponent<MeshRenderer>();
+            mrL.sharedMaterial = beeWingMat;
+            mrL.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mrL.receiveShadows = false;
+
+            // Right Wing Pivot & Mesh
+            var wingPivotR = new GameObject("bee_wing_pivot_R");
+            wingPivotR.transform.SetParent(abd, false);
+            wingPivotR.transform.localPosition = new Vector3(0.18f, 0.42f, 0.16f);
+            wingPivotR.transform.localRotation = Quaternion.Euler(22f, 26f, -18f);
+            cs.wingPivotR = wingPivotR.transform;
+            cs.wingRestR = wingPivotR.transform.localRotation;
+
+            var wingMeshR = new GameObject("wing_mesh_R");
+            wingMeshR.transform.SetParent(wingPivotR.transform, false);
+            wingMeshR.transform.localScale = Vector3.one * 2.5f; // 3x smaller!
+            var mfR = wingMeshR.AddComponent<MeshFilter>();
+            mfR.sharedMesh = wingRMesh;
+            var mrR = wingMeshR.AddComponent<MeshRenderer>();
+            mrR.sharedMaterial = beeWingMat;
+            mrR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mrR.receiveShadows = false;
+        }
+        else if (def.name == "Wasp")
+        {
+            var wingLMesh = MakeWaspWingMesh(true);
+            var wingRMesh = MakeWaspWingMesh(false);
+
+            var waspTex = Resources.Load<Texture2D>("Enemies/Wasp_Wing");
+#if UNITY_EDITOR
+            if (!waspTex) waspTex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/TC/Resources/Enemies/Wasp_Wing.png");
+#endif
+            // Transparent alpha-blended material with translucent smoky dark slate membrane and sharp costal edge
+            var transShader = Shader.Find("TallCrawl/TCFadeEntity")
+                ?? Shader.Find("Unlit/Transparent")
+                ?? Shader.Find("Mobile/Particles/Alpha Blended")
+                ?? Shader.Find("Sprites/Default");
+            var waspWingMat = new Material(transShader);
+            if (waspTex) waspWingMat.mainTexture = waspTex;
+            waspWingMat.color = Color.white;
+
+            // Left Wing Pivot & Mesh (3x smaller than 7.6f, long razor blade swept back along abdomen)
+            var wingPivotL = new GameObject("wasp_wing_pivot_L");
+            wingPivotL.transform.SetParent(abd, false);
+            wingPivotL.transform.localPosition = new Vector3(-0.20f, 0.40f, 0.14f);
+            wingPivotL.transform.localRotation = Quaternion.Euler(14f, -12f, 8f);
+            cs.wingPivotL = wingPivotL.transform;
+            cs.wingRestL = wingPivotL.transform.localRotation;
+            cs.wingType = "Wasp";
+
+            var wingMeshL = new GameObject("wing_mesh_L");
+            wingMeshL.transform.SetParent(wingPivotL.transform, false);
+            wingMeshL.transform.localScale = Vector3.one * 2.5f; // 3x smaller!
+            var mfL = wingMeshL.AddComponent<MeshFilter>();
+            mfL.sharedMesh = wingLMesh;
+            var mrL = wingMeshL.AddComponent<MeshRenderer>();
+            mrL.sharedMaterial = waspWingMat;
+            mrL.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mrL.receiveShadows = false;
+
+            // Right Wing Pivot & Mesh
+            var wingPivotR = new GameObject("wasp_wing_pivot_R");
+            wingPivotR.transform.SetParent(abd, false);
+            wingPivotR.transform.localPosition = new Vector3(0.20f, 0.40f, 0.14f);
+            wingPivotR.transform.localRotation = Quaternion.Euler(14f, 12f, -8f);
+            cs.wingPivotR = wingPivotR.transform;
+            cs.wingRestR = wingPivotR.transform.localRotation;
+
+            var wingMeshR = new GameObject("wing_mesh_R");
+            wingMeshR.transform.SetParent(wingPivotR.transform, false);
+            wingMeshR.transform.localScale = Vector3.one * 2.5f; // 3x smaller!
+            var mfR = wingMeshR.AddComponent<MeshFilter>();
+            mfR.sharedMesh = wingRMesh;
+            var mrR = wingMeshR.AddComponent<MeshRenderer>();
+            mrR.sharedMaterial = waspWingMat;
+            mrR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mrR.receiveShadows = false;
+        }
+        else if (def.name == "Bat")
+        {
+            // Guaranteed robust bat wing mesh (uses 3D model asset with automatic procedural fallback)
+            var wingLMesh = TCEnemy.GetBatMesh("WingL") ?? TCEnemy.MakeBatWingMesh(true);
+            var wingRMesh = TCEnemy.GetBatMesh("WingR") ?? TCEnemy.MakeBatWingMesh(false);
+
+            var batTex = Resources.Load<Texture2D>("Enemies/Bat_Texture");
+#if UNITY_EDITOR
+            if (!batTex) batTex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/TC/Resources/Enemies/Bat_Texture.png");
+#endif
+            var batWingMat = Flat(new Color(0.28f, 0.22f, 0.36f, 1f), null, 0.28f, 0.1f, 0.85f);
+            if (batTex) batWingMat.mainTexture = batTex;
+            if (batWingMat.HasProperty("_OutlineWidth")) batWingMat.SetFloat("_OutlineWidth", 1.4f);
+            if (batWingMat.HasProperty("_OutlineColor")) batWingMat.SetColor("_OutlineColor", new Color(0.38f, 0.14f, 0.52f, 1f));
+
+            // Left Wing Pivot & Mesh (anchored on upper dorsal back, parallel to body surface)
+            var wingPivotL = new GameObject("bat_wing_pivot_L");
+            wingPivotL.transform.SetParent(abd, false);
+            wingPivotL.transform.localPosition = new Vector3(0.1f, 0.44f, 0.35f);
+            wingPivotL.transform.localRotation = Quaternion.Euler(82f, -24f, 12f);
+            cs.wingPivotL = wingPivotL.transform;
+            cs.wingRestL = wingPivotL.transform.localRotation;
+            cs.wingType = "Bat";
+
+            var wingMeshL = new GameObject("wing_mesh_L");
+            wingMeshL.transform.SetParent(wingPivotL.transform, false);
+            wingMeshL.transform.localRotation = Quaternion.Euler(0f, 0f, -17.23f);
+            wingMeshL.transform.localScale = Vector3.one * 2.56f; // 1.6x bigger!
+            var mfL = wingMeshL.AddComponent<MeshFilter>();
+            mfL.sharedMesh = wingLMesh;
+            var mrL = wingMeshL.AddComponent<MeshRenderer>();
+            mrL.sharedMaterial = batWingMat;
+            mrL.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mrL.receiveShadows = false;
+
+            // Right Wing Pivot & Mesh
+            var wingPivotR = new GameObject("bat_wing_pivot_R");
+            wingPivotR.transform.SetParent(abd, false);
+            wingPivotR.transform.localPosition = new Vector3(-0.1f, 0.44f, 0.35f);
+            wingPivotR.transform.localRotation = Quaternion.Euler(82f, 24f, -12f);
+            cs.wingPivotR = wingPivotR.transform;
+            cs.wingRestR = wingPivotR.transform.localRotation;
+
+            var wingMeshR = new GameObject("wing_mesh_R");
+            wingMeshR.transform.SetParent(wingPivotR.transform, false);
+            wingMeshR.transform.localRotation = Quaternion.Euler(0f, 0f, 17.23f);
+            wingMeshR.transform.localScale = Vector3.one * 2.56f; // 1.6x bigger!
+            var mfR = wingMeshR.AddComponent<MeshFilter>();
+            mfR.sharedMesh = wingRMesh;
+            var mrR = wingMeshR.AddComponent<MeshRenderer>();
+            mrR.sharedMaterial = batWingMat;
+            mrR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mrR.receiveShadows = false;
         }
 
         cs.anim = spider.GetComponentInChildren<Animator>();
@@ -835,6 +1196,35 @@ public partial class TCCuteSpider : MonoBehaviour
             abdomen.localRotation = Quaternion.Slerp(abdomen.localRotation, abdomenRest * lag, 1f - Mathf.Exp(-8f * dt));
         }
 
+        // Dynamic wing flutter for winged skins (Bee, Wasp, Bat)
+        if (wingPivotL && wingPivotR)
+        {
+            float flapAngle = 0f;
+            if (wingType == "Bee")
+            {
+                // High-frequency buzzing flutter typical of bees (45Hz buzz)
+                float buzz = Mathf.Sin(t * 45f) * (isJumping ? 22f : (isMoving ? 16f : 7f));
+                flapAngle = buzz;
+            }
+            else if (wingType == "Wasp")
+            {
+                // Sharp, darting hornet wing stroke (32Hz stroke)
+                float hornetStroke = Mathf.Sin(t * 32f) * (isJumping ? 25f : (isMoving ? 18f : 6f));
+                flapAngle = hornetStroke;
+            }
+            else // Bat
+            {
+                flapAngle = isJumping
+                    ? Mathf.Sin(t * 26f) * 20f
+                    : isMoving
+                        ? Mathf.Sin(phWalk * 2f) * 12f * amp
+                        : Mathf.Sin(t * 3.5f) * 5f;
+            }
+
+            wingPivotL.localRotation = wingRestL * Quaternion.Euler(0, 0, flapAngle);
+            wingPivotR.localRotation = wingRestR * Quaternion.Euler(0, 0, -flapAngle);
+        }
+
         // Rainbow Spider: dynamically wave colors across all parts over time
         if (isRainbow && rainbowRenderers.Count > 0)
         {
@@ -1038,6 +1428,206 @@ public partial class TCCuteSpider : MonoBehaviour
         m.SetUVs(0, uvs);
         m.SetTriangles(tri, 0);
         m.RecalculateBounds();
+        return m;
+    }
+
+    static Mesh gemMesh;
+
+    /// <summary>
+    /// Generates a sparkling faceted brilliant-cut 3D gemstone mesh with flat facet normals.
+    /// Every facet reflects light distinctly with vibrant jewelry specular highlights.
+    /// </summary>
+    static Mesh MakeGemMesh()
+    {
+        const int N = 8;
+        var verts = new List<Vector3>();
+        var norms = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var tris = new List<int>();
+
+        float tableR = 0.50f;
+        float tableY = 0.45f;
+        float girdleR = 0.95f;
+        float girdleY = 0.15f;
+        float culetY = -0.55f;
+
+        var tablePts = new Vector3[N];
+        var girdlePts = new Vector3[N];
+        for (int i = 0; i < N; i++)
+        {
+            float a1 = i * Mathf.PI * 2f / N;
+            float a2 = (i + 0.5f) * Mathf.PI * 2f / N;
+            tablePts[i] = new Vector3(Mathf.Cos(a1) * tableR, tableY, Mathf.Sin(a1) * tableR);
+            girdlePts[i] = new Vector3(Mathf.Cos(a2) * girdleR, girdleY, Mathf.Sin(a2) * girdleR);
+        }
+        var tableCenter = new Vector3(0, tableY, 0);
+        var culet = new Vector3(0, culetY, 0);
+
+        void AddFlatTri(Vector3 p0, Vector3 p1, Vector3 p2)
+        {
+            var faceCenter = (p0 + p1 + p2) / 3f;
+            var fn = Vector3.Cross(p1 - p0, p2 - p0).normalized;
+            if (Vector3.Dot(fn, faceCenter) < 0f)
+            {
+                var tmp = p1; p1 = p2; p2 = tmp;
+                fn = -fn;
+            }
+            int idx = verts.Count;
+            verts.Add(p0); verts.Add(p1); verts.Add(p2);
+            norms.Add(fn); norms.Add(fn); norms.Add(fn);
+            uvs.Add(new Vector2(0.5f, 0.5f));
+            uvs.Add(new Vector2(0.5f + p1.x * 0.4f, 0.5f + p1.z * 0.4f));
+            uvs.Add(new Vector2(0.5f + p2.x * 0.4f, 0.5f + p2.z * 0.4f));
+            tris.Add(idx); tris.Add(idx + 1); tris.Add(idx + 2);
+        }
+
+        // 1. Table fan facets
+        for (int i = 0; i < N; i++)
+        {
+            int next = (i + 1) % N;
+            AddFlatTri(tableCenter, tablePts[i], tablePts[next]);
+        }
+
+        // 2. Crown kite & triangular facets
+        for (int i = 0; i < N; i++)
+        {
+            int next = (i + 1) % N;
+            AddFlatTri(tablePts[i], girdlePts[i], tablePts[next]);
+            AddFlatTri(tablePts[next], girdlePts[i], girdlePts[next]);
+        }
+
+        // 3. Pavilion facets tapering to culet
+        for (int i = 0; i < N; i++)
+        {
+            int next = (i + 1) % N;
+            AddFlatTri(girdlePts[i], culet, girdlePts[next]);
+        }
+
+        var m = new Mesh { name = "ruby_gem_mesh" };
+        m.SetVertices(verts);
+        m.SetNormals(norms);
+        m.SetUVs(0, uvs);
+        m.SetTriangles(tris, 0);
+        m.RecalculateBounds();
+        return m;
+    }
+
+    static Mesh beeWingMeshL, beeWingMeshR;
+    static Mesh waspWingMeshL, waspWingMeshR;
+
+    /// <summary>
+    /// Generates a smooth ribbon mesh for the honeybee wing mapped with full [0..1] UVs,
+    /// so the high-resolution transparent texture renders the rounded honeybee wing with crisp alpha transparency.
+    /// </summary>
+    static Mesh MakeBeeWingMesh(bool isLeft)
+    {
+        if (isLeft && beeWingMeshL) return beeWingMeshL;
+        if (!isLeft && beeWingMeshR) return beeWingMeshR;
+
+        const int segments = 16;
+        var verts = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var tris = new List<int>();
+
+        float sgn = isLeft ? -1f : 1f;
+        float length = 0.46f;
+        float leadZ = 0.12f;
+        float trailZ = -0.12f;
+
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = i / (float)segments;
+            float x = sgn * t * length;
+            float y = Mathf.Sin(t * Mathf.PI) * 0.015f; // subtle natural wing camber
+
+            verts.Add(new Vector3(x, y, leadZ));
+            verts.Add(new Vector3(x, y, trailZ));
+
+            uvs.Add(new Vector2(t, 1f));
+            uvs.Add(new Vector2(t, 0f));
+        }
+
+        for (int i = 0; i < segments; i++)
+        {
+            int i0 = i * 2;
+            int i1 = i0 + 1;
+            int i2 = (i + 1) * 2;
+            int i3 = i2 + 1;
+
+            // Front face
+            tris.Add(i0); tris.Add(i2); tris.Add(i1);
+            tris.Add(i1); tris.Add(i2); tris.Add(i3);
+            // Back face (double-sided)
+            tris.Add(i0); tris.Add(i1); tris.Add(i2);
+            tris.Add(i1); tris.Add(i3); tris.Add(i2);
+        }
+
+        var m = new Mesh { name = isLeft ? "bee_wing_L" : "bee_wing_R" };
+        m.SetVertices(verts);
+        m.SetUVs(0, uvs);
+        m.SetTriangles(tris, 0);
+        m.RecalculateNormals();
+        m.RecalculateBounds();
+
+        if (isLeft) beeWingMeshL = m; else beeWingMeshR = m;
+        return m;
+    }
+
+    /// <summary>
+    /// Generates a sleek ribbon mesh for the wasp wing mapped with full [0..1] UVs,
+    /// so the high-resolution transparent texture renders the predatory dagger blade hornet wing with crisp alpha transparency.
+    /// </summary>
+    static Mesh MakeWaspWingMesh(bool isLeft)
+    {
+        if (isLeft && waspWingMeshL) return waspWingMeshL;
+        if (!isLeft && waspWingMeshR) return waspWingMeshR;
+
+        const int segments = 16;
+        var verts = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var tris = new List<int>();
+
+        float sgn = isLeft ? -1f : 1f;
+        float length = 0.58f;
+        float leadZ = 0.10f;
+        float trailZ = -0.10f;
+
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = i / (float)segments;
+            float x = sgn * t * length;
+            float y = Mathf.Sin(t * Mathf.PI) * 0.010f; // subtle natural wing camber
+
+            verts.Add(new Vector3(x, y, leadZ));
+            verts.Add(new Vector3(x, y, trailZ));
+
+            uvs.Add(new Vector2(t, 1f));
+            uvs.Add(new Vector2(t, 0f));
+        }
+
+        for (int i = 0; i < segments; i++)
+        {
+            int i0 = i * 2;
+            int i1 = i0 + 1;
+            int i2 = (i + 1) * 2;
+            int i3 = i2 + 1;
+
+            // Front face
+            tris.Add(i0); tris.Add(i2); tris.Add(i1);
+            tris.Add(i1); tris.Add(i2); tris.Add(i3);
+            // Back face (double-sided)
+            tris.Add(i0); tris.Add(i1); tris.Add(i2);
+            tris.Add(i1); tris.Add(i3); tris.Add(i2);
+        }
+
+        var m = new Mesh { name = isLeft ? "wasp_wing_L" : "wasp_wing_R" };
+        m.SetVertices(verts);
+        m.SetUVs(0, uvs);
+        m.SetTriangles(tris, 0);
+        m.RecalculateNormals();
+        m.RecalculateBounds();
+
+        if (isLeft) waspWingMeshL = m; else waspWingMeshR = m;
         return m;
     }
 }
