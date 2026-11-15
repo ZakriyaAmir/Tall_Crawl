@@ -178,11 +178,14 @@ public static class TCSetup
             {
                 float d_spine = Mathf.Abs(u - 0.25f);
                 if (d_spine > 0.5f) d_spine = 1.0f - d_spine;
-                float radiance = Mathf.Exp(-d_spine * 14.0f) * 0.35f;
+                float radiance = Mathf.Exp(-d_spine * 12.0f) * 0.30f;
                 float sheen = Mathf.Sin((v * 1.5f + u * 2.0f) * Mathf.PI * 4.0f) * 0.04f;
-                Color baseCol = Color.Lerp(new Color(1.0f, 0.88f, 0.10f), new Color(1.0f, 0.98f, 0.72f), radiance);
-                float curv = 0.82f + 0.18f * Mathf.Sin(v * Mathf.PI * 0.5f);
-                float s = 0.92f + 0.08f * Mathf.Cos(d_spine * Mathf.PI * 2.0f);
+                // Pure 24k gold luster along dorsal spine - zero white washing
+                Color goldBase = new Color(1.0f, 0.84f, 0.06f);
+                Color goldSpine = new Color(1.0f, 0.92f, 0.18f);
+                Color baseCol = Color.Lerp(goldBase, goldSpine, radiance);
+                float curv = 0.84f + 0.16f * Mathf.Sin(v * Mathf.PI * 0.5f);
+                float s = 0.94f + 0.06f * Mathf.Cos(d_spine * Mathf.PI * 2.0f);
                 baseCol *= curv * s * (1.0f + sheen);
                 baseCol.a = 1f;
                 t.SetPixel(x, y, baseCol);

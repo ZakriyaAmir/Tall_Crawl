@@ -281,7 +281,13 @@ public class playerInteract : MonoBehaviour
                 enemy.Smash(transform.position);
                 if (boostDuration > 0)
                 {
-                    if (enemy.enemyType == TCEnemyType.Wasp) Play(TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+                    if (enemy.enemyType == TCEnemyType.Wasp)
+                    {
+                        var waspComp = enemy as TCWasp;
+                        bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
+                        Play(isBat ? (TCSfx.Get("bat_kill") ?? TCSfx.Get("thrust") ?? boostSound)
+                                   : (TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound), 1f);
+                    }
                     else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                     else Play(TCSfx.Get("thrust") ?? boostSound, 1f);
                 }
@@ -314,7 +320,13 @@ public class playerInteract : MonoBehaviour
             if (boostDuration > 0)
             {
                 enemy.Smash(transform.position);
-                if (enemy.enemyType == TCEnemyType.Wasp) Play(TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+                if (enemy.enemyType == TCEnemyType.Wasp)
+                {
+                    var waspComp = enemy as TCWasp;
+                    bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
+                    Play(isBat ? (TCSfx.Get("bat_kill") ?? TCSfx.Get("thrust") ?? boostSound)
+                               : (TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound), 1f);
+                }
                 else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                 else Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
                 TCFx.Spawn(impactParticle, other.transform.position);
@@ -330,7 +342,9 @@ public class playerInteract : MonoBehaviour
 
             if (enemy.enemyType == TCEnemyType.Wasp)
             {
-                Play(TCSfx.Get("wasp") ?? woodImpactSound, 0.95f);
+                var waspComp = enemy as TCWasp;
+                bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
+                Play(isBat ? (TCSfx.Get("bat") ?? woodImpactSound) : (TCSfx.Get("wasp") ?? woodImpactSound), 0.95f);
             }
             else
             {

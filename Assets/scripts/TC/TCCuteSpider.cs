@@ -73,6 +73,11 @@ public partial class TCCuteSpider : MonoBehaviour
             if (bodyMat.HasProperty("_OutlineColor")) bodyMat.SetColor("_OutlineColor", new Color(0.12f, 0.08f, 0.10f, 1f));
             if (bodyMat.HasProperty("_OutlineWidth")) bodyMat.SetFloat("_OutlineWidth", 1.4f);
             if (bodyMat.HasProperty("_EdgeThreshold")) bodyMat.SetFloat("_EdgeThreshold", 0.22f);
+            if (def.name == "Golden")
+            {
+                // Pure deep 24k gold emission on abdomen - eliminates any white bleaching
+                if (bodyMat.HasProperty("_EmissionColor")) bodyMat.SetColor("_EmissionColor", new Color(0.65f, 0.48f, 0.02f, 1.0f));
+            }
         }
         // Photo look (3D-printed chibi spider): one solid plastic colour for head + legs, the abdomen carries the skin pattern.
         // Tuned to medium tone so spider parts are not overly bright.
@@ -323,10 +328,10 @@ public partial class TCCuteSpider : MonoBehaviour
                     float thickness = 0.22f * (distFromCenter == 0 ? 1.25f : 1.0f);
                     g.transform.localScale = new Vector3(thickness, len, thickness);
 
-                    // Gleaming 24k gold with brilliant jewel tip highlight on central spire
-                    Color spkColor = (distFromCenter == 0) ? new Color(1.0f, 0.98f, 0.75f) : ((k % 2 == 0) ? new Color(1.0f, 0.90f, 0.35f) : new Color(0.98f, 0.82f, 0.12f));
-                    float spkEmis = (distFromCenter == 0) ? 0.95f : 0.65f;
-                    var crownMat = Flat(spkColor, null, spkEmis, 0.92f, 0.96f);
+                    // Gleaming 24k gold royal crown spikes - all rich gold, zero white bleaching
+                    Color spkColor = (distFromCenter == 0) ? new Color(1.0f, 0.88f, 0.10f) : ((k % 2 == 0) ? new Color(0.98f, 0.82f, 0.08f) : new Color(0.95f, 0.76f, 0.04f));
+                    float spkEmis = (distFromCenter == 0) ? 0.45f : 0.30f;
+                    var crownMat = Flat(spkColor, null, spkEmis, 0.95f, 0.98f);
 
                     g.AddComponent<MeshFilter>().sharedMesh = cone;
                     var mr = g.AddComponent<MeshRenderer>();

@@ -287,17 +287,17 @@ MonoBehaviour:
     gloss: 0.85
   - name: Golden
     body: {r: 1, g: 0.8784314, b: 0.101960786, a: 1}
-    accent: {r: 1, g: 0.972549, b: 0.6901961, a: 1}
+    accent: {r: 1, g: 0.7215686, b: 0, a: 1}
     pattern: 0
-    emission: 0.7
-    trail: {r: 1, g: 0.9019608, b: 0.2, a: 1}
+    emission: 0.6
+    trail: {r: 1, g: 0.6666667, b: 0, a: 1}
     shape: 0
     spikes: 8
     spikeLength: 0.55
     unlock: 1
     amount: 100000
-    eye: {r: 1, g: 0.99215686, b: 0.8784314, a: 1}
-    eyeGlow: 1
+    eye: {r: 1, g: 0.8156863, b: 0, a: 1}
+    eyeGlow: 0.8
     metallic: 0.95
     gloss: 0.98
   - name: Bee

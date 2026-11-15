@@ -51,6 +51,25 @@ public class gameManager : MonoBehaviour
     int currentPhaseIndex;
     int nextPhaseIndex;
     bool isTransitioning;
+
+    public string CurrentPhaseName
+    {
+        get
+        {
+            if (diurnalPhases != null && currentPhaseIndex >= 0 && currentPhaseIndex < diurnalPhases.Length)
+                return diurnalPhases[currentPhaseIndex].name;
+            return string.Empty;
+        }
+    }
+
+    public bool IsBatPhase
+    {
+        get
+        {
+            string phase = CurrentPhaseName;
+            return phase == "CloudyCrown_Sunset" || phase == "CloudyCrown_Midnight";
+        }
+    }
     float transitionTimer;
     float phaseTimer;
     const float PhaseStayDuration = 20.0f;       // Daytime stays steady between transitions

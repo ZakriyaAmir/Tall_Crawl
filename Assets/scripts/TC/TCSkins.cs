@@ -72,7 +72,7 @@ public static class TCSkins
         new SkinDef("Tiger",      "#F27818", "#181416", SkinPattern.Stripes,  0f,   "#FFCA80",   SkinShape.Flat,   4, 0.35f, SkinUnlock.Coins, 20000,     "#FFB420", 0.3f, 0.1f,  0.60f),
         new SkinDef("Tarantula",  "#2E2522", "#E65A20", SkinPattern.Dots,     0f,   "#FF8850",   SkinShape.Tall,   8, 0.50f, SkinUnlock.Coins, 25000,     "#FF3300", 0.4f, 0.15f, 0.50f),
         new SkinDef("Rainbow",    "#FF3366", "#33CCFF", SkinPattern.Gradient, 0.45f,"#FF00FF",   SkinShape.Round,  7, 0.50f, SkinUnlock.Coins, 50000,     "#FFFFFF", 0.6f, 0.30f, 0.85f),
-        new SkinDef("Golden",     "#FFE01A", "#FFF8B0", SkinPattern.Solid,    0.70f,"#FFE633",   SkinShape.Pear,   8, 0.55f, SkinUnlock.Coins, 100000,    "#FFFDE0", 1.0f, 0.95f, 0.98f),
+        new SkinDef("Golden",     "#FFE01A", "#FFB800", SkinPattern.Solid,    0.60f,"#FFAA00",   SkinShape.Pear,   8, 0.55f, SkinUnlock.Coins, 100000,    "#FFD000", 0.8f, 0.95f, 0.98f),
         // Milestone Enemy Hunter skins:
         new SkinDef("Bee",        "#FFB81C", "#181416", SkinPattern.Stripes,  0.15f,"#FFE066",   SkinShape.Chubby, 0, 0f,    SkinUnlock.KillBees, 50,     "#141216", 0f,   0.05f, 0.60f),
         new SkinDef("Wasp",       "#FFB800", "#141018", SkinPattern.Zigzag,   0.30f,"#FFB733",   SkinShape.Tall,   5, 0.45f, SkinUnlock.KillWasps, 100,   "#FFD700", 0.5f, 0.20f, 0.70f),

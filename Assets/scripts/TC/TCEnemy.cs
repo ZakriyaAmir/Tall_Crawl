@@ -92,6 +92,7 @@ public class TCEnemy : MonoBehaviour
     // ---------------- Procedural Materials & Textures ----------------
 
     static Material pineconeWoodMat, pineconeScaleMat, eyeGlowMat, waspBodyMat, waspBlackMat, waspWingMat;
+    static Material batBodyMat, batWingMat, batEyeMat, batEarMat;
     static Material squirrelMat;
 
     static Texture2D LoadTexture(string name)
@@ -178,6 +179,45 @@ public class TCEnemy : MonoBehaviour
                 waspWingMat.color = new Color(0.92f, 0.96f, 1f, 0.75f);
                 if (tex != null) waspWingMat.mainTexture = tex;
             }
+        }
+
+        if (!batBodyMat)
+        {
+            batBodyMat = Resources.Load<Material>("Enemies/Bat_BodyMat");
+#if UNITY_EDITOR
+            if (!batBodyMat)
+                batBodyMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/TC/Resources/Enemies/Bat_BodyMat.mat");
+#endif
+            if (!batBodyMat)
+            {
+                var tex = LoadTexture("Bat_Texture") ?? LoadTexture("Bat_Fur");
+                batBodyMat = CreateCelMaterial(Color.white, tex, 1.0f, new Color(0.26f, 0.06f, 0.38f, 1f));
+                if (batBodyMat.HasProperty("_Brightness")) batBodyMat.SetFloat("_Brightness", 1.05f);
+                if (batBodyMat.HasProperty("_ShadowDull")) batBodyMat.SetFloat("_ShadowDull", 0.75f);
+                if (batBodyMat.HasProperty("_EdgeThreshold")) batBodyMat.SetFloat("_EdgeThreshold", 0.18f);
+                if (batBodyMat.HasProperty("_CelIntensity")) batBodyMat.SetFloat("_CelIntensity", 0.35f);
+            }
+        }
+        if (batBodyMat)
+        {
+            if (batBodyMat.HasProperty("_OutlineColor")) batBodyMat.SetColor("_OutlineColor", new Color(0.26f, 0.06f, 0.38f, 1f));
+            if (batBodyMat.HasProperty("_OutlineWidth")) batBodyMat.SetFloat("_OutlineWidth", 1.0f);
+        }
+
+        if (!batWingMat)
+        {
+            batWingMat = batBodyMat;
+        }
+
+        if (!batEyeMat)
+        {
+            Color glow = new Color(1.0f, 0.88f, 0.18f, 1f); // Luminous yellow/amber bat night eyes
+            batEyeMat = CreateCelMaterial(glow, null, 0f, Color.clear, glow * 1.8f);
+        }
+
+        if (!batEarMat)
+        {
+            batEarMat = batBodyMat;
         }
 
         if (!squirrelMat)
@@ -277,8 +317,81 @@ public class TCEnemy : MonoBehaviour
         return root;
     }
 
+    static Mesh batWingMeshL, batWingMeshR;
+
+    public static Mesh MakeBatWingMesh(bool isLeft)
+    {
+        var m = new Mesh();
+        m.name = isLeft ? "BatWing_L" : "BatWing_R";
+
+        float sgn = isLeft ? 1f : -1f;
+
+        // Realistic stylized bat wing geometry with thumb hook, elongated finger struts, and scalloped trailing edge
+        var vertices = new Vector3[]
+        {
+            new Vector3(0.00f, 0.00f, 0.00f),                                   // 0: base / shoulder
+            new Vector3(-0.10f * sgn, 0.05f, 0.02f),                             // 1: thumb knuckle (wrist)
+            new Vector3(-0.08f * sgn, 0.10f, 0.03f),                             // 2: hooked thumb claw
+            new Vector3(-0.24f * sgn, 0.045f, 0.01f),                            // 3: mid knuckle
+            new Vector3(-0.48f * sgn, 0.01f, -0.01f),                            // 4: wing tip (longest digit II/III)
+            new Vector3(-0.36f * sgn, -0.17f, -0.03f),                           // 5: digit IV tip
+            new Vector3(-0.21f * sgn, -0.19f, -0.04f),                           // 6: digit V tip
+            new Vector3(-0.06f * sgn, -0.13f, -0.03f),                           // 7: flank attachment
+            new Vector3(-0.41f * sgn, -0.07f, -0.02f),                           // 8: scalloped notch 1 (between 4 and 5)
+            new Vector3(-0.28f * sgn, -0.09f, -0.025f),                          // 9: scalloped notch 2 (between 5 and 6)
+            new Vector3(-0.13f * sgn, -0.08f, -0.02f)                            // 10: scalloped notch 3 (between 6 and 7)
+        };
+
+        var uvs = new Vector2[vertices.Length];
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            uvs[i] = new Vector2(Mathf.Abs(vertices[i].x) * 2.1f, vertices[i].y * 2.5f + 0.5f);
+        }
+
+        // Triangles for front and back faces (double-sided membrane)
+        var triList = new List<int>();
+        void AddTri(int a, int b, int c)
+        {
+            if (isLeft)
+            {
+                triList.Add(a); triList.Add(b); triList.Add(c);
+                triList.Add(c); triList.Add(b); triList.Add(a);
+            }
+            else
+            {
+                triList.Add(c); triList.Add(b); triList.Add(a);
+                triList.Add(a); triList.Add(b); triList.Add(c);
+            }
+        }
+
+        // Thumb claw
+        AddTri(0, 2, 1);
+        // Main leading edge arm
+        AddTri(0, 1, 10);
+        AddTri(1, 3, 10);
+        AddTri(3, 4, 8);
+        AddTri(3, 8, 9);
+        AddTri(1, 3, 9);
+        AddTri(1, 9, 10);
+        // Scalloped trailing membranes
+        AddTri(4, 5, 8);
+        AddTri(8, 5, 9);
+        AddTri(9, 5, 6);
+        AddTri(9, 6, 10);
+        AddTri(10, 6, 7);
+        AddTri(0, 10, 7);
+
+        m.vertices = vertices;
+        m.uv = uvs;
+        m.triangles = triList.ToArray();
+        m.RecalculateNormals();
+        m.RecalculateBounds();
+        return m;
+    }
+
     /// <summary>
     /// Builds a cute stylized hovering Wasp / Hornet enemy with animated flapping wings and pumping stinger.
+    /// Reskinned into an authentic Bat during CloudyCrown_Sunset and CloudyCrown_Midnight!
     /// </summary>
     public static GameObject CreateWaspPrefab(Transform parent)
     {
@@ -304,39 +417,74 @@ public class TCEnemy : MonoBehaviour
         mObj.transform.localPosition = new Vector3(0, 0, 0.68f);
         wComp.model = mObj.transform;
 
-        // Thorax
-        CreatePart(PrimitiveType.Sphere, mObj.transform, new Vector3(0, 0.05f, 0), new Vector3(0.24f, 0.22f, 0.24f), waspBlackMat);
+        // Container 1: Wasp Visual Model
+        var waspRoot = new GameObject("Wasp_Visual");
+        waspRoot.transform.SetParent(mObj.transform, false);
+        wComp.waspVisual = waspRoot;
 
-        // Head
-        var head = CreatePart(PrimitiveType.Sphere, mObj.transform, new Vector3(0, 0.06f, 0.15f), new Vector3(0.20f, 0.18f, 0.20f), waspBlackMat);
-        head.name = "Head";
-        wComp.head = head.transform;
+        CreatePart(PrimitiveType.Sphere, waspRoot.transform, new Vector3(0, 0.05f, 0), new Vector3(0.24f, 0.22f, 0.24f), waspBlackMat);
 
-        CreatePart(PrimitiveType.Sphere, head.transform, new Vector3(-0.35f, 0.2f, 0.5f), new Vector3(0.36f, 0.36f, 0.36f), eyeGlowMat);
-        CreatePart(PrimitiveType.Sphere, head.transform, new Vector3(0.35f, 0.2f, 0.5f), new Vector3(0.36f, 0.36f, 0.36f), eyeGlowMat);
+        var waspHead = CreatePart(PrimitiveType.Sphere, waspRoot.transform, new Vector3(0, 0.06f, 0.15f), new Vector3(0.20f, 0.18f, 0.20f), waspBlackMat);
+        waspHead.name = "Head";
+        wComp.waspHead = waspHead.transform;
 
-        // Striped Abdomen (Yellow & Black with Texture) - animated pump
+        CreatePart(PrimitiveType.Sphere, waspHead.transform, new Vector3(-0.35f, 0.2f, 0.5f), new Vector3(0.36f, 0.36f, 0.36f), eyeGlowMat);
+        CreatePart(PrimitiveType.Sphere, waspHead.transform, new Vector3(0.35f, 0.2f, 0.5f), new Vector3(0.36f, 0.36f, 0.36f), eyeGlowMat);
+
         var abdObj = new GameObject("Abdomen_Pivot");
-        abdObj.transform.SetParent(mObj.transform, false);
+        abdObj.transform.SetParent(waspRoot.transform, false);
         abdObj.transform.localPosition = new Vector3(0, 0.02f, -0.08f);
-        wComp.abdomen = abdObj.transform;
+        wComp.waspAbdomen = abdObj.transform;
 
         var abdMesh = CreatePart(PrimitiveType.Capsule, abdObj.transform, new Vector3(0, -0.06f, -0.12f), new Vector3(0.22f, 0.32f, 0.22f), waspBodyMat, Quaternion.Euler(-32f, 0, 0));
-        // Sharp black stinger at the apex
         CreatePart(PrimitiveType.Cylinder, abdMesh.transform, new Vector3(0, -0.60f, 0), new Vector3(0.20f, 0.30f, 0.20f), waspBlackMat);
 
-        // Wings (flapped via TCWasp script at 70Hz)
         var wingPivotL = new GameObject("WingPivot_L").transform;
-        wingPivotL.SetParent(mObj.transform, false);
+        wingPivotL.SetParent(waspRoot.transform, false);
         wingPivotL.localPosition = new Vector3(-0.08f, 0.14f, 0.02f);
-        var wingMeshL = CreatePart(PrimitiveType.Cube, wingPivotL, new Vector3(-0.16f, 0, 0), new Vector3(0.34f, 0.008f, 0.15f), waspWingMat);
-        wComp.wingL = wingPivotL;
+        CreatePart(PrimitiveType.Cube, wingPivotL, new Vector3(-0.16f, 0, 0), new Vector3(0.34f, 0.008f, 0.15f), waspWingMat);
+        wComp.waspWingL = wingPivotL;
 
         var wingPivotR = new GameObject("WingPivot_R").transform;
-        wingPivotR.SetParent(mObj.transform, false);
+        wingPivotR.SetParent(waspRoot.transform, false);
         wingPivotR.localPosition = new Vector3(0.08f, 0.14f, 0.02f);
-        var wingMeshR = CreatePart(PrimitiveType.Cube, wingPivotR, new Vector3(0.16f, 0, 0), new Vector3(0.34f, 0.008f, 0.15f), waspWingMat);
+        CreatePart(PrimitiveType.Cube, wingPivotR, new Vector3(0.16f, 0, 0), new Vector3(0.34f, 0.008f, 0.15f), waspWingMat);
+        wComp.waspWingR = wingPivotR;
+
+        // Container 2: Bat Visual Model (Reskin for Sunset & Midnight)
+        // Uses user-editable Bat_Enemy prefab from Assets/prefabs or Assets/TC/Resources/Enemies
+        GameObject batRoot = null;
+        var batPrefab = Resources.Load<GameObject>("Enemies/Bat_Enemy");
+#if UNITY_EDITOR
+        if (!batPrefab)
+        {
+            batPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/prefabs/Bat_Enemy.prefab")
+                     ?? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TC/Resources/Enemies/Bat_Enemy.prefab");
+        }
+#endif
+        if (batPrefab != null)
+        {
+            batRoot = Object.Instantiate(batPrefab, mObj.transform, false);
+            batRoot.name = "Bat_Visual";
+        }
+        else
+        {
+            batRoot = BuildMedievalBatModel(mObj.transform);
+        }
+
+        wComp.batVisual = batRoot;
+
+        // Auto-wire articulated flight transforms from the prefab / hierarchy
+        wComp.batHead = batRoot.transform.Find("Body");
+        wComp.batTail = batRoot.transform.Find("Body");
+        wComp.batWingL = batRoot.transform.Find("BatWingPivot_L");
+        wComp.batWingR = batRoot.transform.Find("BatWingPivot_R");
+
+        // Set default active wing/head transforms
+        wComp.wingL = wingPivotL;
         wComp.wingR = wingPivotR;
+        wComp.abdomen = abdObj.transform;
+        wComp.head = waspHead.transform;
 
         // Trigger Collider
         var col = mObj.AddComponent<SphereCollider>();
@@ -347,6 +495,108 @@ public class TCEnemy : MonoBehaviour
         root.tag = "bees"; // safe fallback for tag queries while TCEnemy handles custom logic
         root.SetActive(false);
         return root;
+    }
+
+    /// <summary>
+    /// Builds the uploaded authentic 3D medieval bat model with watertight solid wing meshes and white outline.
+    /// Used directly or as fallback when Bat_Enemy.prefab is loaded.
+    /// </summary>
+    public static GameObject BuildMedievalBatModel(Transform parent)
+    {
+        EnsureMaterials();
+        var batRoot = new GameObject("Bat_Visual");
+        if (parent) batRoot.transform.SetParent(parent, false);
+
+        var bodyMesh = GetBatMesh("Body");
+        var wingLMesh = GetBatMesh("WingL");
+        var wingRMesh = GetBatMesh("WingR");
+
+        // Central Body
+        var bodyGo = new GameObject("Body");
+        bodyGo.transform.SetParent(batRoot.transform, false);
+        bodyGo.transform.localPosition = Vector3.zero;
+        var bMf = bodyGo.AddComponent<MeshFilter>();
+        bMf.sharedMesh = bodyMesh;
+        var bMr = bodyGo.AddComponent<MeshRenderer>();
+        bMr.sharedMaterial = batBodyMat;
+        bMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        bMr.receiveShadows = false;
+
+        // Left Wing Pivot at shoulder joint
+        var wingPivotL = new GameObject("BatWingPivot_L");
+        wingPivotL.transform.SetParent(batRoot.transform, false);
+        wingPivotL.transform.localPosition = new Vector3(-0.065f, 0.055f, 0.002f);
+        var wingGoL = new GameObject("WingMesh_L");
+        wingGoL.transform.SetParent(wingPivotL.transform, false);
+        var mfL = wingGoL.AddComponent<MeshFilter>();
+        mfL.sharedMesh = wingLMesh;
+        var mrL = wingGoL.AddComponent<MeshRenderer>();
+        mrL.sharedMaterial = batBodyMat;
+        mrL.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mrL.receiveShadows = false;
+
+        // Right Wing Pivot at shoulder joint
+        var wingPivotR = new GameObject("BatWingPivot_R");
+        wingPivotR.transform.SetParent(batRoot.transform, false);
+        wingPivotR.transform.localPosition = new Vector3(0.065f, 0.055f, 0.002f);
+        var wingGoR = new GameObject("WingMesh_R");
+        wingGoR.transform.SetParent(wingPivotR.transform, false);
+        var mfR = wingGoR.AddComponent<MeshFilter>();
+        mfR.sharedMesh = wingRMesh;
+        var mrR = wingGoR.AddComponent<MeshRenderer>();
+        mrR.sharedMaterial = batBodyMat;
+        mrR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mrR.receiveShadows = false;
+
+        return batRoot;
+    }
+
+    public static GameObject BuildPreviousBatModel(Transform parent)
+    {
+        return BuildMedievalBatModel(parent);
+    }
+
+    // ---------------- Bat Mesh Loader ----------------
+
+    static readonly Dictionary<string, Mesh> batMeshCache = new Dictionary<string, Mesh>();
+
+    public static Mesh GetBatMesh(string partName)
+    {
+        if (batMeshCache.TryGetValue(partName, out var cached) && cached)
+            return cached;
+
+        Mesh m = null;
+#if UNITY_EDITOR
+        m = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>("Assets/TC/Resources/Enemies/Bat_" + partName + ".obj");
+        if (!m)
+        {
+            var go = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TC/Resources/Enemies/Bat_" + partName + ".obj");
+            if (go)
+            {
+                var mf = go.GetComponentInChildren<MeshFilter>();
+                if (mf) m = mf.sharedMesh;
+            }
+        }
+#endif
+        if (!m)
+        {
+            var resGo = Resources.Load<GameObject>("Enemies/Bat_" + partName);
+            if (resGo)
+            {
+                var mf = resGo.GetComponentInChildren<MeshFilter>();
+                if (mf) m = mf.sharedMesh;
+            }
+        }
+        if (!m) m = Resources.Load<Mesh>("Enemies/Bat_" + partName);
+
+        if (!m)
+        {
+            string path = System.IO.Path.Combine(Application.dataPath, "TC/Resources/Enemies/Bat_" + partName + ".obj");
+            m = ParseObjDirect(path);
+        }
+
+        if (m) batMeshCache[partName] = m;
+        return m;
     }
 
     // ---------------- Low-Poly Squirrel Mesh Loader & Direct Parser ----------------
@@ -623,6 +873,13 @@ public class TCWasp : TCEnemy
     public Transform abdomen, head;
     public AudioSource audioSrc;
 
+    [Header("Reskin Variants")]
+    public GameObject waspVisual;
+    public GameObject batVisual;
+    public Transform waspWingL, waspWingR, waspAbdomen, waspHead;
+    public Transform batWingL, batWingR, batTail, batHead;
+    public bool isBat;
+
     bool hasPlayedBuzz;
     static player cachedPlayer;
 
@@ -636,16 +893,53 @@ public class TCWasp : TCEnemy
     {
         if (!audioSrc) audioSrc = GetComponent<AudioSource>();
         if (audioSrc) audioSrc.loop = false;
+        UpdateReskin();
+    }
+
+    public void UpdateReskin()
+    {
+        bool shouldBeBat = gameManager.Instance != null && gameManager.Instance.IsBatPhase;
+        isBat = shouldBeBat;
+
+        if (waspVisual) waspVisual.SetActive(!isBat);
+        if (batVisual) batVisual.SetActive(isBat);
+
+        if (isBat)
+        {
+            wingL = batWingL;
+            wingR = batWingR;
+            head = batHead;
+            abdomen = batTail;
+
+            if (batVisual)
+            {
+                var anim = batVisual.GetComponent<Animator>();
+                if (anim && anim.runtimeAnimatorController)
+                {
+                    anim.speed = UnityEngine.Random.Range(0.92f, 1.08f);
+                    anim.Play("Bat_Fly", 0, UnityEngine.Random.value);
+                }
+            }
+        }
+        else
+        {
+            wingL = waspWingL;
+            wingR = waspWingR;
+            head = waspHead;
+            abdomen = waspAbdomen;
+        }
     }
 
     public override void Init(float startY, float startAngle, float sweep = 40f, float spd = 2.2f)
     {
         base.Init(startY, startAngle, sweep, spd);
         hasPlayedBuzz = false;
+        UpdateReskin();
         if (!audioSrc) audioSrc = GetComponent<AudioSource>();
         if (audioSrc)
         {
-            var clip = TCSfx.Get("wasp");
+            var clip = isBat ? (TCSfx.Get("bat") ?? Resources.Load<AudioClip>("Sfx/bat"))
+                             : (TCSfx.Get("wasp") ?? Resources.Load<AudioClip>("Sfx/wasp"));
             if (clip && audioSrc.clip != clip) audioSrc.clip = clip;
             audioSrc.loop = false;
             audioSrc.volume = 0.85f;
@@ -665,7 +959,8 @@ public class TCWasp : TCEnemy
 
     void PlayBuzz()
     {
-        var clip = TCSfx.Get("wasp");
+        var clip = isBat ? (TCSfx.Get("bat") ?? Resources.Load<AudioClip>("Sfx/bat"))
+                         : (TCSfx.Get("wasp") ?? Resources.Load<AudioClip>("Sfx/wasp"));
         if (clip)
         {
             if (audioSrc)
@@ -676,7 +971,7 @@ public class TCWasp : TCEnemy
             }
             else
             {
-                TCSfx.Play("wasp", 0.85f);
+                TCAudio.Play(clip, 0.85f);
             }
         }
     }
@@ -701,27 +996,44 @@ public class TCWasp : TCEnemy
             }
         }
 
-        // 1. High-frequency 70Hz wing flutter with pitch stroke angling
-        float flap = Mathf.Sin(t * 70f) * 44f;
-        float strokePitch = Mathf.Cos(t * 70f) * 16f;
-        if (wingL) wingL.localRotation = Quaternion.Euler(strokePitch, 0, flap + 12f);
-        if (wingR) wingR.localRotation = Quaternion.Euler(strokePitch, 0, -flap - 12f);
-
-        // 2. Realistic wasp stinger abdomen pumping / curling
-        if (abdomen)
+        // 1. Wing flutter: 70Hz for wasp, authentic deep flapping stroke for bat
+        if (isBat)
         {
-            float pump = Mathf.Sin(t * 7.5f + phase) * 20f;
-            abdomen.localRotation = Quaternion.Euler(-26f + pump, 0, 0);
+            var anim = batVisual != null ? batVisual.GetComponent<Animator>() : null;
+            if (anim == null || !anim.enabled || anim.runtimeAnimatorController == null)
+            {
+                // Procedural bat wing flapping fallback: 5.5Hz fluid flapping stroke cycle
+                float wingPhase = t * 11f * Mathf.PI;
+                float flap = Mathf.Sin(wingPhase) * 44f;
+                float fold = Mathf.Cos(wingPhase) * 16f;
+                if (wingL) wingL.localRotation = Quaternion.Euler(fold * 0.4f, -fold * 0.35f, flap + 4f);
+                if (wingR) wingR.localRotation = Quaternion.Euler(fold * 0.4f, fold * 0.35f, -flap - 4f);
+            }
+        }
+        else
+        {
+            // High-frequency 70Hz wing flutter with pitch stroke angling for wasp
+            float flap = Mathf.Sin(t * 70f) * 44f;
+            float strokePitch = Mathf.Cos(t * 70f) * 16f;
+            if (wingL) wingL.localRotation = Quaternion.Euler(strokePitch, 0, flap + 12f);
+            if (wingR) wingR.localRotation = Quaternion.Euler(strokePitch, 0, -flap - 12f);
+
+            // Realistic wasp stinger abdomen pumping / curling
+            if (abdomen)
+            {
+                float pump = Mathf.Sin(t * 7.5f + phase) * 20f;
+                abdomen.localRotation = Quaternion.Euler(-26f + pump, 0, 0);
+            }
+
+            // Head twitching scan
+            if (head)
+            {
+                float twitch = Mathf.Sin(t * 3.2f) * 6f;
+                head.localRotation = Quaternion.Euler(twitch, Mathf.Sin(t * 5.4f) * 8f, 0);
+            }
         }
 
-        // 3. Head twitching scan
-        if (head)
-        {
-            float twitch = Mathf.Sin(t * 3.2f) * 6f;
-            head.localRotation = Quaternion.Euler(twitch, Mathf.Sin(t * 5.4f) * 8f, 0);
-        }
-
-        // 4. Natural 3D Figure-8 Hover & banking motion
+        // Natural 3D Figure-8 Hover & banking motion (shared identical motion across both wasp and bat)
         float hoverY = y + Mathf.Sin(t * 3.8f + phase) * 0.18f;
         float swayAngle = baseAngle + Mathf.Sin(t * 2.0f + phase) * (sweepAngle * 0.45f);
         float bankRoll = Mathf.Cos(t * 2.0f + phase) * -14f;
