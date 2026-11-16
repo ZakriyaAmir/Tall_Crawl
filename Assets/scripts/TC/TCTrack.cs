@@ -35,6 +35,9 @@ public class TCTrack : MonoBehaviour
     public const float LetterCheckInterval = HeartCheckInterval * 2f;
     public const float LetterCheckChance = 0.25f;
     public float CurrentLetterCheckChance => (gameManager.Instance != null) ? gameManager.Instance.webPickupSpawnProbability : LetterCheckChance;
+    public float CurrentChilliChance => (gameManager.Instance != null) ? gameManager.Instance.chilliSpawnProbability : (C != null ? C.boostChance : 0.0624f);
+    public float CurrentCooldownChance => (gameManager.Instance != null) ? gameManager.Instance.slowMoSpawnProbability : (C != null ? C.cooldownChance : 0.042f);
+    public float CurrentMagnetChance => (gameManager.Instance != null) ? gameManager.Instance.coinMagnetSpawnProbability : (C != null ? C.magnetChance : 0.042f);
     public const float LetterMissRetryMin = 8f;
     public const float LetterMissRetryMax = 12f;
     int rowIndex; bool lastWasBee; player pl;
@@ -295,9 +298,9 @@ public class TCTrack : MonoBehaviour
                 {
                     // Weighted random probability selection across unlocked powerups
                     float wHeart = heartEligible ? C.heartChance * 1.5f : 0f;
-                    float wChilli = CanSpawnChilli ? C.boostChance * 1.5f : 0f;
-                    float wCooldown = canSpawnCooldown ? C.cooldownChance * 1.5f : 0f;
-                    float wMagnet = canSpawnMagnet ? C.magnetChance * 1.5f : 0f;
+                    float wChilli = CanSpawnChilli ? CurrentChilliChance * 1.5f : 0f;
+                    float wCooldown = canSpawnCooldown ? CurrentCooldownChance * 1.5f : 0f;
+                    float wMagnet = canSpawnMagnet ? CurrentMagnetChance * 1.5f : 0f;
                     float totalWeight = wHeart + wChilli + wCooldown + wMagnet;
 
                     if (totalWeight > 0f && Random.value < Mathf.Clamp01(totalWeight))
@@ -328,18 +331,24 @@ public class TCTrack : MonoBehaviour
                     else
                     {
                         // Coin spiral that guarantees no overlap with hazards or powerups
-                        float spiralStartY = Mathf.Max(y + 0.3f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
-                        float spiralEndY = y + gap - 0.3f;
-                        SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
+                        float spiralStartY = Mathf.Max(y + 0.35f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+                        float spiralEndY = y + gap - 0.35f;
+                        if (spiralEndY - spiralStartY >= 1.2f)
+                        {
+                            SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
+                        }
                     }
                 }
             }
             else
             {
                 // Coin spiral that guarantees no overlap with hazards or powerups
-                float spiralStartY = Mathf.Max(y + 0.3f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
-                float spiralEndY = y + gap - 0.3f;
-                SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
+                float spiralStartY = Mathf.Max(y + 0.35f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+                float spiralEndY = y + gap - 0.35f;
+                if (spiralEndY - spiralStartY >= 1.2f)
+                {
+                    SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
+                }
             }
 
             nextRowY = y + gap * 1.3f;
@@ -453,9 +462,9 @@ public class TCTrack : MonoBehaviour
             {
                 // Weighted random selection across available powerups
                 float wHeart = heartEligible ? C.heartChance : 0f;
-                float wChilli = CanSpawnChilli ? C.boostChance : 0f;
-                float wCooldown = canSpawnCooldownGap ? C.cooldownChance : 0f;
-                float wMagnet = canSpawnMagnetGap ? C.magnetChance : 0f;
+                float wChilli = CanSpawnChilli ? CurrentChilliChance : 0f;
+                float wCooldown = canSpawnCooldownGap ? CurrentCooldownChance : 0f;
+                float wMagnet = canSpawnMagnetGap ? CurrentMagnetChance : 0f;
                 float totalPowerupWeight = wHeart + wChilli + wCooldown + wMagnet;
 
                 if (totalPowerupWeight > 0f && Random.value < Mathf.Clamp01(totalPowerupWeight))
@@ -501,30 +510,37 @@ public class TCTrack : MonoBehaviour
             float trailEndY = y - 0.35f;
             float trailStartY = Mathf.Max(trailEndY - trailSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
 
-            if (roll < 0.10f)
+            // Only spawn if there is sufficient vertical space for a clean string (never squeeze into a cluster)
+            if (trailEndY - trailStartY >= 1.2f)
             {
-                // 1/10: Vertical jump arc string (straight vertical constant angle, spider hops in arc)
-                const float jumpSpan = LongestArcSpan;
-                float arcEndY = y - 0.35f;
-                float arcStartY = Mathf.Max(arcEndY - jumpSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
-                SpawnCoinArc(arcStartY, arcEndY, newSafe, SpiderJumpHeight, 8);
-            }
-            else if (roll < 0.40f)
-            {
-                // 3/10: Zigzag string (weaves left and right along the climb path)
-                float zigzagAmp = Mathf.Min(14f, window * 0.28f);
-                SpawnCoinZigzag(trailStartY, trailEndY, newSafe, zigzagAmp, stringCount);
-            }
-            else if (roll < 0.70f)
-            {
-                // 3/10: Straight vertical string (dead straight at newSafe angle)
-                SpawnCoinTrail(trailStartY, trailEndY, newSafe, newSafe, stringCount);
-            }
-            else
-            {
-                // 3/10: Curving string (smoothly curves from previous safe angle towards newSafe)
-                float curveFrom = Mathf.LerpAngle(safeAngle, newSafe, 0.25f);
-                SpawnCoinTrail(trailStartY, trailEndY, curveFrom, newSafe, stringCount);
+                if (roll < 0.10f)
+                {
+                    // 1/10: Vertical jump arc string (straight vertical constant angle, spider hops in arc)
+                    const float jumpSpan = LongestArcSpan;
+                    float arcEndY = y - 0.35f;
+                    float arcStartY = Mathf.Max(arcEndY - jumpSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
+                    if (arcEndY - arcStartY >= jumpSpan * 0.9f)
+                    {
+                        SpawnCoinArc(arcStartY, arcEndY, newSafe, SpiderJumpHeight, 8);
+                    }
+                }
+                else if (roll < 0.40f)
+                {
+                    // 3/10: Zigzag string (weaves left and right along the climb path)
+                    float zigzagAmp = Mathf.Min(14f, window * 0.28f);
+                    SpawnCoinZigzag(trailStartY, trailEndY, newSafe, zigzagAmp, stringCount);
+                }
+                else if (roll < 0.70f)
+                {
+                    // 3/10: Straight vertical string (dead straight at newSafe angle)
+                    SpawnCoinTrail(trailStartY, trailEndY, newSafe, newSafe, stringCount);
+                }
+                else
+                {
+                    // 3/10: Curving string (smoothly curves from previous safe angle towards newSafe)
+                    float curveFrom = Mathf.LerpAngle(safeAngle, newSafe, 0.25f);
+                    SpawnCoinTrail(trailStartY, trailEndY, curveFrom, newSafe, stringCount);
+                }
             }
         }
 
@@ -536,7 +552,8 @@ public class TCTrack : MonoBehaviour
     {
         float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
         float spanY = endY - minY;
-        if (spanY <= 0.05f) return;
+        // Require at least 1.1m vertical span so coins only ever spawn in extended, clear strings/formations (never clumps or isolated pairs)
+        if (spanY < 1.1f) return;
 
         // Trunk cylinder surface metric: distance ds^2 = dy^2 + (R * da_radians)^2
         const float trunkRadius = 0.603f;
@@ -545,31 +562,23 @@ public class TCTrack : MonoBehaviour
         float arcDistance = trunkRadius * deltaAngleRad;
         float totalPathLength = Mathf.Sqrt(spanY * spanY + arcDistance * arcDistance);
 
-        if (totalPathLength < UniformCoinSpacing * 0.7f) return;
-
-        // Calculate steps based strictly on vertical progress to guarantee increasing vertical order without horizontal clustering
-        // Minimum vertical step per coin ensures coins are spaced out vertically (never cluttered horizontally)
-        int steps = Mathf.Max(1, Mathf.RoundToInt(totalPathLength / UniformCoinSpacing));
-        int count = steps + 1;
+        // Derive coin count directly from path length and UniformCoinSpacing to guarantee consistent spacing
+        int count = Mathf.RoundToInt(totalPathLength / UniformCoinSpacing) + 1;
         if (preferredCount > 0)
         {
             count = Mathf.Min(count, preferredCount);
-            steps = count - 1;
         }
 
-        // Clamp steps so vertical delta between any consecutive coins is at least 0.12m
-        const float minStepY = 0.12f;
-        if (steps > 1 && (spanY / steps) < minStepY)
+        // Coins should only appear in extended strings / formations (minimum 4 coins). Never single coins or tight pairs.
+        if (count < 4) return;
+
+        int steps = count - 1;
+        // Strict guard: ensure minimum vertical rise per step (at least 0.22m) so coins never cluster laterally
+        if (spanY / steps < 0.22f)
         {
-            steps = Mathf.Max(1, Mathf.FloorToInt(spanY / minStepY));
+            steps = Mathf.FloorToInt(spanY / 0.22f);
             count = steps + 1;
-        }
-
-        if (count < 2)
-        {
-            Spawn(coinPool, "coin", minY + spanY * 0.5f, Mathf.LerpAngle(fromAngle, toAngle, 0.5f));
-            lastCoinY = minY + spanY * 0.5f;
-            return;
+            if (count < 4) return;
         }
 
         // Advance along the path in strictly uniform distance steps with guaranteed vertical progression
@@ -589,7 +598,7 @@ public class TCTrack : MonoBehaviour
     {
         float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
         float spanY = endY - minY;
-        if (spanY <= 0.05f || count < 3) return;
+        if (spanY < 1.2f || count < 4) return;
 
         const float trunkRadius = 0.603f;
         // Start zigzag direction randomly (-1 or +1)

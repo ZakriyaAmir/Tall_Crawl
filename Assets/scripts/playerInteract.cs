@@ -122,6 +122,54 @@ public class playerInteract : MonoBehaviour
             p.boost = true;
             boostDuration -= dt;
             if (boostDuration <= 0) { p.boost = false; invulnTimer = 1.0f; }
+
+            // Active forward sweep detection during chilli mode:
+            // Prevents tunneling through moving or static enemies when climbing at 2.2x speed
+            PerformChilliProximitySmash();
+        }
+    }
+
+    readonly Collider[] chilliOverlapBuffer = new Collider[16];
+
+    void PerformChilliProximitySmash()
+    {
+        Vector3 center = transform.TransformPoint(BASE_COLLIDER_CENTER) + transform.forward * 0.10f;
+        int hitCount = Physics.OverlapSphereNonAlloc(center, 0.35f, chilliOverlapBuffer, ~0, QueryTriggerInteraction.Collide);
+        for (int i = 0; i < hitCount; i++)
+        {
+            var col = chilliOverlapBuffer[i];
+            if (!col || col.transform.IsChildOf(transform)) continue;
+
+            var enemy = col.GetComponentInParent<TCEnemy>();
+            if (enemy != null)
+            {
+                SmashEnemy(enemy, col.transform.position);
+                continue;
+            }
+
+            var pooled = col.GetComponentInParent<TCPooled>();
+            if (col.CompareTag("branch"))
+            {
+                Vector3 hitPoint = col.ClosestPoint(transform.position);
+                if (hitPoint == Vector3.zero || (hitPoint - transform.position).sqrMagnitude > 4f)
+                    hitPoint = col.bounds.ClosestPoint(transform.position);
+                TCFx.SpawnWoodImpact(hitPoint, impactParticle);
+                if (pooled) pooled.Release(); else (col.transform.parent ? col.transform.parent.gameObject : col.gameObject).SetActive(false);
+                Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
+                OnEvent?.Invoke("smash", transform.position);
+                TCFx.Shake(0.1f);
+            }
+            else if (col.CompareTag("bees"))
+            {
+                GameObject beeObj = pooled != null ? pooled.gameObject : (col.transform.parent ? col.transform.parent.gameObject : col.gameObject);
+                TCFx.ScatterBeeSwarm(beeObj, transform.position, 1.0f);
+                Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+                if (pooled) pooled.Release();
+                TCFx.Shake(0.18f);
+                TCSave.AddBeeKnock(1);
+                TCSkins.CheckAchievements();
+                OnEvent?.Invoke("chilli_kill", transform.position);
+            }
         }
     }
 
@@ -221,6 +269,13 @@ public class playerInteract : MonoBehaviour
         if (HandlePickup(other)) return;
         if (TCWebBonus.Instance && TCWebBonus.Instance.IsInvincible) return;
 
+        ProcessHazardOrEnemyTrigger(other);
+    }
+
+    public void ProcessHazardOrEnemyTrigger(Collider other)
+    {
+        if (IsDead || p == null || p.GameOver || !other) return;
+
         // In chilli mode: play a very little vibration when colliding with any object/obstacle
         if (boostDuration > 0 && Time.unscaledTime - lastChilliHapticTime > 0.04f)
         {
@@ -240,7 +295,7 @@ public class playerInteract : MonoBehaviour
                 Vector3 hitPoint = other.ClosestPoint(transform.position);
                 if (hitPoint == Vector3.zero || (hitPoint - transform.position).sqrMagnitude > 4f)
                     hitPoint = other.bounds.ClosestPoint(transform.position);
-                TCFx.Spawn(impactParticle, hitPoint);
+                TCFx.SpawnWoodImpact(hitPoint, impactParticle);
                 if (pooled) pooled.Release(); else (other.transform.parent ? other.transform.parent.gameObject : other.gameObject).SetActive(false);
                 Play(TCSfx.Get("thrust") ?? boostSound, 1f);
                 OnEvent?.Invoke("smash", transform.position);
@@ -278,44 +333,7 @@ public class playerInteract : MonoBehaviour
             }
             if (enemy != null)
             {
-                enemy.Smash(transform.position);
-                if (boostDuration > 0)
-                {
-                    if (enemy.enemyType == TCEnemyType.Wasp)
-                    {
-                        var waspComp = enemy as TCWasp;
-                        bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
-                        Play(isBat ? (TCSfx.Get("bat_kill") ?? TCSfx.Get("thrust") ?? boostSound)
-                                   : (TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound), 1f);
-                    }
-                    else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
-                    else Play(TCSfx.Get("thrust") ?? boostSound, 1f);
-                }
-                else
-                {
-                    Play(TCSfx.Get("thrust") ?? boostSound, 1f);
-                }
-                TCFx.Spawn(impactParticle, other.transform.position);
-                TCFx.Shake(0.2f);
-                if (enemy.enemyType == TCEnemyType.Wasp)
-                {
-                    var waspComp = enemy as TCWasp;
-                    bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
-                    if (isBat) TCSave.AddBatKnock(1);
-                    else TCSave.AddWaspKnock(1);
-                }
-                else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKnock(1);
-                TCSkins.CheckAchievements();
-
-                if (boostDuration > 0)
-                {
-                    OnEvent?.Invoke("chilli_kill", other.transform.position);
-                }
-                else
-                {
-                    OnEvent?.Invoke("smash", transform.position);
-                    gameManager.Instance?.addCoin();
-                }
+                SmashEnemy(enemy, other.transform.position);
                 return;
             }
         }
@@ -325,28 +343,7 @@ public class playerInteract : MonoBehaviour
         {
             if (boostDuration > 0)
             {
-                enemy.Smash(transform.position);
-                if (enemy.enemyType == TCEnemyType.Wasp)
-                {
-                    var waspComp = enemy as TCWasp;
-                    bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
-                    Play(isBat ? (TCSfx.Get("bat_kill") ?? TCSfx.Get("thrust") ?? boostSound)
-                               : (TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound), 1f);
-                }
-                else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
-                else Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
-                TCFx.Spawn(impactParticle, other.transform.position);
-                TCFx.Shake(0.12f);
-                if (enemy.enemyType == TCEnemyType.Wasp)
-                {
-                    var waspComp = enemy as TCWasp;
-                    bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
-                    if (isBat) TCSave.AddBatKnock(1);
-                    else TCSave.AddWaspKnock(1);
-                }
-                else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKnock(1);
-                TCSkins.CheckAchievements();
-                OnEvent?.Invoke("chilli_kill", other.transform.position);
+                SmashEnemy(enemy, other.transform.position);
                 return;
             }
             if (jumpTimer > 0 && enemy.CanJumpOver) return; // jumped over crawling enemy
@@ -373,7 +370,7 @@ public class playerInteract : MonoBehaviour
             Vector3 hitPoint = other.ClosestPoint(transform.position);
             if (hitPoint == Vector3.zero || (hitPoint - transform.position).sqrMagnitude > 4f)
                 hitPoint = other.bounds.ClosestPoint(transform.position);
-            TCFx.Spawn(impactParticle, hitPoint);
+            TCFx.SpawnWoodImpact(hitPoint, impactParticle);
             if (pooled) pooled.Release(); else (other.transform.parent ? other.transform.parent.gameObject : other.gameObject).SetActive(false);
             if (boostDuration > 0)
             {
@@ -416,6 +413,52 @@ public class playerInteract : MonoBehaviour
             Play(TCSfx.Get("bees") ?? beesImpactSound, 0.8f);
             if (pooled) pooled.Release();
             Damage();
+        }
+    }
+
+    public void SmashEnemy(TCEnemy enemy, Vector3 hitWorldPos)
+    {
+        if (enemy == null) return;
+        enemy.Smash(transform.position);
+
+        if (boostDuration > 0)
+        {
+            if (enemy.enemyType == TCEnemyType.Wasp)
+            {
+                var waspComp = enemy as TCWasp;
+                bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
+                Play(isBat ? (TCSfx.Get("bat_kill") ?? TCSfx.Get("thrust") ?? boostSound)
+                           : (TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound), 1f);
+            }
+            else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+            else Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+        }
+        else
+        {
+            Play(TCSfx.Get("thrust") ?? boostSound, 1f);
+        }
+
+        TCFx.Spawn(impactParticle, hitWorldPos);
+        TCFx.Shake(boostDuration > 0 ? 0.2f : 0.12f);
+
+        if (enemy.enemyType == TCEnemyType.Wasp)
+        {
+            var waspComp = enemy as TCWasp;
+            bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
+            if (isBat) TCSave.AddBatKnock(1);
+            else TCSave.AddWaspKnock(1);
+        }
+        else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKnock(1);
+        TCSkins.CheckAchievements();
+
+        if (boostDuration > 0)
+        {
+            OnEvent?.Invoke("chilli_kill", hitWorldPos);
+        }
+        else
+        {
+            OnEvent?.Invoke("smash", transform.position);
+            gameManager.Instance?.addCoin();
         }
     }
 

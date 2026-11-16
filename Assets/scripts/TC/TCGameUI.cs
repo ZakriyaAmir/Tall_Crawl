@@ -494,10 +494,8 @@ public class TCGameUI : MonoBehaviour
     {
         for (int i = 0; i < 5; i++)
         {
-            // Spread 5 coins in a small circle around the enemy smash position
-            float angle = (i * 72f + Random.Range(-15f, 15f)) * Mathf.Deg2Rad;
-            float r = Random.Range(0.25f, 0.55f);
-            Vector3 coinWorld = centerWorldPos + new Vector3(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r, 0f);
+            // Spawn consecutive coins in an upward trail/string rather than a closed radial clump
+            Vector3 coinWorld = centerWorldPos + new Vector3(0f, 0.25f + i * 0.28f, 0f);
 
             FlyCoin(coinWorld);
             if (gm) gm.addCoin();
@@ -1532,6 +1530,10 @@ public class TCGameUI : MonoBehaviour
 
         // Complete the tutorial!
         TCSave.TutorialDone = true;
+        if (gm != null)
+        {
+            gm.EndTutorialTimeFreeze();
+        }
         if (TCTrack.Instance != null)
         {
             TCTrack.Instance.OnTutorialFinished();
@@ -1673,7 +1675,7 @@ public class TCGameUI : MonoBehaviour
         Time.timeScale = 1f;
         if (pl) { pl.ResetInputState(); pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); pl.SetSlowmoAllowed(true); }
         // A death during the first-run tutorial left its overlay up over the results
-        if (tutorialCo != null) { StopCoroutine(tutorialCo); tutorialCo = null; TCSave.TutorialDone = true; }
+        if (tutorialCo != null) { StopCoroutine(tutorialCo); tutorialCo = null; TCSave.TutorialDone = true; if (gm != null) gm.EndTutorialTimeFreeze(); }
         if (startOverlay.alpha > 0) TCUI.Hide(this, startOverlay);
         if (canRevive) { reviveGemBtn.interactable = TCSave.Gems >= TCConfig.I.reviveCostGems; TCUI.Show(this, revivePanel); reviveCo = StartCoroutine(ReviveCountdown()); }
         else ShowResults();

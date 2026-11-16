@@ -16,12 +16,143 @@ public class TCFx : MonoBehaviour
     {
         if (!prefab) return;
         var me = I;
-        if (!me.pools.TryGetValue(prefab, out var pool)) { pool = new TCPool(prefab, me.transform, 2); me.pools[prefab] = pool; }
+        if (!me.pools.TryGetValue(prefab, out var pool)) { pool = new TCPool(prefab, me.transform, 6); me.pools[prefab] = pool; }
         var g = pool.Get(pos, Quaternion.identity);
-        foreach (var ps in g.GetComponentsInChildren<ParticleSystem>()) { ps.Clear(); ps.Play(); }
+        foreach (var ps in g.GetComponentsInChildren<ParticleSystem>())
+        {
+            ps.Clear();
+            ps.Play();
+            // Force immediate burst emission so one-shot impact effects don't depend solely on rateOverTime
+            int burstCount = Mathf.Max(12, ps.main.maxParticles > 0 ? Mathf.Min(24, ps.main.maxParticles) : 16);
+            ps.Emit(burstCount);
+        }
         me.StartCoroutine(me.Return(pool, g));
     }
-    System.Collections.IEnumerator Return(TCPool p, GameObject g) { yield return new WaitForSeconds(2f); p.Release(g); }
+    System.Collections.IEnumerator Return(TCPool p, GameObject g) { yield return new WaitForSeconds(1.2f); p.Release(g); }
+
+    // ------------------------------------------------------------------ Dedicated Wood Impact Burst FX
+    static readonly List<ParticleSystem> woodBurstPool = new List<ParticleSystem>();
+    static int nextWoodBurst = 0;
+    static Transform woodBurstHost;
+
+    /// Spawns high-visibility wood splinters, sawdust puffs, and impact sparks at the exact contact point.
+    /// Offset slightly along the camera view line so particles are never buried or clipped inside the trunk/branch geometry.
+    public static void SpawnWoodImpact(Vector3 hitPoint, GameObject prefab = null)
+    {
+        if (prefab != null)
+        {
+            Spawn(prefab, hitPoint);
+        }
+
+        if (!Application.isPlaying) return;
+
+        if (!woodBurstHost)
+        {
+            woodBurstPool.Clear();
+            nextWoodBurst = 0;
+            var pl = Object.FindObjectOfType<player>();
+            var hostGo = new GameObject("TC_WoodImpactBursts");
+            woodBurstHost = hostGo.transform;
+            if (pl) woodBurstHost.SetParent(pl.p1 ? pl.p1 : pl.transform, false);
+        }
+
+        Vector3 spawnPos = hitPoint;
+        var cam = Camera.main;
+        if (cam)
+        {
+            // Pull slightly towards camera (0.18m) so it renders prominently in front of trunk bark / branch wood
+            Vector3 camDir = (cam.transform.position - hitPoint).normalized;
+            spawnPos = hitPoint + camDir * 0.18f;
+        }
+
+        const int cap = 4;
+        ParticleSystem ps;
+        if (woodBurstPool.Count < cap)
+        {
+            ps = BuildWoodImpactBurst(woodBurstHost);
+            woodBurstPool.Add(ps);
+        }
+        else
+        {
+            ps = woodBurstPool[nextWoodBurst];
+            nextWoodBurst = (nextWoodBurst + 1) % cap;
+        }
+
+        ps.transform.position = spawnPos;
+        if (cam) ps.transform.rotation = Quaternion.LookRotation(cam.transform.position - spawnPos, cam.transform.up);
+
+        ps.Clear(true);
+        ps.Play(true);
+    }
+
+    static ParticleSystem BuildWoodImpactBurst(Transform host)
+    {
+        // Root container + wood impact dust flash
+        var root = TCFxLib.PS(host, "WoodImpactBurst", "Glow", Vector3.zero, 3);
+        TCFxLib.OneShot(root, 0.22f);
+        var rMain = root.main;
+        rMain.startSize = 0.9f;
+        rMain.startColor = new Color(1f, 0.92f, 0.72f, 0.95f);
+        TCFxLib.Burst(root, 1);
+        TCFxLib.SizeLife(root, 0, 0.4f, 0.2f, 1f, 1f, 1.2f);
+        TCFxLib.ColorLife(root, TCFxLib.Fade(Color.white, new Color(0.82f, 0.58f, 0.32f, 0.9f), 0.02f, 0.35f));
+
+        // Shockwave ring
+        var ring = TCFxLib.PS(root.transform, "WoodShock", "Ring", Vector3.zero, 3);
+        TCFxLib.OneShot(ring, 0.35f);
+        var ringMain = ring.main;
+        ringMain.startSize = 1.3f;
+        ringMain.startColor = new Color(0.95f, 0.85f, 0.65f, 0.85f);
+        TCFxLib.Burst(ring, 1);
+        TCFxLib.SizeLife(ring, 0, 0.2f, 1f, 1f);
+        TCFxLib.ColorLife(ring, TCFxLib.Fade(Color.white, new Color(0.78f, 0.52f, 0.28f, 0.75f), 0.02f, 0.35f));
+
+        // Wood splinters & chips (sharp, flying outwards with gravity)
+        var splinters = TCFxLib.PS(root.transform, "Splinters", "Spark", Vector3.zero, 32);
+        TCFxLib.OneShot(splinters, 0.38f, 0.65f);
+        var sMain = splinters.main;
+        sMain.startSpeed = new ParticleSystem.MinMaxCurve(2.8f, 5.2f);
+        sMain.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.26f);
+        sMain.startColor = new ParticleSystem.MinMaxGradient(
+            new Color(0.92f, 0.74f, 0.48f, 1f), // golden wood
+            new Color(0.55f, 0.34f, 0.16f, 1f)  // dark bark brown
+        );
+        sMain.gravityModifier = 1.5f;
+        var sRend = splinters.GetComponent<ParticleSystemRenderer>();
+        if (sRend)
+        {
+            sRend.renderMode = ParticleSystemRenderMode.Stretch;
+            sRend.velocityScale = 0.06f;
+            sRend.lengthScale = 2.2f;
+        }
+        TCFxLib.Burst(splinters, 18);
+        TCFxLib.Sphere(splinters, 0.12f);
+        var sLim = splinters.limitVelocityOverLifetime;
+        sLim.enabled = true;
+        sLim.limit = 0.6f;
+        sLim.dampen = 0.12f;
+        TCFxLib.SizeLife(splinters, 0, 1f, 0.8f, 0.9f, 1f, 0f);
+        TCFxLib.ColorLife(splinters, TCFxLib.Fade(Color.white, new Color(0.68f, 0.42f, 0.20f, 1f), 0.02f, 0.5f));
+
+        // Wood sawdust puff
+        var smoke = TCFxLib.PS(root.transform, "Sawdust", "Smoke", Vector3.zero, 16);
+        TCFxLib.OneShot(smoke, 0.45f, 0.75f);
+        var smMain = smoke.main;
+        smMain.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 2.0f);
+        smMain.startSize = new ParticleSystem.MinMaxCurve(0.28f, 0.55f);
+        smMain.startColor = new ParticleSystem.MinMaxGradient(
+            new Color(0.86f, 0.72f, 0.54f, 0.75f),
+            new Color(0.64f, 0.48f, 0.34f, 0.65f)
+        );
+        smMain.gravityModifier = -0.1f; // drifts softly upward
+        TCFxLib.Burst(smoke, 10);
+        TCFxLib.Sphere(smoke, 0.15f);
+        TCFxLib.SpinRandom(smoke, 120f);
+        TCFxLib.SizeLife(smoke, 0, 0.35f, 0.25f, 1f, 1f, 1.4f);
+        TCFxLib.ColorLife(smoke, TCFxLib.Fade(Color.white, new Color(0.72f, 0.54f, 0.36f, 0.6f), 0.04f, 0.45f));
+
+        return root;
+    }
 
     public static void Shake(float amount) { I.shake = Mathf.Max(I.shake, amount); }
 

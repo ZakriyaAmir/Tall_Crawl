@@ -11,7 +11,19 @@ public class gameManager : MonoBehaviour
     public Camera camera;
     public GameObject Sun;
 
-    [Header("WEB Letter Pickups")]
+    [Header("Pickup Spawn Probabilities")]
+    [Range(0.01f, 1.0f)]
+    [Tooltip("Spawn probability for Chilli Boost pickups")]
+    public float chilliSpawnProbability = 0.0624f; // Reduced by 20% (from 0.078f)
+
+    [Range(0.01f, 1.0f)]
+    [Tooltip("Spawn probability for Coin Magnet pickups")]
+    public float coinMagnetSpawnProbability = 0.042f;
+
+    [Range(0.01f, 1.0f)]
+    [Tooltip("Spawn probability for Slow-mo Cooldown pickups")]
+    public float slowMoSpawnProbability = 0.042f;
+
     [Range(0.1f, 1.0f)]
     [Tooltip("Spawn probability for W E B letter pickups (0.1 - 1.0)")]
     public float webPickupSpawnProbability = 0.25f;
@@ -51,6 +63,7 @@ public class gameManager : MonoBehaviour
     int currentPhaseIndex;
     int nextPhaseIndex;
     bool isTransitioning;
+    public bool isTutorialActive;
 
     public string CurrentPhaseName
     {
@@ -215,9 +228,38 @@ public class gameManager : MonoBehaviour
             }
         };
 
-        currentPhaseIndex = Random.Range(0, diurnalPhases.Length); // Start at any random time of the day
+        int middayPhaseIdx = -1;
+        for (int i = 0; i < diurnalPhases.Length; i++)
+        {
+            if (diurnalPhases[i].name == "CloudyCrown_Midday")
+            {
+                middayPhaseIdx = i;
+                break;
+            }
+        }
+
+        // If tutorial is not yet completed, always start at Midday time and freeze diurnal time until tutorial ends
+        if (!TCSave.TutorialDone && middayPhaseIdx >= 0)
+        {
+            currentPhaseIndex = middayPhaseIdx;
+            isTutorialActive = true;
+        }
+        else
+        {
+            currentPhaseIndex = Random.Range(0, diurnalPhases.Length); // Start at any random time of the day
+            isTutorialActive = false;
+        }
         phaseTimer = 0f;
         isTransitioning = false;
+    }
+
+    /// <summary>
+    /// Called when the tutorial is completed or ended so normal diurnal cycle progression can resume.
+    /// </summary>
+    public void EndTutorialTimeFreeze()
+    {
+        isTutorialActive = false;
+        phaseTimer = 0f;
     }
 
     int FindMaterialIndex(string keyword)
@@ -496,8 +538,8 @@ public class gameManager : MonoBehaviour
         skyboxRotation += dt * 0.8f;
         if (blendedSkyboxMat) blendedSkyboxMat.SetFloat("_Rotation", skyboxRotation);
 
-        // Advance diurnal cycle when gameplay is running
-        if (IsPaused || (p && (p.paused || p.GameOver))) return;
+        // Advance diurnal cycle when gameplay is running (and not frozen during tutorial)
+        if (IsPaused || (p && (p.paused || p.GameOver)) || isTutorialActive) return;
 
         if (!isTransitioning)
         {

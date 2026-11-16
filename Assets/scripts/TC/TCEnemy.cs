@@ -310,7 +310,7 @@ public class TCEnemy : MonoBehaviour
         // Trigger Collider for collision
         var col = mObj.AddComponent<SphereCollider>();
         col.isTrigger = true;
-        col.radius = 0.32f;
+        col.radius = 0.22f;
         col.center = Vector3.zero;
 
         root.tag = "branch"; // safe fallback for tag queries while TCEnemy component handles custom interaction
@@ -487,11 +487,12 @@ public class TCEnemy : MonoBehaviour
         wComp.abdomen = abdObj.transform;
         wComp.head = waspHead.transform;
 
-        // Trigger Collider
+        // Trigger Collider attached to model
         var col = mObj.AddComponent<SphereCollider>();
         col.isTrigger = true;
-        col.radius = 0.28f;
+        col.radius = 0.20f;
         col.center = new Vector3(0, 0.04f, 0);
+        wComp.bodyCollider = col;
 
         root.tag = "bees"; // safe fallback for tag queries while TCEnemy handles custom logic
         root.SetActive(false);
@@ -807,7 +808,7 @@ public class TCEnemy : MonoBehaviour
         // Trigger Collider for collision & jump/smash detection
         var col = mObj.AddComponent<SphereCollider>();
         col.isTrigger = true;
-        col.radius = 0.34f;
+        col.radius = 0.22f;
         col.center = new Vector3(0, 0, 0.08f);
 
         root.tag = "branch";
@@ -861,6 +862,9 @@ public class TCPinecone : TCEnemy
 
         transform.position = new Vector3(0, y, 0);
         transform.rotation = Quaternion.Euler(0, baseAngle, 0);
+
+        // Keep collider physics transform synchronized with rolling motion
+        Physics.SyncTransforms();
     }
 }
 
@@ -879,10 +883,13 @@ public class TCWasp : TCEnemy
     public GameObject batVisual;
     public Transform waspWingL, waspWingR, waspAbdomen, waspHead;
     public Transform batWingL, batWingR, batTail, batHead;
+    public SphereCollider bodyCollider;
     public bool isBat;
 
     bool hasPlayedBuzz;
+    bool pendingReskinShift;
     static player cachedPlayer;
+    static Camera cachedCamera;
 
     void Awake()
     {
@@ -906,12 +913,20 @@ public class TCWasp : TCEnemy
         if (waspVisual) waspVisual.SetActive(!isBat);
         if (batVisual) batVisual.SetActive(isBat);
 
+        if (!bodyCollider && model) bodyCollider = model.GetComponent<SphereCollider>();
+
         if (isBat)
         {
             wingL = batWingL;
             wingR = batWingR;
             head = batHead;
             abdomen = batTail;
+
+            if (bodyCollider)
+            {
+                bodyCollider.radius = 0.20f;
+                bodyCollider.center = new Vector3(0, 0.04f, 0);
+            }
 
             if (batVisual)
             {
@@ -929,6 +944,12 @@ public class TCWasp : TCEnemy
             wingR = waspWingR;
             head = waspHead;
             abdomen = waspAbdomen;
+
+            if (bodyCollider)
+            {
+                bodyCollider.radius = 0.20f;
+                bodyCollider.center = new Vector3(0, 0.04f, 0);
+            }
         }
     }
 
@@ -936,6 +957,7 @@ public class TCWasp : TCEnemy
     {
         base.Init(startY, startAngle, sweep, spd);
         hasPlayedBuzz = false;
+        pendingReskinShift = false;
         UpdateReskin();
         if (!audioSrc) audioSrc = GetComponent<AudioSource>();
         if (audioSrc)
@@ -951,12 +973,52 @@ public class TCWasp : TCEnemy
     void OnDisable()
     {
         gameManager.OnBatPhaseChanged -= OnBatPhaseChanged;
+        pendingReskinShift = false;
         if (audioSrc && audioSrc.isPlaying) audioSrc.Stop();
     }
 
     void OnBatPhaseChanged(bool batPhase)
     {
-        UpdateReskin();
+        bool targetIsBat = gameManager.Instance != null && gameManager.Instance.IsBatPhase;
+        if (isBat == targetIsBat) return;
+
+        // If the enemy is in camera view or close to the spider, defer the visual shift until off-camera
+        if (IsInCameraOrCloseToSpider())
+        {
+            pendingReskinShift = true;
+        }
+        else
+        {
+            pendingReskinShift = false;
+            UpdateReskin();
+        }
+    }
+
+    bool IsInCameraOrCloseToSpider()
+    {
+        if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
+        if (cachedPlayer != null)
+        {
+            float dy = Mathf.Abs(y - cachedPlayer.transform.position.y);
+            if (dy < 9.0f) return true; // Close proximity to spider (vertical view range)
+        }
+
+        if (!cachedCamera)
+        {
+            if (cachedPlayer && cachedPlayer.maincam) cachedCamera = cachedPlayer.maincam;
+            else cachedCamera = Camera.main;
+        }
+
+        if (cachedCamera != null)
+        {
+            Vector3 vp = cachedCamera.WorldToViewportPoint(transform.position);
+            // In front of camera with comfortable margin outside the screen frustum
+            if (vp.z > 0f && vp.x >= -0.15f && vp.x <= 1.15f && vp.y >= -0.15f && vp.y <= 1.15f)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     public override void Smash(Vector3? hitSourcePos = null)
@@ -988,6 +1050,17 @@ public class TCWasp : TCEnemy
     {
         if (isSmashed) return;
         float t = Time.time;
+
+        // If a reskin shift was deferred because the enemy was on-screen/close to spider,
+        // execute the shift as soon as it moves completely off-camera and far from spider.
+        if (pendingReskinShift)
+        {
+            if (!IsInCameraOrCloseToSpider())
+            {
+                pendingReskinShift = false;
+                UpdateReskin();
+            }
+        }
 
         // Proximity buzz warning sound when spider approaches within 4.5m - plays ONCE, never in a loop
         if (!hasPlayedBuzz)
@@ -1049,6 +1122,9 @@ public class TCWasp : TCEnemy
 
         transform.position = new Vector3(0, hoverY, 0);
         transform.rotation = Quaternion.Euler(pitchBob, swayAngle, bankRoll);
+
+        // Keep collider physics transform in exact lockstep with moving body
+        Physics.SyncTransforms();
     }
 }
 
@@ -1415,5 +1491,8 @@ public class TCSquirrel : TCEnemy
 
         transform.position = new Vector3(0, y, 0);
         transform.rotation = Quaternion.Euler(0, baseAngle, 0);
+
+        // Keep collider physics transform synchronized with rolling motion
+        Physics.SyncTransforms();
     }
 }
