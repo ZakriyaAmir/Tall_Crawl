@@ -1589,6 +1589,7 @@ public class TCGameUI : MonoBehaviour
     {
         if (resuming) return;
         if (!started || pl == null || pl.GameOver || (gm != null && gm.runEnded) || pausePanel.gameObject.activeSelf) return;
+        TCUI.LiftOverlay(pausePanel.transform, 80);
         gm.Pause(true); TCUI.Show(this, pausePanel);
     }
     void HidePause()

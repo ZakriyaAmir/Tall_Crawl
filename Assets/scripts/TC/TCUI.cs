@@ -489,6 +489,7 @@ public static class TCUI
     public static void Show(MonoBehaviour host, CanvasGroup cg, bool pop = true, bool animateContents = true)
     {
         hiding.Remove(cg);
+        LiftOverlay(cg.transform, 80);
         cg.gameObject.SetActive(true); cg.transform.SetAsLastSibling();
         // Do not animate UI buttons/contents for Shop and Skins panels when opened
         if (cg != null && (cg.name == "Shop" || cg.name == "Skins")) animateContents = false;

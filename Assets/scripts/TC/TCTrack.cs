@@ -410,6 +410,11 @@ public class TCTrack : MonoBehaviour
         if (!webSwinging)
         {
             float waspProb = metres > 30f ? Mathf.Lerp(0.12f, 0.26f, d) : 0f;
+            // Reduce bats during night by 30%
+            if (gameManager.Instance != null && gameManager.Instance.IsBatPhase)
+            {
+                waspProb *= 0.70f;
+            }
             float squirrelProb = metres >= 2000f ? Mathf.Lerp(0.15f, 0.28f, d) : 0f;
 
             if (waspProb > 0f && Random.value < waspProb)

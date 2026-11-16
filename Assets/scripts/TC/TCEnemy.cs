@@ -191,17 +191,18 @@ public class TCEnemy : MonoBehaviour
             if (!batBodyMat)
             {
                 var tex = LoadTexture("Bat_Texture") ?? LoadTexture("Bat_Fur");
-                batBodyMat = CreateCelMaterial(Color.white, tex, 1.0f, new Color(0.26f, 0.06f, 0.38f, 1f));
+                batBodyMat = CreateCelMaterial(Color.white, tex, 1.0f, Color.white);
                 if (batBodyMat.HasProperty("_Brightness")) batBodyMat.SetFloat("_Brightness", 1.05f);
                 if (batBodyMat.HasProperty("_ShadowDull")) batBodyMat.SetFloat("_ShadowDull", 0.75f);
-                if (batBodyMat.HasProperty("_EdgeThreshold")) batBodyMat.SetFloat("_EdgeThreshold", 0.18f);
+                if (batBodyMat.HasProperty("_EdgeThreshold")) batBodyMat.SetFloat("_EdgeThreshold", 0.0f);
                 if (batBodyMat.HasProperty("_CelIntensity")) batBodyMat.SetFloat("_CelIntensity", 0.35f);
             }
         }
         if (batBodyMat)
         {
-            if (batBodyMat.HasProperty("_OutlineColor")) batBodyMat.SetColor("_OutlineColor", new Color(0.26f, 0.06f, 0.38f, 1f));
-            if (batBodyMat.HasProperty("_OutlineWidth")) batBodyMat.SetFloat("_OutlineWidth", 1.0f);
+            if (batBodyMat.HasProperty("_OutlineColor")) batBodyMat.SetColor("_OutlineColor", Color.white);
+            if (batBodyMat.HasProperty("_OutlineWidth")) batBodyMat.SetFloat("_OutlineWidth", 1.4f);
+            if (batBodyMat.HasProperty("_EdgeThreshold")) batBodyMat.SetFloat("_EdgeThreshold", 0.0f);
         }
 
         if (!batWingMat)
@@ -893,6 +894,7 @@ public class TCWasp : TCEnemy
     {
         if (!audioSrc) audioSrc = GetComponent<AudioSource>();
         if (audioSrc) audioSrc.loop = false;
+        gameManager.OnBatPhaseChanged += OnBatPhaseChanged;
         UpdateReskin();
     }
 
@@ -948,7 +950,13 @@ public class TCWasp : TCEnemy
 
     void OnDisable()
     {
+        gameManager.OnBatPhaseChanged -= OnBatPhaseChanged;
         if (audioSrc && audioSrc.isPlaying) audioSrc.Stop();
+    }
+
+    void OnBatPhaseChanged(bool batPhase)
+    {
+        UpdateReskin();
     }
 
     public override void Smash(Vector3? hitSourcePos = null)

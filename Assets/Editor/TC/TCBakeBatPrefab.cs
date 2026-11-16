@@ -48,9 +48,9 @@ public static class TCBakeBatPrefab
         mat.color = Color.white;
         if (mat.HasProperty("_Brightness")) mat.SetFloat("_Brightness", 1.05f);
         if (mat.HasProperty("_ShadowDull")) mat.SetFloat("_ShadowDull", 0.75f);
-        if (mat.HasProperty("_OutlineColor")) mat.SetColor("_OutlineColor", new Color(0.26f, 0.06f, 0.38f, 1f));
-        if (mat.HasProperty("_OutlineWidth")) mat.SetFloat("_OutlineWidth", 1.0f);
-        if (mat.HasProperty("_EdgeThreshold")) mat.SetFloat("_EdgeThreshold", 0.18f);
+        if (mat.HasProperty("_OutlineColor")) mat.SetColor("_OutlineColor", Color.white);
+        if (mat.HasProperty("_OutlineWidth")) mat.SetFloat("_OutlineWidth", 0.30f);
+        if (mat.HasProperty("_EdgeThreshold")) mat.SetFloat("_EdgeThreshold", 0.0f);
         if (mat.HasProperty("_CelIntensity")) mat.SetFloat("_CelIntensity", 0.35f);
         EditorUtility.SetDirty(mat);
 

@@ -62,10 +62,24 @@ public class gameManager : MonoBehaviour
         }
     }
 
+    public static System.Action<bool> OnBatPhaseChanged;
+
     public bool IsBatPhase
     {
         get
         {
+            // As soon as midnight ends (when transitioning out of Midnight to the next phase),
+            // immediately shift out of bat phase to wasp.
+            if (isTransitioning)
+            {
+                string cur = CurrentPhaseName;
+                if (cur == "CloudyCrown_Midnight") return false; // Midnight is over, immediately wasp!
+                if (diurnalPhases != null && nextPhaseIndex >= 0 && nextPhaseIndex < diurnalPhases.Length)
+                {
+                    string nxt = diurnalPhases[nextPhaseIndex].name;
+                    if (nxt == "CloudyCrown_Sunset" || nxt == "CloudyCrown_Midnight") return true;
+                }
+            }
             string phase = CurrentPhaseName;
             return phase == "CloudyCrown_Sunset" || phase == "CloudyCrown_Midnight";
         }
@@ -454,6 +468,7 @@ public class gameManager : MonoBehaviour
 
         isTransitioning = true;
         transitionTimer = 0f;
+        OnBatPhaseChanged?.Invoke(IsBatPhase);
     }
 
     void StartAudioCrossfade(AudioClip targetClip, float duration)
@@ -554,6 +569,7 @@ public class gameManager : MonoBehaviour
                 currentPhaseIndex = nextPhaseIndex;
                 phaseTimer = 0f;
                 ApplyPhaseImmediate(currentPhaseIndex);
+                OnBatPhaseChanged?.Invoke(IsBatPhase);
 
                 if (diurnalPhases != null && currentPhaseIndex < diurnalPhases.Length &&
                     diurnalPhases[currentPhaseIndex].name == "CloudyCrown_Evening")

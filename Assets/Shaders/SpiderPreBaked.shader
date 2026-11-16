@@ -77,7 +77,7 @@ Shader "TallCrawl/SpiderPreBaked"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                return fixed4(_OutlineColor.rgb, 1.0);
+                return _OutlineColor;
             }
             ENDCG
         }
