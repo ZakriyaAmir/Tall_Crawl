@@ -488,7 +488,7 @@ public class TCGameUI : MonoBehaviour
             case "heart": Pop("+1 HEART", pos, TCUI.Blush); StartCoroutine(TCUI.Punch(heartsRow, 0.25f)); break;
             case "boost": Pop("BOOST", pos, TCUI.Peach); break;
             case "cooldown": Pop("SLOW-MO +1", pos, TCUI.Tan); if (slowmoStockRect) StartCoroutine(TCUI.Punch(slowmoStockRect, 0.25f)); break;
-            case "smash": Pop("SMASH!", pos, TCUI.Coral); break;
+            case "smash": Pop("SMASH!", pos, TCUI.Cream); break;
             case "hit": flash.alpha = 1; StartCoroutine(TCUI.Punch(heartsRow, 0.3f)); break;
         }
     }
@@ -1836,7 +1836,7 @@ public class TCGameUI : MonoBehaviour
         var medal = TCUI.Img("Medal", countDownRoot, TCUI.Crimson, TCUI.Circle);
         TCUI.Place(medal.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(330, 330));
         { var o = TCUI.Add<Outline>(medal.gameObject); o.effectColor = TCUI.Cream; o.effectDistance = new Vector2(9, -9); var sh = medal.gameObject.AddComponent<Shadow>(); sh.effectColor = new Color(TCUI.Ink.r, TCUI.Ink.g, TCUI.Ink.b, 0.55f); sh.effectDistance = new Vector2(0, -16); }
-        var mb = TCUI.Img("Gloss", medal.transform, new Color(1f, 1f, 1f, 0.24f), TCUI.Circle); TCUI.Place(mb.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(230, 120));
+        var mb = TCUI.Img("Gloss", medal.transform, new Color(TCUI.CreamLight.r, TCUI.CreamLight.g, TCUI.CreamLight.b, 0.16f), TCUI.Circle); mb.preserveAspect = false; mb.raycastTarget = false; TCUI.Place(mb.rectTransform, new Vector2(0.5f, 0.8f), Vector2.zero, new Vector2(220, 84));
         countDownText = TCUI.Label("N", countDownRoot, "3", 220, TCUI.Cream);
         TCUI.Place(countDownText.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(400, 400));
         TCTheme.StyleText(countDownText, TCUI.Cream, 0.3f, true);

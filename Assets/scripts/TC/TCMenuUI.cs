@@ -793,7 +793,7 @@ public class TCMenuUI : MonoBehaviour
             if (c.idx >= skins.Length) continue;
             bool owned = TCSave.SkinOwned(c.idx); var def = skins[c.idx];
             if (c.lockIc) c.lockIc.gameObject.SetActive(!owned);
-            if (c.check) c.check.gameObject.SetActive(TCSave.SelectedSkin == c.idx);
+            if (c.check) { c.check.gameObject.SetActive(TCSave.SelectedSkin == c.idx); c.check.color = TCUI.Crimson; }
             if (c.label)
             {
                 c.label.color = Color.black;
@@ -1153,6 +1153,7 @@ public class TCMenuUI : MonoBehaviour
     IEnumerator ToastCo(string msg, bool flashy = false)
     {
         toastText.text = msg;
+        toastText.margin = new Vector4(22, 6, 22, 6); toastText.enableAutoSizing = true; toastText.fontSizeMin = 16; toastText.fontSizeMax = Mathf.Max(toastText.fontSizeMax, 26);
         toastGroup.transform.SetAsLastSibling();
         var img = toastGroup.GetComponent<Image>();
         var original = img ? img.color : TCUI.Cocoa;

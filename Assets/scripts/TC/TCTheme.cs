@@ -198,11 +198,19 @@ public static class TCTheme
     }
 
     // ---------- panels ----------
+    // Dim lives inside the safe-area rect, so stretch it past the safe/banner inset to darken the whole screen.
+    public static void BleedDim(Transform root)
+    {
+        var dim = root.Find("Dim")?.GetComponent<Image>(); if (!dim) return;
+        dim.color = A(TCUI.Ink, 0.62f);
+        var drt = dim.rectTransform; drt.anchorMin = Vector2.zero; drt.anchorMax = Vector2.one;
+        drt.offsetMin = new Vector2(-1600, -1600); drt.offsetMax = new Vector2(1600, 1600);
+    }
     public static void StylePanel(Transform root)
     {
         if (!root) return;
         var card = root.Find("Card") as RectTransform; if (!card) return;
-        var dim = root.Find("Dim")?.GetComponent<Image>(); if (dim) dim.color = A(TCUI.Ink, 0.62f);
+        var dim = root.Find("Dim")?.GetComponent<Image>(); BleedDim(root);
         var ci = card.GetComponent<Image>();
         if (ci && !Marked(card))
         {
@@ -294,7 +302,10 @@ public static class TCTheme
         if (!canvas) return;
         // panels first (cards, ribbons, headings)
         foreach (var cg in canvas.GetComponentsInChildren<CanvasGroup>(true))
-            if (cg.transform.Find("Card") && !Marked(cg)) StylePanel(cg.transform);
+        {
+            if (!cg.transform.Find("Card")) continue;
+            if (!Marked(cg)) StylePanel(cg.transform); else BleedDim(cg.transform);
+        }
 
         foreach (var b in canvas.GetComponentsInChildren<Button>(true))
         {
