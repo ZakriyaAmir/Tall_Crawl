@@ -430,6 +430,12 @@ public class playerInteract : MonoBehaviour
                 bool isBat = waspComp != null ? waspComp.isBat : (gameManager.Instance != null && gameManager.Instance.IsBatPhase);
                 Play(isBat ? (TCSfx.Get("bat") ?? woodImpactSound) : (TCSfx.Get("wasp") ?? woodImpactSound), 0.95f);
             }
+            else if (enemy.enemyType == TCEnemyType.Snake)
+            {
+                // angry strike hiss layered over the usual damage thud
+                Play(TCSfx.Get("hit") ?? woodImpactSound, 0.8f);
+                Play(TCSfx.Get("snake_hit") ?? woodImpactSound, 0.9f);
+            }
             else
             {
                 Play(TCSfx.Get("hit") ?? woodImpactSound, 0.85f);
@@ -511,6 +517,7 @@ public class playerInteract : MonoBehaviour
                            : (TCSfx.Get("wasp_kill") ?? TCSfx.Get("thrust") ?? boostSound), 1f);
             }
             else if (enemy.enemyType == TCEnemyType.Squirrel) Play(TCSfx.Get("squirrel_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
+            else if (enemy.enemyType == TCEnemyType.Snake) Play(TCSfx.Get("snake_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
             else Play(TCSfx.Get("thrust") ?? boostSound, 1f);
         }
         else

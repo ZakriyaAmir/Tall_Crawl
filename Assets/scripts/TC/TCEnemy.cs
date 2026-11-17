@@ -7,7 +7,8 @@ public enum TCEnemyType
 {
     Pinecone, // Spiky rolling pinecone tumbling down the trunk bark
     Wasp,     // Aerial darting hornet hovering off the bark with fluttering wings
-    Squirrel  // Animated running squirrel scampering downwards along the trunk
+    Squirrel, // Animated running squirrel scampering downwards along the trunk
+    Snake     // Low-poly snake spiralling down the trunk on a helix (jump over it)
 }
 
 /// <summary>
@@ -454,24 +455,8 @@ public class TCEnemy : MonoBehaviour
 
         // Container 2: Bat Visual Model (Reskin for Sunset & Midnight)
         // Uses user-editable Bat_Enemy prefab from Assets/prefabs or Assets/TC/Resources/Enemies
-        GameObject batRoot = null;
-        var batPrefab = Resources.Load<GameObject>("Enemies/Bat_Enemy");
-#if UNITY_EDITOR
-        if (!batPrefab)
-        {
-            batPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/prefabs/Bat_Enemy.prefab")
-                     ?? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TC/Resources/Enemies/Bat_Enemy.prefab");
-        }
-#endif
-        if (batPrefab != null)
-        {
-            batRoot = Object.Instantiate(batPrefab, mObj.transform, false);
-            batRoot.name = "Bat_Visual";
-        }
-        else
-        {
-            batRoot = BuildMedievalBatModel(mObj.transform);
-        }
+        // polish3: procedural faceted low-poly bat (two-joint flapping wings, TCBatFlap), replaces the old Bat_Enemy prefab
+        GameObject batRoot = TCCritters.BuildBat(mObj.transform);
 
         wComp.batVisual = batRoot;
 
@@ -770,40 +755,10 @@ public class TCEnemy : MonoBehaviour
         bodyPivot.transform.localRotation = Quaternion.Euler(90f, 0, 0);
         sComp.bodyPivot = bodyPivot.transform;
 
-        // 1. Torso / Body low-poly mesh (sleek arched back, cream belly, rich chestnut fur)
-        var bodyMesh = GetSquirrelMesh("Body");
-        CreateMeshPart("Torso", bodyMesh, bodyPivot.transform, Vector3.zero, Vector3.one, squirrelMat);
-
-        // 2. Head Pivot & low-poly mesh (chubby cheeks, pointed snout, perked ears, shiny eyes)
-        // Positioned at the leading front (+Z) of the body, facing downward where it heads
-        var headPivot = new GameObject("HeadPivot");
-        headPivot.transform.SetParent(bodyPivot.transform, false);
-        headPivot.transform.localPosition = new Vector3(0, 0.05f, 0.20f);
-        headPivot.transform.localRotation = Quaternion.Euler(10f, 0, 0);
-        sComp.head = headPivot.transform;
-
-        var headMesh = GetSquirrelMesh("Head");
-        CreateMeshPart("HeadModel", headMesh, headPivot.transform, Vector3.zero, Vector3.one, squirrelMat);
-
-        // 3. Iconic Bushy Tail Pivot & low-poly plume mesh (S-curved plume arching over back)
-        var tailPivot = new GameObject("TailPivot");
-        tailPivot.transform.SetParent(bodyPivot.transform, false);
-        tailPivot.transform.localPosition = new Vector3(0, 0.03f, -0.22f);
-        sComp.tail = tailPivot.transform;
-
-        var tailMesh = GetSquirrelMesh("Tail");
-        CreateMeshPart("TailModel", tailMesh, tailPivot.transform, Vector3.zero, Vector3.one, squirrelMat);
-
-        // 4. Four Running Low-Poly Legs & Gripping Paws
-        var legFLMesh = GetSquirrelMesh("LegFL");
-        var legFRMesh = GetSquirrelMesh("LegFR");
-        var legBLMesh = GetSquirrelMesh("LegBL");
-        var legBRMesh = GetSquirrelMesh("LegBR");
-
-        sComp.legFL = CreateLegPart("LegFL", legFLMesh, bodyPivot.transform, new Vector3(-0.11f, 0.01f, 0.12f));
-        sComp.legFR = CreateLegPart("LegFR", legFRMesh, bodyPivot.transform, new Vector3( 0.11f, 0.01f, 0.12f));
-        sComp.legBL = CreateLegPart("LegBL", legBLMesh, bodyPivot.transform, new Vector3(-0.14f, 0.04f, -0.11f));
-        sComp.legBR = CreateLegPart("LegBR", legBRMesh, bodyPivot.transform, new Vector3( 0.14f, 0.04f, -0.11f));
+        // polish3: procedural faceted low-poly squirrel (cuter face, chipmunk stripes, bushy S-tail), same rig + pivots
+        TCCritters.BuildSquirrel(bodyPivot.transform, out var headT, out var tailT, out var lfl, out var lfr, out var lbl, out var lbr);
+        sComp.head = headT; sComp.tail = tailT;
+        sComp.legFL = lfl; sComp.legFR = lfr; sComp.legBL = lbl; sComp.legBR = lbr;
 
         // Trigger Collider for collision & jump/smash detection
         var col = mObj.AddComponent<SphereCollider>();
