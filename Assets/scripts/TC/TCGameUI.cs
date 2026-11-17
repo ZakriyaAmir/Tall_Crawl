@@ -286,7 +286,8 @@ public class TCGameUI : MonoBehaviour
         int max = spider.MaxLife;
         float spacing = max >= 5 ? 50f : 66f;
         float startX = max >= 5 ? 32f : 40f;
-        while (hearts.Count < max)
+        int heartSafety = 0;
+        while (hearts.Count < max && ++heartSafety < 30)
         {
             var h = TCUI.Img("Heart", heartsRow, Color.white, TCUI.Icon("heart"));
             TCUI.Place(h.rectTransform, new Vector2(0, 0.5f), new Vector2(startX + hearts.Count * spacing, 0), new Vector2(56, 56));

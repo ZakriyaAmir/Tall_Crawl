@@ -684,7 +684,16 @@ public class gameManager : MonoBehaviour
         if (musicSecondary && musicSecondary.isPlaying) { if (on) musicSecondary.Pause(); else musicSecondary.UnPause(); }
     }
 
-    void OnApplicationPause(bool paused) { if (paused && p && !p.paused && !p.GameOver) TCGameUI.Instance?.ShowPause(); }
+    void OnApplicationPause(bool paused)
+    {
+        if (paused) TCSave.Flush();
+        if (paused && p && !p.paused && !p.GameOver) TCGameUI.Instance?.ShowPause();
+    }
+
+    void OnApplicationQuit()
+    {
+        TCSave.Flush();
+    }
 
     public void OnPlayerDied()
     {
@@ -733,6 +742,7 @@ public class gameManager : MonoBehaviour
         TCSave.Runs++;
         if (metres > TCSave.Best) TCSave.Best = metres;
         TCSkins.CheckAchievements();
+        TCSave.Flush();
         TCServices.Log("run_end", "metres", metres);
         return RunReward;
     }

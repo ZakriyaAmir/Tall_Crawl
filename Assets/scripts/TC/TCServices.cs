@@ -186,8 +186,11 @@ public static class TCServices
 
     public static void Haptic()
     {
-#if UNITY_ANDROID || UNITY_IOS
-        if (TCSave.Vibration && !Application.isEditor) Handheld.Vibrate();
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // Use non-blocking light haptic on Android rather than synchronous Handheld.Vibrate()
+        PlayAndroidLightHaptic();
+#elif UNITY_IOS && !UNITY_EDITOR
+        if (TCSave.Vibration) Handheld.Vibrate();
 #endif
     }
 
@@ -254,7 +257,10 @@ public static class TCServices
             using (var windowManager = activity.Call<AndroidJavaObject>("getWindowManager"))
             using (var display = windowManager.Call<AndroidJavaObject>("getDefaultDisplay"))
             {
-                // Query hardware display modes on Android:
+                int bestModeId = -1;
+                float highestRate = 60f;
+
+                // Query all hardware display modes supported by the screen:
                 var modes = display.Call<AndroidJavaObject[]>("getSupportedModes");
                 if (modes != null)
                 {
@@ -266,12 +272,48 @@ public static class TCServices
                             float rate = m.Call<float>("getRefreshRate");
                             int rounded = Mathf.RoundToInt(rate);
                             if (rounded > maxHz) maxHz = rounded;
+
+                            if (rate > highestRate)
+                            {
+                                highestRate = rate;
+                                bestModeId = m.Call<int>("getModeId");
+                            }
                         }
                     }
                 }
                 float curRate = display.Call<float>("getRefreshRate");
                 int curRounded = Mathf.RoundToInt(curRate);
                 if (curRounded > maxHz) maxHz = curRounded;
+
+                // On Android 6.0+ (API 23+), the OS defaults windows to 60Hz unless the Window explicitly requests
+                // the higher refresh mode via WindowManager.LayoutParams.preferredDisplayModeId or Window.setFrameRate.
+                if (bestModeId > 0)
+                {
+                    activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                    {
+                        try
+                        {
+                            using (var window = activity.Call<AndroidJavaObject>("getWindow"))
+                            {
+                                if (window != null)
+                                {
+                                    using (var layoutParams = window.Call<AndroidJavaObject>("getAttributes"))
+                                    {
+                                        if (layoutParams != null)
+                                        {
+                                            layoutParams.Set("preferredDisplayModeId", bestModeId);
+                                            window.Call("setAttributes", layoutParams);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception winEx)
+                        {
+                            Debug.LogWarning("[TCServices] Set preferredDisplayModeId error: " + winEx.Message);
+                        }
+                    }));
+                }
             }
         }
         catch (Exception ex)

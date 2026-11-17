@@ -5,6 +5,9 @@ using UnityEngine;
 
 public class bees : MonoBehaviour
 {
+    [Header("Swarm Rotation")]
+    public float spinSpeed = 240f; // Constant rotation speed around the tree trunk (degrees per second)
+
     AudioSource audioSrc;
     static player cachedPlayer;
 
@@ -24,6 +27,12 @@ public class bees : MonoBehaviour
 
     void OnEnable()
     {
+        var cols = GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < cols.Length; i++)
+        {
+            if (cols[i]) cols[i].enabled = true;
+        }
+
         if (!audioSrc) audioSrc = GetComponent<AudioSource>();
         if (audioSrc)
         {
@@ -39,6 +48,16 @@ public class bees : MonoBehaviour
 
     void Update()
     {
+        // Constant circling around the tree trunk (World Y axis)
+        if (spinSpeed != 0f)
+        {
+            float dt = Time.deltaTime;
+            if (dt > 0f)
+            {
+                transform.Rotate(0f, spinSpeed * dt, 0f, Space.World);
+            }
+        }
+
         if (!audioSrc) return;
 
         if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();

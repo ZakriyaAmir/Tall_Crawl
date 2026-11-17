@@ -5,7 +5,31 @@ using UnityEngine;
 public static class TCSave
 {
     public static event Action Changed;
-    static void Fire() { PlayerPrefs.Save(); Changed?.Invoke(); }
+    static bool dirty;
+    static float lastSaveTime;
+
+    static void Fire()
+    {
+        dirty = true;
+        // On mobile, writing synchronously to disk via PlayerPrefs.Save() blocks the main thread
+        // and causes severe hitches or OS ANR freezes when called during gameplay.
+        // Rate-limit disk flushing to at most once every 5 seconds, plus explicit flush on pause/quit/run-end.
+        if (Time.unscaledTime - lastSaveTime > 5f)
+        {
+            Flush();
+        }
+        Changed?.Invoke();
+    }
+
+    public static void Flush()
+    {
+        if (dirty)
+        {
+            dirty = false;
+            lastSaveTime = Time.unscaledTime;
+            PlayerPrefs.Save();
+        }
+    }
 
     static TCSave()
     {

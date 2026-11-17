@@ -96,11 +96,13 @@ public class TCTimeDilation : MonoBehaviour
 
     IEnumerator RampTimeScale(float fromScale, float toScale, float dur)
     {
+        if (dur <= 0.001f) dur = 0.1f;
         for (float t = 0; t < dur; )
         {
             if (IsDeadOrEnded()) { CancelOnDeath(); yield break; }
             if (IsPausedNow()) { yield return null; continue; }
             float dt = Time.unscaledDeltaTime;
+            if (dt <= 0f) dt = 0.016f;
             t += dt;
             float frac = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / dur));
             Time.timeScale = Mathf.Lerp(fromScale, toScale, frac);
@@ -130,7 +132,8 @@ public class TCTimeDilation : MonoBehaviour
         {
             if (IsDeadOrEnded()) { CancelOnDeath(); yield break; }
             if (IsPausedNow()) { yield return null; continue; }
-            activeTimeRemaining -= Time.unscaledDeltaTime;
+            float udt = Time.unscaledDeltaTime;
+            activeTimeRemaining -= (udt > 0f ? udt : 0.016f);
             yield return null;
         }
 

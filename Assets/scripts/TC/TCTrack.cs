@@ -207,14 +207,23 @@ public class TCTrack : MonoBehaviour
 
         float py = player.position.y;
         float metres = pl ? pl.currentScore : 0f; // same distance the HUD/difficulty uses
-        while (nextTrunkY < py + C.chunksAhead * C.trunkChunkHeight)
+
+        int trunkIterations = 0;
+        float trunkAheadY = py + C.chunksAhead * C.trunkChunkHeight;
+        while (nextTrunkY < trunkAheadY && ++trunkIterations <= 64)
         {
             Spawn(trunkPool, "trunk", nextTrunkY, 0);
             nextTrunkY += C.trunkChunkHeight;
         }
+
         if (TCSave.TutorialDone)
         {
-            while (nextRowY < py + 12f) GenerateRow(metres + (nextRowY - py) * C.metresPerUnit);
+            int rowIterations = 0;
+            float rowAheadY = py + 12f;
+            while (nextRowY < rowAheadY && ++rowIterations <= 64)
+            {
+                GenerateRow(metres + (nextRowY - py) * C.metresPerUnit);
+            }
         }
 
         // Recycle everything far below the player (iterate backwards, no allocations)
@@ -650,10 +659,11 @@ public class TCTrack : MonoBehaviour
 
         // Spawn coins along the zigzag trajectory with strictly uniform surface distance between consecutive coins
         int sampleIdx = 0;
+        int sampleSafety = 0;
         for (int i = 0; i <= steps; i++)
         {
             float targetDist = i * targetSpacing;
-            while (sampleIdx < Samples && cumDist[sampleIdx + 1] < targetDist)
+            while (sampleIdx < Samples && cumDist[sampleIdx + 1] < targetDist && ++sampleSafety < 1000)
             {
                 sampleIdx++;
             }
@@ -869,6 +879,11 @@ public class TCTrack : MonoBehaviour
                     }
                 }
             }
+        }
+        var cols = g.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < cols.Length; i++)
+        {
+            if (cols[i]) cols[i].enabled = true;
         }
         live.Add(p);
         return p;

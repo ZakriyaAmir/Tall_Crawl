@@ -862,9 +862,6 @@ public class TCPinecone : TCEnemy
 
         transform.position = new Vector3(0, y, 0);
         transform.rotation = Quaternion.Euler(0, baseAngle, 0);
-
-        // Keep collider physics transform synchronized with rolling motion
-        Physics.SyncTransforms();
     }
 }
 
@@ -1122,9 +1119,6 @@ public class TCWasp : TCEnemy
 
         transform.position = new Vector3(0, hoverY, 0);
         transform.rotation = Quaternion.Euler(pitchBob, swayAngle, bankRoll);
-
-        // Keep collider physics transform in exact lockstep with moving body
-        Physics.SyncTransforms();
     }
 }
 
@@ -1491,8 +1485,5 @@ public class TCSquirrel : TCEnemy
 
         transform.position = new Vector3(0, y, 0);
         transform.rotation = Quaternion.Euler(0, baseAngle, 0);
-
-        // Keep collider physics transform synchronized with rolling motion
-        Physics.SyncTransforms();
     }
 }

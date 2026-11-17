@@ -37,6 +37,19 @@ public class playerInteract : MonoBehaviour
     AudioSource audioSource; player p; Animator animator; Renderer[] renderers;
     float invulnTimer, jumpTimer, rollTimer, lastChilliHapticTime; bool blinking, initialized;
     int coinStreak; float lastCoinCollectTime;
+    Vector3 lastTrackPosition; bool hasLastTrackPosition;
+    TCCuteSpider cachedCuteSpider;
+
+    public bool IsAirborneClear
+    {
+        get
+        {
+            if (cachedCuteSpider == null) cachedCuteSpider = GetComponentInChildren<TCCuteSpider>();
+            // If cute spider is jumping and has reached sufficient vertical clearance above trunk
+            if (cachedCuteSpider != null && cachedCuteSpider.CurrentAirHeight >= 0.20f) return true;
+            return false;
+        }
+    }
 
     void Awake()
     {
@@ -127,18 +140,74 @@ public class playerInteract : MonoBehaviour
             // Prevents tunneling through moving or static enemies when climbing at 2.2x speed
             PerformChilliProximitySmash();
         }
+
+        // Continuous swept trigger check: prevents discrete tunneling through bee swarms at high speed
+        PerformContinuousSweep();
     }
 
     readonly Collider[] chilliOverlapBuffer = new Collider[16];
+    readonly Collider[] sweepOverlapBuffer = new Collider[16];
+
+    void PerformContinuousSweep()
+    {
+        if (IsDead || p == null || p.GameOver)
+        {
+            hasLastTrackPosition = false;
+            return;
+        }
+
+        Vector3 curPos = transform.position;
+        if (!hasLastTrackPosition)
+        {
+            lastTrackPosition = curPos;
+            hasLastTrackPosition = true;
+            return;
+        }
+
+        float deltaDist = Vector3.Distance(curPos, lastTrackPosition);
+        // Only sweep if the spider moved a significant distance this frame (e.g. at least 0.05m)
+        if (deltaDist >= 0.05f)
+        {
+            // Sample test spheres along the movement segment from last frame to current frame
+            int steps = Mathf.Clamp(Mathf.CeilToInt(deltaDist / 0.15f), 1, 4);
+            bool sweptHit = false;
+            for (int s = 1; s <= steps && !sweptHit; s++)
+            {
+                float tStep = (float)s / steps;
+                Vector3 samplePos = Vector3.Lerp(lastTrackPosition, curPos, tStep);
+                Vector3 center = samplePos + transform.TransformDirection(BASE_COLLIDER_CENTER);
+
+                int hitCount = Physics.OverlapSphereNonAlloc(center, 0.40f, sweepOverlapBuffer, ~0, QueryTriggerInteraction.Collide);
+                for (int i = 0; i < hitCount; i++)
+                {
+                    var col = sweepOverlapBuffer[i];
+                    if (!col || !col.enabled || !col.gameObject.activeInHierarchy || col.transform.IsChildOf(transform)) continue;
+
+                    if (col.CompareTag("bees"))
+                    {
+                        // In normal mode: if spider is airborne, safely hop over
+                        if (!IsAirborneClear || boostDuration > 0)
+                        {
+                            sweptHit = true;
+                            ProcessHazardOrEnemyTrigger(col);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        lastTrackPosition = curPos;
+    }
 
     void PerformChilliProximitySmash()
     {
         Vector3 center = transform.TransformPoint(BASE_COLLIDER_CENTER) + transform.forward * 0.10f;
-        int hitCount = Physics.OverlapSphereNonAlloc(center, 0.35f, chilliOverlapBuffer, ~0, QueryTriggerInteraction.Collide);
+        int hitCount = Physics.OverlapSphereNonAlloc(center, 0.50f, chilliOverlapBuffer, ~0, QueryTriggerInteraction.Collide);
         for (int i = 0; i < hitCount; i++)
         {
             var col = chilliOverlapBuffer[i];
-            if (!col || col.transform.IsChildOf(transform)) continue;
+            if (!col || !col.enabled || !col.gameObject.activeInHierarchy || col.transform.IsChildOf(transform)) continue;
 
             var enemy = col.GetComponentInParent<TCEnemy>();
             if (enemy != null)
@@ -150,6 +219,7 @@ public class playerInteract : MonoBehaviour
             var pooled = col.GetComponentInParent<TCPooled>();
             if (col.CompareTag("branch"))
             {
+                col.enabled = false;
                 Vector3 hitPoint = col.ClosestPoint(transform.position);
                 if (hitPoint == Vector3.zero || (hitPoint - transform.position).sqrMagnitude > 4f)
                     hitPoint = col.bounds.ClosestPoint(transform.position);
@@ -161,10 +231,12 @@ public class playerInteract : MonoBehaviour
             }
             else if (col.CompareTag("bees"))
             {
+                col.enabled = false;
                 GameObject beeObj = pooled != null ? pooled.gameObject : (col.transform.parent ? col.transform.parent.gameObject : col.gameObject);
+                foreach (var c in beeObj.GetComponentsInChildren<Collider>()) c.enabled = false;
                 TCFx.ScatterBeeSwarm(beeObj, transform.position, 1.0f);
                 Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
-                if (pooled) pooled.Release();
+                if (pooled) pooled.Release(); else beeObj.SetActive(false);
                 TCFx.Shake(0.18f);
                 TCSave.AddBeeKnock(1);
                 TCSkins.CheckAchievements();
@@ -305,9 +377,12 @@ public class playerInteract : MonoBehaviour
             }
             if (other.CompareTag("bees"))
             {
+                other.enabled = false;
+                GameObject beeObj = pooled != null ? pooled.gameObject : (other.transform.parent ? other.transform.parent.gameObject : other.gameObject);
+                foreach (var c in beeObj.GetComponentsInChildren<Collider>()) c.enabled = false;
+
                 if (boostDuration > 0)
                 {
-                    GameObject beeObj = pooled != null ? pooled.gameObject : (other.transform.parent ? other.transform.parent.gameObject : other.gameObject);
                     TCFx.ScatterBeeSwarm(beeObj, transform.position, 1.0f);
                     Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
                 }
@@ -316,7 +391,7 @@ public class playerInteract : MonoBehaviour
                     TCFx.Spawn(BeesimpactParticle, transform.position);
                     Play(TCSfx.Get("thrust") ?? boostSound, 1f);
                 }
-                if (pooled) pooled.Release();
+                if (pooled) pooled.Release(); else beeObj.SetActive(false);
                 TCFx.Shake(0.18f);
                 TCSave.AddBeeKnock(1);
                 TCSkins.CheckAchievements();
@@ -346,7 +421,7 @@ public class playerInteract : MonoBehaviour
                 SmashEnemy(enemy, other.transform.position);
                 return;
             }
-            if (jumpTimer > 0 && enemy.CanJumpOver) return; // jumped over crawling enemy
+            if (IsAirborneClear && enemy.CanJumpOver) return; // jumped over crawling enemy
             if (invulnTimer > 0) return;
 
             if (enemy.enemyType == TCEnemyType.Wasp)
@@ -374,7 +449,7 @@ public class playerInteract : MonoBehaviour
             if (pooled) pooled.Release(); else (other.transform.parent ? other.transform.parent.gameObject : other.gameObject).SetActive(false);
             if (boostDuration > 0)
             {
-                // In chilli mode: smash through with a powerful thrust sound (no sad/hurt sound)
+                // In chilli mode: smash through with the boost thrust sound
                 Play(TCSfx.Get("thrust") ?? boostSound, 0.9f);
                 OnEvent?.Invoke("smash", transform.position);
                 TCFx.Shake(0.1f);
@@ -387,20 +462,25 @@ public class playerInteract : MonoBehaviour
             }
             else
             {
+                // Spider collides with branch: play original chilli smash thrust sound together with impact
+                Play(TCSfx.Get("thrust") ?? boostSound, 0.85f);
                 Play(TCSfx.Get("hit") ?? woodImpactSound, 0.8f);
                 Damage();
             }
         }
         else if (other.CompareTag("bees"))
         {
-            if (jumpTimer > 0) return; // jumped over
+            if (IsAirborneClear) return; // jumped over with sufficient air height
+            other.enabled = false;
+            GameObject beeObj = pooled != null ? pooled.gameObject : (other.transform.parent ? other.transform.parent.gameObject : other.gameObject);
+            foreach (var c in beeObj.GetComponentsInChildren<Collider>()) c.enabled = false;
+
             if (boostDuration > 0)
             {
                 // In chilli mode: active bees fly away scattering off the tree trunk with bee swarm kill sound
-                GameObject beeObj = pooled != null ? pooled.gameObject : (other.transform.parent ? other.transform.parent.gameObject : other.gameObject);
                 TCFx.ScatterBeeSwarm(beeObj, transform.position, 1.0f);
                 Play(TCSfx.Get("bees_kill") ?? TCSfx.Get("thrust") ?? boostSound, 1f);
-                if (pooled) pooled.Release();
+                if (pooled) pooled.Release(); else beeObj.SetActive(false);
                 TCSave.AddBeeKnock(1);
                 TCSkins.CheckAchievements();
                 OnEvent?.Invoke("chilli_kill", transform.position);
@@ -411,7 +491,7 @@ public class playerInteract : MonoBehaviour
 
             TCFx.Spawn(BeesimpactParticle, transform.position);
             Play(TCSfx.Get("bees") ?? beesImpactSound, 0.8f);
-            if (pooled) pooled.Release();
+            if (pooled) pooled.Release(); else beeObj.SetActive(false);
             Damage();
         }
     }

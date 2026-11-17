@@ -87,69 +87,39 @@ public class TCFx : MonoBehaviour
 
     static ParticleSystem BuildWoodImpactBurst(Transform host)
     {
-        // Root container + wood impact dust flash
-        var root = TCFxLib.PS(host, "WoodImpactBurst", "Glow", Vector3.zero, 3);
-        TCFxLib.OneShot(root, 0.22f);
+        // Root container: sawdust cloud burst (natural wood dust, no sharp glow or spark)
+        var root = TCFxLib.PS(host, "WoodImpactBurst", "Smoke", Vector3.zero, 24);
+        TCFxLib.OneShot(root, 0.45f, 0.75f);
         var rMain = root.main;
-        rMain.startSize = 0.9f;
-        rMain.startColor = new Color(1f, 0.92f, 0.72f, 0.95f);
-        TCFxLib.Burst(root, 1);
-        TCFxLib.SizeLife(root, 0, 0.4f, 0.2f, 1f, 1f, 1.2f);
-        TCFxLib.ColorLife(root, TCFxLib.Fade(Color.white, new Color(0.82f, 0.58f, 0.32f, 0.9f), 0.02f, 0.35f));
-
-        // Shockwave ring
-        var ring = TCFxLib.PS(root.transform, "WoodShock", "Ring", Vector3.zero, 3);
-        TCFxLib.OneShot(ring, 0.35f);
-        var ringMain = ring.main;
-        ringMain.startSize = 1.3f;
-        ringMain.startColor = new Color(0.95f, 0.85f, 0.65f, 0.85f);
-        TCFxLib.Burst(ring, 1);
-        TCFxLib.SizeLife(ring, 0, 0.2f, 1f, 1f);
-        TCFxLib.ColorLife(ring, TCFxLib.Fade(Color.white, new Color(0.78f, 0.52f, 0.28f, 0.75f), 0.02f, 0.35f));
-
-        // Wood splinters & chips (sharp, flying outwards with gravity)
-        var splinters = TCFxLib.PS(root.transform, "Splinters", "Spark", Vector3.zero, 32);
-        TCFxLib.OneShot(splinters, 0.38f, 0.65f);
-        var sMain = splinters.main;
-        sMain.startSpeed = new ParticleSystem.MinMaxCurve(2.8f, 5.2f);
-        sMain.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.26f);
-        sMain.startColor = new ParticleSystem.MinMaxGradient(
-            new Color(0.92f, 0.74f, 0.48f, 1f), // golden wood
-            new Color(0.55f, 0.34f, 0.16f, 1f)  // dark bark brown
+        rMain.startSpeed = new ParticleSystem.MinMaxCurve(1.0f, 2.5f);
+        rMain.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.65f);
+        rMain.startColor = new ParticleSystem.MinMaxGradient(
+            new Color(0.85f, 0.70f, 0.52f, 0.85f), // natural wood sawdust
+            new Color(0.62f, 0.45f, 0.30f, 0.75f)  // soft bark brown
         );
-        sMain.gravityModifier = 1.5f;
-        var sRend = splinters.GetComponent<ParticleSystemRenderer>();
-        if (sRend)
-        {
-            sRend.renderMode = ParticleSystemRenderMode.Stretch;
-            sRend.velocityScale = 0.06f;
-            sRend.lengthScale = 2.2f;
-        }
-        TCFxLib.Burst(splinters, 18);
-        TCFxLib.Sphere(splinters, 0.12f);
-        var sLim = splinters.limitVelocityOverLifetime;
-        sLim.enabled = true;
-        sLim.limit = 0.6f;
-        sLim.dampen = 0.12f;
-        TCFxLib.SizeLife(splinters, 0, 1f, 0.8f, 0.9f, 1f, 0f);
-        TCFxLib.ColorLife(splinters, TCFxLib.Fade(Color.white, new Color(0.68f, 0.42f, 0.20f, 1f), 0.02f, 0.5f));
+        rMain.gravityModifier = -0.05f; // drifts softly upward
+        TCFxLib.Burst(root, 14);
+        TCFxLib.Sphere(root, 0.18f);
+        TCFxLib.SpinRandom(root, 100f);
+        TCFxLib.SizeLife(root, 0, 0.4f, 0.25f, 1f, 1f, 1.4f);
+        TCFxLib.ColorLife(root, TCFxLib.Fade(new Color(0.88f, 0.74f, 0.56f, 0.85f), new Color(0.60f, 0.42f, 0.26f, 0.6f), 0.05f, 0.45f));
 
-        // Wood sawdust puff
-        var smoke = TCFxLib.PS(root.transform, "Sawdust", "Smoke", Vector3.zero, 16);
-        TCFxLib.OneShot(smoke, 0.45f, 0.75f);
-        var smMain = smoke.main;
-        smMain.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 2.0f);
-        smMain.startSize = new ParticleSystem.MinMaxCurve(0.28f, 0.55f);
-        smMain.startColor = new ParticleSystem.MinMaxGradient(
-            new Color(0.86f, 0.72f, 0.54f, 0.75f),
-            new Color(0.64f, 0.48f, 0.34f, 0.65f)
+        // Soft wood dust debris / powder puff
+        var powder = TCFxLib.PS(root.transform, "SawdustPowder", "Smoke", Vector3.zero, 16);
+        TCFxLib.OneShot(powder, 0.35f, 0.55f);
+        var pMain = powder.main;
+        pMain.startSpeed = new ParticleSystem.MinMaxCurve(0.5f, 1.6f);
+        pMain.startSize = new ParticleSystem.MinMaxCurve(0.20f, 0.40f);
+        pMain.startColor = new ParticleSystem.MinMaxGradient(
+            new Color(0.92f, 0.80f, 0.64f, 0.7f),
+            new Color(0.72f, 0.55f, 0.38f, 0.6f)
         );
-        smMain.gravityModifier = -0.1f; // drifts softly upward
-        TCFxLib.Burst(smoke, 10);
-        TCFxLib.Sphere(smoke, 0.15f);
-        TCFxLib.SpinRandom(smoke, 120f);
-        TCFxLib.SizeLife(smoke, 0, 0.35f, 0.25f, 1f, 1f, 1.4f);
-        TCFxLib.ColorLife(smoke, TCFxLib.Fade(Color.white, new Color(0.72f, 0.54f, 0.36f, 0.6f), 0.04f, 0.45f));
+        pMain.gravityModifier = 0.05f;
+        TCFxLib.Burst(powder, 10);
+        TCFxLib.Sphere(powder, 0.12f);
+        TCFxLib.SpinRandom(powder, 80f);
+        TCFxLib.SizeLife(powder, 0, 0.5f, 0.2f, 1f, 1f, 1.3f);
+        TCFxLib.ColorLife(powder, TCFxLib.Fade(new Color(0.90f, 0.78f, 0.62f, 0.75f), new Color(0.68f, 0.50f, 0.34f, 0.5f), 0.04f, 0.4f));
 
         return root;
     }
@@ -217,8 +187,19 @@ public static class TCHitFlash
     {
         if (!beeRoot) return;
 
+        // Prevent recursive clone-on-clone triggering or scattering already handled bee objects
+        if (beeRoot.name.StartsWith("BeesScattering_Clone") || beeRoot.CompareTag("Untagged"))
+            return;
+
         var sourcePS = beeRoot.GetComponentInChildren<ParticleSystem>();
         if (!sourcePS) return;
+
+        // Immediately disable all colliders on source so physics/sweeps cannot detect it again
+        var sourceColliders = beeRoot.GetComponentsInChildren<Collider>();
+        for (int i = 0; i < sourceColliders.Length; i++)
+        {
+            if (sourceColliders[i]) sourceColliders[i].enabled = false;
+        }
 
         int maxP = sourcePS.main.maxParticles;
         var existing = new ParticleSystem.Particle[maxP];
@@ -228,10 +209,24 @@ public static class TCHitFlash
         // Clone the particle system object to fly away independently
         var host = Object.Instantiate(sourcePS.gameObject, sourcePS.transform.position, sourcePS.transform.rotation);
         host.name = "BeesScattering_Clone";
+        host.tag = "Untagged";
+        host.layer = 2; // Ignore Raycast layer
 
-        // Disable audio and colliders on clone
-        foreach (var col in host.GetComponentsInChildren<Collider>()) Object.Destroy(col);
-        foreach (var aud in host.GetComponentsInChildren<AudioSource>()) Object.Destroy(aud);
+        // Immediately disable and destroy colliders, rigidbodies, and audio on clone
+        foreach (var col in host.GetComponentsInChildren<Collider>())
+        {
+            col.enabled = false;
+            Object.Destroy(col);
+        }
+        foreach (var rb in host.GetComponentsInChildren<Rigidbody>())
+        {
+            Object.Destroy(rb);
+        }
+        foreach (var aud in host.GetComponentsInChildren<AudioSource>())
+        {
+            aud.Stop();
+            Object.Destroy(aud);
+        }
         foreach (var mb in host.GetComponents<MonoBehaviour>())
         {
             if (!(mb is TCHitFlashRunner)) Object.Destroy(mb);
@@ -661,11 +656,14 @@ public class TCHitFlashRunner : MonoBehaviour
             yield break;
         }
 
-        // Initialize scattering velocities for each active bee particle
-        var velocities = new Vector3[count];
-        var rotations = new float[count];
+        // Limit simulated scatter count to at most 80 particles to prevent mobile CPU spikes
+        int simCount = Mathf.Min(count, 80);
 
-        for (int i = 0; i < count; i++)
+        // Initialize scattering velocities for each active bee particle
+        var velocities = new Vector3[simCount];
+        var rotations = new float[simCount];
+
+        for (int i = 0; i < simCount; i++)
         {
             Vector3 worldP = ps.transform.TransformPoint(particles[i].position);
             Vector3 fromSpider = worldP - spiderPos;
@@ -695,16 +693,19 @@ public class TCHitFlashRunner : MonoBehaviour
         ps.SetParticles(particles, count);
 
         float elapsed = 0f;
-        while (elapsed < duration)
+        while (elapsed < duration && host && ps)
         {
             float dt = Time.deltaTime;
+            if (dt <= 0f) dt = Time.unscaledDeltaTime;
+            if (dt <= 0f) dt = 0.016f;
             elapsed += dt;
             float progress = Mathf.Clamp01(elapsed / duration);
 
             count = ps.GetParticles(particles);
             if (count == 0) break;
 
-            for (int i = 0; i < count && i < velocities.Length; i++)
+            int activeCount = Mathf.Min(count, simCount);
+            for (int i = 0; i < activeCount; i++)
             {
                 // Move each bee along its fly-away trajectory with high speed
                 particles[i].position += velocities[i] * dt;

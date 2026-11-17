@@ -997,7 +997,9 @@ public partial class TCCuteSpider : MonoBehaviour
         // Keep player colliders (hit box and points/pickup collector) synchronized with cute spider jumping altitude
         if (pi != null)
         {
-            Vector3 colliderLift = new Vector3(0f, 0f, currentAirHeight);
+            // In the spider's local coordinate system (direction=1, Y is outward radially from the trunk):
+            // colliderLift moves outward along local Y when jumping off the trunk.
+            Vector3 colliderLift = new Vector3(0f, currentAirHeight, 0f);
             if (pi.HitCollider != null)
             {
                 pi.HitCollider.center = playerInteract.BASE_COLLIDER_CENTER + colliderLift;
