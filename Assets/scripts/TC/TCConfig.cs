@@ -27,7 +27,7 @@ public class TCConfig : ScriptableObject
     [Tooltip("Every N rows a breather (no hurdles, coin trail) is inserted")] public int breatherEvery = 7;
     [Range(0, 1)] [Tooltip("Probability of spawning branches in a hazard row (0.5 = 50% fewer branch rows)")] public float branchChance = 0.5f;
     [Range(0, 1)] public float beeChance = 0.09f;
-    public float beeMinMetres = 250f;
+    public float beeMinMetres = 200f;
     [Range(0, 1)] public float coinTrailChance = 0.55f;
     [Range(0, 1)] public float heartChance = 0.06f;
     [Range(0, 1)] [Tooltip("Probability of spawning chilli boost pickup in safe gap")] public float boostChance = 0.0624f; // Reduced by 20% (from 0.078f)

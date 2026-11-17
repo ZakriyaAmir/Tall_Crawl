@@ -30,7 +30,7 @@ MonoBehaviour:
   breatherEvery: 7
   branchChance: 0.5
   beeChance: 0.09
-  beeMinMetres: 250
+  beeMinMetres: 200
   coinTrailChance: 0.55
   heartChance: 0.06
   boostChance: 0.078

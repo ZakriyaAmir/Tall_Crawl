@@ -4,7 +4,7 @@ using UnityEngine;
 public enum SkinPattern { Solid, Stripes, Dots, Checker, Gradient, Zigzag }
 /// Body silhouette of the round spider. Skins only differ by colour, spikes and this shape (no props).
 public enum SkinShape { Round, Chubby, Tall, Flat, Pear }
-public enum SkinUnlock { Free, Coins, Ads, BestScore, Runs, KillBees, KillWasps, KillSquirrels, KnockBats, KnockBees = KillBees, KnockWasps = KillWasps, KnockSquirrels = KillSquirrels }
+public enum SkinUnlock { Free, Coins, Ads, BestScore, Runs, KillBees, KillWasps, KillSquirrels, KnockBats, KnockSnakes, KnockBees = KillBees, KnockWasps = KillWasps, KnockSquirrels = KillSquirrels }
 
 [System.Serializable]
 public class SkinDef
@@ -31,6 +31,7 @@ public class SkinDef
         SkinUnlock.KillWasps => "Knock " + amount + " Wasps (" + Mathf.Min(TCSave.WaspsKnocked, amount) + "/" + amount + ")",
         SkinUnlock.KillSquirrels => "Knock " + amount + " Squirrels (" + Mathf.Min(TCSave.SquirrelsKnocked, amount) + "/" + amount + ")",
         SkinUnlock.KnockBats => "Knock " + amount + " Bats (" + Mathf.Min(TCSave.BatsKnocked, amount) + "/" + amount + ")",
+        SkinUnlock.KnockSnakes => "Knock " + amount + " Snakes (" + Mathf.Min(TCSave.SnakesKnocked, amount) + "/" + amount + ")",
         _ => "Free"
     };
 }
@@ -79,6 +80,7 @@ public static class TCSkins
         new SkinDef("Wasp",       "#FFB800", "#141018", SkinPattern.Zigzag,   0.30f,"#FFB733",   SkinShape.Tall,   5, 0.45f, SkinUnlock.KillWasps, 100,   "#FFD700", 0.5f, 0.20f, 0.70f),
         new SkinDef("Squirrel",   "#D4571E", "#FFF6E8", SkinPattern.Gradient, 0.10f,"#FFA066",   SkinShape.Pear,   6, 0.40f, SkinUnlock.KillSquirrels, 100,"#141216", 0f,   0.10f, 0.55f),
         new SkinDef("Bat",        "#241D2B", "#7E489E", SkinPattern.Zigzag,   0.25f,"#9B59B6",   SkinShape.Pear,   0, 0f,    SkinUnlock.KnockBats, 200,   "#FFD42A", 0.85f, 0.10f, 0.65f),
+        new SkinDef("Hiss",       "#80D14D", "#338033", SkinPattern.Stripes,  0.20f,"#80D14D",   SkinShape.Round,  0, 0f,    SkinUnlock.KnockSnakes, 100, "#FFD129", 0.80f, 0.10f, 0.70f),
     };
 
     /// Display order: easiest unlock first, Golden always last. Does not change saved skin indices.
@@ -97,6 +99,7 @@ public static class TCSkins
             case SkinUnlock.KillWasps: return 600_000 + s.amount;
             case SkinUnlock.KillSquirrels: return 700_000 + s.amount;
             case SkinUnlock.KnockBats: return 750_000 + s.amount;
+            case SkinUnlock.KnockSnakes: return 780_000 + s.amount;
             default: return 800_000 + s.amount;
         }
     }
@@ -122,7 +125,8 @@ public static class TCSkins
             || (s.unlock == SkinUnlock.KillBees && TCSave.BeesKnocked >= s.amount)
             || (s.unlock == SkinUnlock.KillWasps && TCSave.WaspsKnocked >= s.amount)
             || (s.unlock == SkinUnlock.KillSquirrels && TCSave.SquirrelsKnocked >= s.amount)
-            || (s.unlock == SkinUnlock.KnockBats && TCSave.BatsKnocked >= s.amount);
+            || (s.unlock == SkinUnlock.KnockBats && TCSave.BatsKnocked >= s.amount)
+            || (s.unlock == SkinUnlock.KnockSnakes && TCSave.SnakesKnocked >= s.amount);
     }
     public static void CheckAchievements()
     {

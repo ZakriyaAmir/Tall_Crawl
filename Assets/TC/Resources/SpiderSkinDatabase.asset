@@ -360,3 +360,18 @@ MonoBehaviour:
     eyeGlow: 0.85
     metallic: 0.1
     gloss: 0.65
+  - name: Hiss
+    body: {r: 0.5019608, g: 0.81960785, b: 0.3019608, a: 1}
+    accent: {r: 0.2, g: 0.5019608, b: 0.2, a: 1}
+    pattern: 1
+    emission: 0.2
+    trail: {r: 0.5019608, g: 0.81960785, b: 0.3019608, a: 1}
+    shape: 0
+    spikes: 0
+    spikeLength: 0
+    unlock: 9
+    amount: 100
+    eye: {r: 1, g: 0.81960785, b: 0.16078432, a: 1}
+    eyeGlow: 0.8
+    metallic: 0.1
+    gloss: 0.7

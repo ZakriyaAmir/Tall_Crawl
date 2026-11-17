@@ -536,6 +536,7 @@ public class playerInteract : MonoBehaviour
             else TCSave.AddWaspKnock(1);
         }
         else if (enemy.enemyType == TCEnemyType.Squirrel) TCSave.AddSquirrelKnock(1);
+        else if (enemy.enemyType == TCEnemyType.Snake) TCSave.AddSnakeKnock(1);
         TCSkins.CheckAchievements();
 
         if (boostDuration > 0)
@@ -551,7 +552,7 @@ public class playerInteract : MonoBehaviour
 
     void Damage()
     {
-        if (!TCSave.TutorialDone)
+        if (TCGameUI.Instance != null ? TCGameUI.Instance.IsTutorialRun : !TCSave.TutorialDone)
         {
             invulnTimer = 0.8f;
             return;

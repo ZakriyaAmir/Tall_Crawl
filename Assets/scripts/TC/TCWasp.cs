@@ -52,6 +52,8 @@ public class TCWasp : TCEnemy
 
         if (isBat)
         {
+            radius = 0.68f;
+            if (model) model.localPosition = new Vector3(model.localPosition.x, model.localPosition.y, 0.68f);
             wingL = batWingL;
             wingR = batWingR;
             head = batHead;
@@ -75,6 +77,8 @@ public class TCWasp : TCEnemy
         }
         else
         {
+            radius = 0.95f;
+            if (model) model.localPosition = new Vector3(model.localPosition.x, model.localPosition.y, 0.95f);
             wingL = waspWingL;
             wingR = waspWingR;
             head = waspHead;
@@ -82,8 +86,8 @@ public class TCWasp : TCEnemy
 
             if (bodyCollider)
             {
-                bodyCollider.radius = 0.20f;
-                bodyCollider.center = new Vector3(0, 0.04f, 0);
+                bodyCollider.radius = 0.28f;
+                bodyCollider.center = new Vector3(0, 0.04f, -0.21f);
             }
         }
     }

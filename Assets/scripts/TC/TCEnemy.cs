@@ -403,7 +403,7 @@ public class TCEnemy : MonoBehaviour
 
         var wComp = root.AddComponent<TCWasp>();
         wComp.enemyType = TCEnemyType.Wasp;
-        wComp.radius = 0.68f;
+        wComp.radius = 0.95f;
 
         var audio = root.AddComponent<AudioSource>();
         audio.playOnAwake = false;
@@ -416,7 +416,7 @@ public class TCEnemy : MonoBehaviour
 
         var mObj = new GameObject("Model");
         mObj.transform.SetParent(root.transform, false);
-        mObj.transform.localPosition = new Vector3(0, 0, 0.68f);
+        mObj.transform.localPosition = new Vector3(0, 0, 0.95f);
         wComp.model = mObj.transform;
 
         // Container 1: Wasp Visual Model (polish3: spider-style chibi hornet, TCCritters.BuildWasp; same rig slots)
@@ -712,12 +712,13 @@ public class TCEnemy : MonoBehaviour
 
         var sComp = root.AddComponent<TCSquirrel>();
         sComp.enemyType = TCEnemyType.Squirrel;
-        sComp.radius = 0.603f;
+        sComp.radius = 0.54f;
 
         // Container placed on trunk surface
         var mObj = new GameObject("Model");
         mObj.transform.SetParent(root.transform, false);
-        mObj.transform.localPosition = new Vector3(0, 0, 0.603f);
+        mObj.transform.localPosition = new Vector3(0, 0, 0.54f);
+        mObj.transform.localScale = Vector3.one * 0.75f;
         sComp.model = mObj.transform;
 
         // Squirrel Body Pivot:

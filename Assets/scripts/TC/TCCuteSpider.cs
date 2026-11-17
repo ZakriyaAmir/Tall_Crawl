@@ -124,6 +124,11 @@ public partial class TCCuteSpider : MonoBehaviour
             headBodyCol = new Color(0.18f, 0.14f, 0.22f); // Deep velvety midnight-violet bat head & cephalothorax
             legCol = new Color(0.15f, 0.12f, 0.18f);      // Dusky midnight legs
         }
+        else if (def.name == "Hiss")
+        {
+            headBodyCol = new Color(0.52f, 0.83f, 0.32f); // Glossy snake green head
+            legCol = new Color(0.42f, 0.72f, 0.26f);      // Viper green legs
+        }
 
         var plain = Flat(headBodyCol, null, def.emission * 0.5f, def.metallic, def.gloss);
         var legMat = Flat(legCol, null, def.emission * 0.35f, def.metallic, def.gloss);

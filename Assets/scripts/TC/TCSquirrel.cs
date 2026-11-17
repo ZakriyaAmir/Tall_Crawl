@@ -318,50 +318,53 @@ public class TCSquirrel : TCEnemy
         float moveSpeed = isChilli ? (runSpeed * 1.5f) : runSpeed;
         y -= moveSpeed * dt;
 
-        // 2. High-speed running leg cycle (quadruped diagonal gait, snappy sprint in chilli mode)
-        float runFreq = isChilli ? 26f : 18f;
-        float legCycle = t * runFreq;
-        float angleFL = Mathf.Sin(legCycle) * 38f;
-        float angleFR = -Mathf.Sin(legCycle) * 38f;
-        float angleBL = -Mathf.Sin(legCycle) * 42f;
-        float angleBR = Mathf.Sin(legCycle) * 42f;
-
-        if (legFL) legFL.localRotation = Quaternion.Euler(angleFL, 0, 0);
-        if (legFR) legFR.localRotation = Quaternion.Euler(angleFR, 0, 0);
-        if (legBL) legBL.localRotation = Quaternion.Euler(angleBL, 0, 0);
-        if (legBR) legBR.localRotation = Quaternion.Euler(angleBR, 0, 0);
-
-        // 3. Body sprint gallop rhythm
-        float gallop = Mathf.Abs(Mathf.Sin(legCycle * 0.5f));
-        if (bodyPivot)
+        // 2. Only run fallback procedural animation if TCSquirrelRig is not present on bodyPivot
+        bool hasRig = bodyPivot && bodyPivot.GetComponent<TCSquirrelRig>() != null;
+        if (!hasRig)
         {
-            float pitch = 90f + Mathf.Sin(legCycle) * 6f; // pitched down the trunk
-            float roll = Mathf.Sin(legCycle * 0.5f) * 4f;
-            bodyPivot.localRotation = Quaternion.Euler(pitch, 0, roll);
+            float runFreq = isChilli ? 26f : 18f;
+            float legCycle = t * runFreq;
+            float angleFL = Mathf.Sin(legCycle) * 38f;
+            float angleFR = -Mathf.Sin(legCycle) * 38f;
+            float angleBL = -Mathf.Sin(legCycle) * 42f;
+            float angleBR = Mathf.Sin(legCycle) * 42f;
+
+            if (legFL) legFL.localRotation = Quaternion.Euler(angleFL, 0, 0);
+            if (legFR) legFR.localRotation = Quaternion.Euler(angleFR, 0, 0);
+            if (legBL) legBL.localRotation = Quaternion.Euler(angleBL, 0, 0);
+            if (legBR) legBR.localRotation = Quaternion.Euler(angleBR, 0, 0);
+
+            float gallop = Mathf.Abs(Mathf.Sin(legCycle * 0.5f));
+            if (bodyPivot)
+            {
+                float pitch = 90f + Mathf.Sin(legCycle) * 6f;
+                float roll = Mathf.Sin(legCycle * 0.5f) * 4f;
+                bodyPivot.localRotation = Quaternion.Euler(pitch, 0, roll);
+            }
+
+            if (tail)
+            {
+                float tailWhip = Mathf.Sin(legCycle - 1.2f) * 16f;
+                float tailSway = Mathf.Cos(legCycle * 0.5f) * 10f;
+                tail.localRotation = Quaternion.Euler(tailWhip, tailSway, 0);
+            }
+
+            if (head)
+            {
+                float headBob = Mathf.Sin(legCycle * 0.5f) * 5f;
+                head.localRotation = Quaternion.Euler(headBob + 8f, 0, 0);
+            }
+
+            if (model)
+            {
+                if (!model.gameObject.activeSelf) model.gameObject.SetActive(true);
+                float hop = gallop * 0.04f;
+                model.localPosition = new Vector3(0, hop, radius);
+            }
         }
-
-        // 4. Bushy tail springy wave & counter-balance (arching over back)
-        if (tail)
+        else
         {
-            float tailWhip = Mathf.Sin(legCycle - 1.2f) * 16f;
-            float tailSway = Mathf.Cos(legCycle * 0.5f) * 10f;
-            tail.localRotation = Quaternion.Euler(tailWhip, tailSway, 0);
-        }
-
-        // 5. Alert head looking downward along heading direction
-        if (head)
-        {
-            float headBob = Mathf.Sin(legCycle * 0.5f) * 5f;
-            // Slight downward tilt toward the trunk ahead
-            head.localRotation = Quaternion.Euler(headBob + 8f, 0, 0);
-        }
-
-        // 6. Trunk surface positioning with scamper hop
-        if (model)
-        {
-            if (!model.gameObject.activeSelf) model.gameObject.SetActive(true);
-            float hop = gallop * 0.04f;
-            model.localPosition = new Vector3(0, hop, radius);
+            if (model && !model.gameObject.activeSelf) model.gameObject.SetActive(true);
         }
 
         transform.position = new Vector3(0, y, 0);

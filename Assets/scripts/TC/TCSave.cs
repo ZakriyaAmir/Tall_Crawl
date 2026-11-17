@@ -54,6 +54,7 @@ public static class TCSave
         set { PlayerPrefs.SetInt("tc_noads", value ? 1 : 0); PlayerPrefs.SetInt("noAds", value ? 1 : 0); Fire(); }
     }
     public static bool TutorialDone { get => PlayerPrefs.GetInt("tc_tut") == 1; set => PlayerPrefs.SetInt("tc_tut", value ? 1 : 0); }
+    public static bool TutorialRequested { get => PlayerPrefs.GetInt("tc_tut_req", 0) == 1; set { PlayerPrefs.SetInt("tc_tut_req", value ? 1 : 0); Fire(); } }
 
     public static bool Sound { get => PlayerPrefs.GetInt("DisableSound") == 0; set { PlayerPrefs.SetInt("DisableSound", value ? 0 : 1); Apply(); } }
     public static bool Music { get => PlayerPrefs.GetInt("tc_music_off") == 0; set { PlayerPrefs.SetInt("tc_music_off", value ? 0 : 1); Apply(); } }
@@ -71,6 +72,7 @@ public static class TCSave
     public static int WaspsKilled { get => PlayerPrefs.GetInt("tc_kills_wasp", 0); set { PlayerPrefs.SetInt("tc_kills_wasp", value); Fire(); } }
     public static int SquirrelsKilled { get => PlayerPrefs.GetInt("tc_kills_squirrel", 0); set { PlayerPrefs.SetInt("tc_kills_squirrel", value); Fire(); } }
     public static int BatsKnocked { get => PlayerPrefs.GetInt("tc_knocks_bat", 0); set { PlayerPrefs.SetInt("tc_knocks_bat", value); Fire(); } }
+    public static int SnakesKnocked { get => PlayerPrefs.GetInt("tc_knocks_snake", 0); set { PlayerPrefs.SetInt("tc_knocks_snake", value); Fire(); } }
 
     public static int BeesKnocked { get => BeesKilled; set => BeesKilled = value; }
     public static int WaspsKnocked { get => WaspsKilled; set => WaspsKilled = value; }
@@ -80,6 +82,7 @@ public static class TCSave
     public static void AddWaspKill(int count = 1) { WaspsKilled += count; }
     public static void AddSquirrelKill(int count = 1) { SquirrelsKilled += count; }
     public static void AddBatKnock(int count = 1) { BatsKnocked += count; }
+    public static void AddSnakeKnock(int count = 1) { SnakesKnocked += count; }
 
     public static void AddBeeKnock(int count = 1) => AddBeeKill(count);
     public static void AddWaspKnock(int count = 1) => AddWaspKill(count);

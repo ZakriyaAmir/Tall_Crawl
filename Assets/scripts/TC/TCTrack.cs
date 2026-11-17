@@ -24,6 +24,7 @@ public class TCTrack : MonoBehaviour
     bool letterMissRetry;
     float runActiveTimer;
     float clearUntilY = -999f;
+    float lastSnakeY = -999f;
     TCPool letterPool;
 
     // Actual health-pickup cadence in GenerateRow (TCConfig.heartChance is unused).
@@ -173,7 +174,8 @@ public class TCTrack : MonoBehaviour
         float py = player.position.y;
         float chunkH = C.trunkChunkHeight;
         nextTrunkY = Mathf.Floor((py - 2f * chunkH) / chunkH) * chunkH;
-        nextRowY = py + (TCSave.TutorialDone ? C.safeStartHeight : 100f);
+        bool isTutorial = TCGameUI.Instance != null ? TCGameUI.Instance.IsTutorialRun : (!TCSave.TutorialDone || TCSave.TutorialRequested);
+        nextRowY = py + (!isTutorial ? C.safeStartHeight : 100f);
         safeAngle = TCPlayerAngle();
         lastCoinY = -999f;
         lastHazardY = -999f;
@@ -228,7 +230,8 @@ public class TCTrack : MonoBehaviour
             nextTrunkY += C.trunkChunkHeight;
         }
 
-        if (TCSave.TutorialDone)
+        bool isTutorial = TCGameUI.Instance != null ? TCGameUI.Instance.IsTutorialRun : (!TCSave.TutorialDone || TCSave.TutorialRequested);
+        if (!isTutorial)
         {
             int rowIterations = 0;
             float rowAheadY = py + 12f;
@@ -376,8 +379,9 @@ public class TCTrack : MonoBehaviour
             return;
         }
 
-        // Bee swarms only spawn after crossing 2000 metres (never during WEB boost)
-        if (!webSwinging && !lastWasBee && metres >= 2000f && Random.value < C.beeChance * d + 0.02f)
+        // Bee swarms only spawn after crossing 200 metres (never during WEB boost)
+        float beeMinDistance = C != null ? C.beeMinMetres : 200f;
+        if (!webSwinging && !lastWasBee && metres >= beeMinDistance && Random.value < C.beeChance * d + 0.02f)
         {
             // Bee swarm row: full 360 jump ring hazard. Spawns an arching coin string over the bees!
             float beeY = y + gap * 0.4f;
@@ -400,7 +404,7 @@ public class TCTrack : MonoBehaviour
         }
 
         // Snake row: a low-poly snake spirals down the trunk from above (like the squirrel, but wrapping the trunk).
-        // Own row with no branches so the jump over it is always clean. Unlocks at 1000m, ramps 5% -> 12% of rows,
+        // Own row with no branches so the jump over it is always clean. Unlocks after 200m, ramps 5% -> 12% of rows,
         // never back-to-back, at least 25u (500m) apart, and cut by 30% once max speed (2.5x) is reached.
         if (!webSwinging && !lastWasBee && snakePool != null && metres >= SnakeUnlockMetres && y > lastSnakeY + SnakeMinSpacing)
         {
@@ -462,17 +466,17 @@ public class TCTrack : MonoBehaviour
         OnRow?.Invoke(y, newSafe, Mathf.Abs(Mathf.DeltaAngle(safeAngle, newSafe)), window, secs, metres);
 
         // Enemy / Hurdle Spawns based on distance and probability rules:
-        // - Wasps: unlock after 30m, scaling with distance difficulty d (12% base up to 26%)
-        // - Squirrels: unlock after 2000m with advance leaf warning (15% base up to 28%)
+        // - Wasps: unlock after 200m, scaling with distance difficulty d (12% base up to 26%)
+        // - Squirrels: unlock after 200m with advance leaf warning (15% base up to 28%)
         if (!webSwinging)
         {
-            float waspProb = metres > 30f ? Mathf.Lerp(0.12f, 0.26f, d) : 0f;
+            float waspProb = metres >= 200f ? Mathf.Lerp(0.12f, 0.26f, d) : 0f;
             // Reduce bats during night by 30%
             if (gameManager.Instance != null && gameManager.Instance.IsBatPhase)
             {
                 waspProb *= 0.70f;
             }
-            float squirrelProb = metres >= 2000f ? Mathf.Lerp(0.15f, 0.28f, d) : 0f;
+            float squirrelProb = metres >= 200f ? Mathf.Lerp(0.15f, 0.28f, d) : 0f;
 
             if (waspProb > 0f && Random.value < waspProb)
             {
@@ -967,7 +971,20 @@ public class TCTrack : MonoBehaviour
         return Spawn(beePool, "bees", y, 0);
     }
 
-    public const float SnakeUnlockMetres = 1000f, SnakeMinSpacing = 25f, RedSnakeUnlockMetres = 2000f;
+    public TCSnake SpawnTutorialSnake(float y, float angle, int dir = 1, TCSnake.Variant variant = TCSnake.Variant.Green)
+    {
+        var p = Spawn(SnakePoolFor(variant) ?? snakePool, "snake", y, angle);
+        var sn = p ? p.GetComponent<TCSnake>() : null;
+        if (sn)
+        {
+            float th0 = angle * Mathf.Deg2Rad - dir * TCSnake.BodyLen / TCSnake.ArcPerRadian;
+            float y0 = y + TCSnake.RisePerRadian * TCSnake.BodyLen / TCSnake.ArcPerRadian;
+            sn.SetupHelix(th0, y0, dir, TCSnake.BodyLen);
+        }
+        return sn;
+    }
+
+    public const float SnakeUnlockMetres = 200f, SnakeMinSpacing = 25f, RedSnakeUnlockMetres = 1000f;
     public const string EnemyPrefabDir = "Enemies/Prefabs/";
     static GameObject LoadEnemyPrefab(string name) { var g = Resources.Load<GameObject>(EnemyPrefabDir + name); return g ? g : null; }
     TCPool SnakePoolFor(TCSnake.Variant v) => snakePools != null && snakePools.Length > (int)v ? snakePools[(int)v] : null;
@@ -979,7 +996,6 @@ public class TCTrack : MonoBehaviour
         if (Random.value < red) return TCSnake.Variant.Red;
         return Random.value < 0.5f ? TCSnake.Variant.Yellow : TCSnake.Variant.Green;
     }
-    float lastSnakeY = -999f;
 
     /// Debug / capture: snake with its head at (y, angle).
     public TCSnake SpawnDebugSnake(float y, float angle, int dir, int variant)

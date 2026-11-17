@@ -38,7 +38,7 @@ public static class TCCritters
             string side = sg < 0 ? "L" : "R";
             TCToon.Ball("Cheek" + side, head, cream, new Vector3(sg * 0.064f, -0.012f, 0.125f), new Vector3(0.052f, 0.046f, 0.046f));
             TCToon.Ball("Blush" + side, head, pink, new Vector3(sg * 0.085f, 0.012f, 0.13f), new Vector3(0.02f, 0.012f, 0.016f), new Vector3(0, sg * 40f, 0));
-            TCToon.Eye("Eye" + side, head, new Vector3(sg * 0.058f, 0.094f, 0.14f), new Vector3(sg * 0.40f, 0.74f, 0.56f), 0.045f, Amber);
+            TCToon.Eye("Eye" + side, head, new Vector3(sg * 0.058f, 0.094f, 0.14f), new Vector3(sg * 0.40f, 0.74f, 0.56f), 0.027f, Amber);
             var ear = TCToon.Pivot("Ear" + side, head, new Vector3(sg * 0.08f, 0.135f, 0.03f), new Vector3(-20f, sg * 10f, sg * -24f));
             TCToon.Ball("Outer", ear, furPlain, new Vector3(0, 0.045f, 0), new Vector3(0.040f, 0.058f, 0.020f));
             TCToon.Ball("Inner", ear, pink, new Vector3(0, 0.042f, 0.012f), new Vector3(0.024f, 0.038f, 0.010f));

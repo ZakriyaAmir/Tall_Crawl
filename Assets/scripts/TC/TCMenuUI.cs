@@ -660,7 +660,7 @@ public class TCMenuUI : MonoBehaviour
     bool loadingGame;
     void StartTutorialGame()
     {
-        TCSave.TutorialDone = false;
+        TCSave.TutorialRequested = true;
         StartCoroutine(LoadGame());
     }
     IEnumerator LoadGame()
@@ -813,6 +813,7 @@ public class TCMenuUI : MonoBehaviour
                         SkinUnlock.KillWasps => Mathf.Min(TCSave.WaspsKnocked, def.amount) + "/" + def.amount + " knocked",
                         SkinUnlock.KillSquirrels => Mathf.Min(TCSave.SquirrelsKnocked, def.amount) + "/" + def.amount + " knocked",
                         SkinUnlock.KnockBats => Mathf.Min(TCSave.BatsKnocked, def.amount) + "/" + def.amount + " knocked",
+                        SkinUnlock.KnockSnakes => Mathf.Min(TCSave.SnakesKnocked, def.amount) + "/" + def.amount + " knocked",
                         _ => "Free"
                     };
                 }
@@ -897,20 +898,20 @@ public class TCMenuUI : MonoBehaviour
         {
             int u = id; float y = -160 - (id - 1) * 102;
             var row = TCUI.Img("Upg" + id, card, Color.white);
-            SetRect(row.rectTransform, new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(880, 88));
             if (TCUI.Fresh(row))
             {
+                SetRect(row.rectTransform, new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(880, 88));
                 var sh = row.gameObject.AddComponent<Shadow>();
                 sh.effectColor = new Color(0, 0, 0, 0.08f);
                 sh.effectDistance = new Vector2(0, -4);
             }
 
             var name = TCUI.Label("N", row.transform, upgNames[id], 34, TCUI.Cocoa, TextAlignmentOptions.Left);
-            SetStretch(name.rectTransform, 26, 270, 0, 32);
+            if (TCUI.Fresh(name)) SetStretch(name.rectTransform, 26, 270, 0, 32);
             name.fontSize = 34; name.alignment = TextAlignmentOptions.Left;
 
             var pips = TCUI.Label("P", row.transform, "", 26, TCUI.Mint, TextAlignmentOptions.Left);
-            SetStretch(pips.rectTransform, 26, 270, 44, 0);
+            if (TCUI.Fresh(pips)) SetStretch(pips.rectTransform, 26, 270, 44, 0);
             pips.fontSize = 26; pips.alignment = TextAlignmentOptions.Left;
 
             var buy = TCUI.Btn("Buy", row.transform, "0", TCUI.Sky, () =>
@@ -919,15 +920,14 @@ public class TCMenuUI : MonoBehaviour
                 if (TCSave.Gems < cost) { Toast("Not enough gems"); return; }
                 TCSave.Gems -= cost; TCSave.SetUpgrade(u, lvl + 1); TCAudio.Play(TCAssets.I.purchase); Toast(upgNames[u] + " upgraded!"); TCServices.Log("upgrade", "id", u);
             }, 32, TCUI.Icon("gem"));
-            SetRect((RectTransform)buy.transform, new Vector2(1, 0.5f), new Vector2(-140, 0), new Vector2(240, 68));
+            if (TCUI.Fresh(buy)) SetRect((RectTransform)buy.transform, new Vector2(1, 0.5f), new Vector2(-140, 0), new Vector2(240, 68));
 
             var bt = buy.GetComponentInChildren<TextMeshProUGUI>();
-            if (bt) { bt.fontSize = 32; bt.alignment = TextAlignmentOptions.Center; SetStretch(bt.rectTransform, 48, 12, 0, 0); }
+            if (bt) { bt.fontSize = 32; bt.alignment = TextAlignmentOptions.Center; }
             var iconImg = buy.transform.Find("Icon")?.GetComponent<Image>();
             if (iconImg != null)
             {
                 iconImg.sprite = TCUI.Icon("gem");
-                SetRect(iconImg.rectTransform, new Vector2(0, 0.5f), new Vector2(36, 0), new Vector2(32, 32));
             }
 
             refreshers.Add(() =>
@@ -952,12 +952,17 @@ public class TCMenuUI : MonoBehaviour
                 TCSave.Gems += gems; TCAudio.Play(TCAssets.I.purchase); Toast("+" + gems + " gems!"); TCServices.Log("iap_gems", "gems", gems);
             }), 30, TCUI.Icon("gem"));
             float xPos = -339f + g * 226f;
-            SetRect((RectTransform)gb.transform, new Vector2(0.5f, 1), new Vector2(xPos, -860), new Vector2(202, 98));
+            if (TCUI.Fresh(gb))
+            {
+                SetRect((RectTransform)gb.transform, new Vector2(0.5f, 1), new Vector2(xPos, -860), new Vector2(202, 98));
+                var gtFresh = gb.GetComponentInChildren<TextMeshProUGUI>();
+                if (gtFresh) SetStretch(gtFresh.rectTransform, 6, 6, 30, 6);
+                var gIconFresh = gb.transform.Find("Icon")?.GetComponent<Image>();
+                if (gIconFresh) SetRect(gIconFresh.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -18), new Vector2(32, 32));
+            }
 
             var gt = gb.GetComponentInChildren<TextMeshProUGUI>();
-            if (gt) { gt.fontSize = 28; gt.alignment = TextAlignmentOptions.Center; gt.lineSpacing = -15f; SetStretch(gt.rectTransform, 6, 6, 30, 6); }
-            var gIcon = gb.transform.Find("Icon")?.GetComponent<Image>();
-            if (gIcon) SetRect(gIcon.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -18), new Vector2(32, 32));
+            if (gt) { gt.fontSize = 28; gt.alignment = TextAlignmentOptions.Center; gt.lineSpacing = -15f; }
             refreshers.Add(() => { var lp = UnityIAP.Instance ? UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[pack]) : null; if (gt && !string.IsNullOrEmpty(lp)) gt.text = gems + "\n" + lp; });
         }
 
@@ -972,20 +977,18 @@ public class TCMenuUI : MonoBehaviour
 
         int adCoins = TCConfig.I.adCoinReward;
         var free = TCUI.Btn("FreeCoins", card, "FREE " + adCoins + " (AD)", TCUI.Mint, () => TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); }, "shop_coins"), 32, TCUI.Icon("play"));
-        SetRect((RectTransform)free.transform, new Vector2(0.5f, 1), new Vector2(228, -1186), new Vector2(424, 94));
+        if (TCUI.Fresh(free)) SetRect((RectTransform)free.transform, new Vector2(0.5f, 1), new Vector2(228, -1186), new Vector2(424, 94));
         var ft = free.GetComponentInChildren<TextMeshProUGUI>();
-        if (ft) { ft.fontSize = 30; ft.alignment = TextAlignmentOptions.Center; SetStretch(ft.rectTransform, 60, 16, 0, 0); }
-        var fIcon = free.transform.Find("Icon")?.GetComponent<Image>();
-        if (fIcon) SetRect(fIcon.rectTransform, new Vector2(0, 0.5f), new Vector2(44, 0), new Vector2(34, 34));
+        if (ft) { ft.fontSize = 30; ft.alignment = TextAlignmentOptions.Center; }
 
         // Bottom Actions (Restore & Close)
         var restore = TCUI.Btn("Restore", card, "RESTORE", TCUI.Lilac, OnRestoreClicked, 34);
-        SetRect((RectTransform)restore.transform, new Vector2(0.5f, 0), new Vector2(-185, 70), new Vector2(330, 90));
+        if (TCUI.Fresh(restore)) SetRect((RectTransform)restore.transform, new Vector2(0.5f, 0), new Vector2(-185, 70), new Vector2(330, 90));
         var rt = restore.GetComponentInChildren<TextMeshProUGUI>();
         if (rt) rt.fontSize = 34;
 
         var close = TCUI.Btn("Close", card, "BACK", TCUI.Grey, () => TCUI.Hide(this, shopPanel), 38);
-        SetRect((RectTransform)close.transform, new Vector2(0.5f, 0), new Vector2(185, 70), new Vector2(330, 90));
+        if (TCUI.Fresh(close)) SetRect((RectTransform)close.transform, new Vector2(0.5f, 0), new Vector2(185, 70), new Vector2(330, 90));
         var ct = close.GetComponentInChildren<TextMeshProUGUI>();
         if (ct) ct.fontSize = 38;
     }
@@ -1018,7 +1021,7 @@ public class TCMenuUI : MonoBehaviour
     void Pack(RectTransform card, Vector2 pos, string title, string btn, int productIndex, System.Action grant)
     {
         var b = TCUI.Btn("Pack" + productIndex, card, title, TCUI.Sky, () => TCServices.Buy(productIndex, () => { grant(); TCAudio.Play(TCAssets.I.purchase); Toast("Purchase complete!"); TCServices.Log("iap_purchase", "index", productIndex); }), 32);
-        SetRect((RectTransform)b.transform, new Vector2(0.5f, 1), pos, new Vector2(424, 94));
+        if (TCUI.Fresh(b)) SetRect((RectTransform)b.transform, new Vector2(0.5f, 1), pos, new Vector2(424, 94));
         var bt = b.GetComponentInChildren<TextMeshProUGUI>();
         if (bt) { bt.fontSize = 30; bt.alignment = TextAlignmentOptions.Center; bt.lineSpacing = -15f; }
     }
@@ -1107,10 +1110,26 @@ public class TCMenuUI : MonoBehaviour
                 dailyCells[i].color = face; TCTheme.TextOnFace(dailyCells[i].transform, face);
                 foreach (var o in dailyCells[i].GetComponents<UnityEngine.UI.Outline>()) o.effectColor = i == day && avail ? TCUI.CrimsonDark : TCUI.Tan;
             }
-            claimBtn.interactable = avail;
-            dblBtn.interactable = avail;
-            if (claimBtnText) claimBtnText.text = avail ? "CLAIM" : "CLAIMED";
-            if (dblBtnText) dblBtnText.text = avail ? "x2 (AD)" : "CLAIMED";
+            var crt = (RectTransform)claimBtn.transform;
+            var s = claimBtn.GetComponent<TCShine>();
+            if (avail)
+            {
+                dblBtn.gameObject.SetActive(true);
+                dblBtn.interactable = true;
+                crt.anchoredPosition = new Vector2(-160, 260);
+                claimBtn.interactable = true;
+                if (claimBtnText) claimBtnText.text = "CLAIM";
+                if (dblBtnText) dblBtnText.text = "x2 (AD)";
+                if (s) s.enabled = true;
+            }
+            else
+            {
+                dblBtn.gameObject.SetActive(false);
+                crt.anchoredPosition = new Vector2(0, 260);
+                claimBtn.interactable = false;
+                if (claimBtnText) claimBtnText.text = "CLAIMED";
+                if (s) s.enabled = false;
+            }
         });
     }
     void OpenDaily() { Refresh(); TCUI.Show(this, dailyPanel); }

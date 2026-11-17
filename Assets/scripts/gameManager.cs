@@ -239,7 +239,8 @@ public class gameManager : MonoBehaviour
         }
 
         // If tutorial is not yet completed, always start at Midday time and freeze diurnal time until tutorial ends
-        if (!TCSave.TutorialDone && middayPhaseIdx >= 0)
+        bool isTutorial = TCGameUI.Instance != null ? TCGameUI.Instance.IsTutorialRun : (!TCSave.TutorialDone || TCSave.TutorialRequested);
+        if (isTutorial && middayPhaseIdx >= 0)
         {
             currentPhaseIndex = middayPhaseIdx;
             isTutorialActive = true;
@@ -251,6 +252,38 @@ public class gameManager : MonoBehaviour
         }
         phaseTimer = 0f;
         isTransitioning = false;
+    }
+
+    /// <summary>
+    /// Forces the diurnal cycle to Midday phase immediately and freezes diurnal progression for the tutorial.
+    /// </summary>
+    public void SetTutorialMidday()
+    {
+        isTutorialActive = true;
+        if (diurnalPhases == null || diurnalPhases.Length == 0) return;
+        int middayIdx = -1;
+        for (int i = 0; i < diurnalPhases.Length; i++)
+        {
+            if (diurnalPhases[i].name == "CloudyCrown_Midday") { middayIdx = i; break; }
+        }
+        if (middayIdx < 0) middayIdx = 0;
+        currentPhaseIndex = middayIdx;
+        isTransitioning = false;
+        phaseTimer = 0f;
+        ApplyPhaseImmediate(currentPhaseIndex);
+        if (musicPrimary != null)
+        {
+            var p = diurnalPhases[currentPhaseIndex];
+            var clip = GetMusicClipForPhase(p);
+            if (clip != null && musicPrimary.clip != clip)
+            {
+                currentBgmClip = clip;
+                musicPrimary.clip = clip;
+                musicPrimary.volume = 0.5f;
+                musicPrimary.mute = !TCSave.Music;
+                musicPrimary.Play();
+            }
+        }
     }
 
     /// <summary>

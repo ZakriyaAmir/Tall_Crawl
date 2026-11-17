@@ -7,12 +7,12 @@ using UnityEngine;
 /// Damage, shield, invincibility, WEB bonus and chilli smash all go through the shared TCEnemy / playerInteract path.
 public class TCSnake : TCEnemy
 {
-    // ---- shape & motion tuning (world units; trunk radius 0.603) ----
-    public const float TrunkR = 0.603f;
-    public const float Slope = 0.42f;          // rise per unit of horizontal travel around the trunk (helix pitch 1.59u / turn)
-    public const float BodyLen = 1.45f;        // head-to-tail-tip arc length (covers ~127 deg of the trunk)
+    // ---- shape & motion tuning (world units; trunk cylinder radius 0.50) ----
+    public const float TrunkR = 0.50f;
+    public const float Slope = 0.42f;          // rise per unit of horizontal travel around the trunk (helix pitch 1.32u / turn)
+    public const float BodyLen = 1.45f;        // head-to-tail-tip arc length (covers ~153 deg of the trunk)
     public const float MaxRadius = 0.078f;     // thickest body radius
-    public const float HitR = 0.59f;           // axis distance of the hit spheres (spider hit capsule centre ~0.564)
+    public const float HitR = 0.56f;           // axis distance of the hit spheres (spider hit capsule centre ~0.564)
     public const float PathSpeed = 0.97f;      // slither speed along the helix (~85 deg/s around, 0.37 u/s downward)
     public const float WaveLen = 0.52f, WaveAmp = 0.032f;
     public const int Rings = 52, Sides = 18;
@@ -324,7 +324,7 @@ public class TCSnake : TCEnemy
 
         // hit spheres: head + body (tail tip excluded so only the visible thick body hurts)
         var hp = new Transform[HitU.Length];
-        var hc = head.gameObject.AddComponent<SphereCollider>(); hc.isTrigger = true; hc.radius = 0.056f; hc.center = new Vector3(0, -0.085f, 0.01f); // local up = away from bark: sink to spider hit radius
+        var hc = head.gameObject.AddComponent<SphereCollider>(); hc.isTrigger = true; hc.radius = 0.056f; hc.center = new Vector3(0, 0f, 0.01f);
         for (int k = 0; k < HitU.Length; k++)
         {
             var g = new GameObject("Hit" + k); g.transform.SetParent(root.transform, false);

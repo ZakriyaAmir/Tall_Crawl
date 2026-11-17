@@ -43,8 +43,25 @@ public class TCGameUI : MonoBehaviour
     enum HandAnimMode { Horizontal, SwipeUp, SwipeDown, PointCooldown, Hidden }
     HandAnimMode handMode = HandAnimMode.Horizontal;
     float currentTargetTimeScale = 1f;
+    bool isTutorialRun;
+    public bool IsTutorialRun => isTutorialRun;
 
-    void Awake() { Instance = this; }
+    void Awake()
+    {
+        Instance = this;
+        // If tutorial was explicitly requested (e.g. from How To Play), clear the one-time request flag
+        // and ensure the run is flagged as completed for future runs so subsequent plays don't replay it.
+        if (TCSave.TutorialRequested)
+        {
+            TCSave.TutorialRequested = false;
+            TCSave.TutorialDone = true;
+            isTutorialRun = true;
+        }
+        else
+        {
+            isTutorialRun = !TCSave.TutorialDone;
+        }
+    }
 
     void Start()
     {
@@ -65,6 +82,10 @@ public class TCGameUI : MonoBehaviour
             wb.AddComponent<TCWebBonus>();
         }
         BuildUI();
+        if (isTutorialRun && gm != null)
+        {
+            gm.SetTutorialMidday();
+        }
         hintText.text = "TOUCH TO CLIMB";
         playerInteract.OnEvent += OnGameEvent;
         player.OnTurned += () => turnedOnce = true;
@@ -851,12 +872,12 @@ public class TCGameUI : MonoBehaviour
             hand.gameObject.SetActive(false);
         }
         gm.BeginRun();
-        if (TCSave.TutorialDone)
+        if (isTutorialRun) tutorialCo = StartCoroutine(Tutorial());
+        else
         {
             if (pl) { pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); pl.SetSlowmoAllowed(true); }
             TCUI.Hide(this, startOverlay);
         }
-        else tutorialCo = StartCoroutine(Tutorial());
     }
 
     IEnumerator Tutorial()
@@ -1230,7 +1251,87 @@ public class TCGameUI : MonoBehaviour
         yield return new WaitForSeconds(0.6f);
 
         // -------------------------------------------------------------
-        // STEP 5: DODGE THE SQUIRREL
+        // STEP 5: DODGE THE SNAKE
+        // -------------------------------------------------------------
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+
+        // Spawn a snake ahead in the spider's path spiraling down the trunk
+        float snakeAngle = pl.CurrentYaw;
+        float snakeY = SpiderY + 4.8f;
+        var snake = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialSnake(snakeY, snakeAngle) : null;
+        hintText.text = "SNAKE INCOMING!";
+        handMode = HandAnimMode.Hidden;
+
+        // Climb forward until approaching the snake (2.2m away)
+        while (snake != null && snake.gameObject.activeInHierarchy && (snake.y - SpiderY) > 2.2f)
+        {
+            if (IsTutorialAborted) yield break;
+            yield return null;
+        }
+
+        // Approach in slow motion until frozen right in front of the snake (1.2m away)
+        yield return StartCoroutine(SmoothTimeScale(0.18f, 0.2f));
+        while (snake != null && snake.gameObject.activeInHierarchy && (snake.y - SpiderY) > 1.2f)
+        {
+            if (IsTutorialAborted) yield break;
+            yield return null;
+        }
+
+        if (snake != null && snake.gameObject.activeInHierarchy)
+        {
+            // Freeze right before collision and prompt player to drag and dodge the snake!
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+            IsTutorialFrozen = true;
+            Time.timeScale = 0f;
+            currentTargetTimeScale = 0f;
+
+            pl.SetSteerAllowed(true);
+            pl.SetJumpAllowed(false);
+            handMode = HandAnimMode.Horizontal;
+            hintText.text = "DRAG TO DODGE\nthe snake!";
+
+            // Wait until the player circles at least 50 degrees away from the snake's lane
+            while (snake != null && snake.gameObject.activeInHierarchy && Mathf.Abs(Mathf.DeltaAngle(snakeAngle, pl.CurrentYaw)) < 50f)
+            {
+                if (IsTutorialAborted) { IsTutorialFrozen = false; yield break; }
+                yield return null;
+            }
+
+            // Player moved enough to fully clear the snake! Lock controls and climb straight past safely
+            IsTutorialFrozen = false;
+            hintText.text = "";
+            handMode = HandAnimMode.Hidden;
+            pl.SetSteerAllowed(false);
+            pl.SetJumpAllowed(false);
+            foreach (var col in snake.GetComponentsInChildren<Collider>()) col.enabled = false;
+
+            yield return WaitWhilePausedOverlay();
+            if (IsTutorialAborted) yield break;
+            Time.timeScale = 1.0f;
+            currentTargetTimeScale = 1.0f;
+
+            // Wait until spider climbs safely past the snake
+            while (snake != null && snake.gameObject.activeInHierarchy && SpiderY < snake.y + 0.8f)
+            {
+                if (IsTutorialAborted) yield break;
+                yield return null;
+            }
+        }
+        else
+        {
+            IsTutorialFrozen = false;
+            yield return WaitWhilePausedOverlay();
+            if (!IsTutorialAborted) { Time.timeScale = 1.0f; currentTargetTimeScale = 1.0f; }
+        }
+
+        pl.SetSteerAllowed(false);
+        pl.SetJumpAllowed(false);
+        yield return new WaitForSeconds(0.6f);
+
+        // -------------------------------------------------------------
+        // STEP 6: DODGE THE SQUIRREL
         // -------------------------------------------------------------
         pl.SetSteerAllowed(false);
         pl.SetJumpAllowed(false);
@@ -1532,6 +1633,7 @@ public class TCGameUI : MonoBehaviour
         }
 
         // Complete the tutorial!
+        isTutorialRun = false;
         TCSave.TutorialDone = true;
         if (gm != null)
         {
@@ -1678,7 +1780,7 @@ public class TCGameUI : MonoBehaviour
         Time.timeScale = 1f;
         if (pl) { pl.ResetInputState(); pl.SetSteerAllowed(true); pl.SetJumpAllowed(true); pl.SetSlowmoAllowed(true); }
         // A death during the first-run tutorial left its overlay up over the results
-        if (tutorialCo != null) { StopCoroutine(tutorialCo); tutorialCo = null; TCSave.TutorialDone = true; if (gm != null) gm.EndTutorialTimeFreeze(); }
+        if (tutorialCo != null) { StopCoroutine(tutorialCo); tutorialCo = null; isTutorialRun = false; TCSave.TutorialDone = true; if (gm != null) gm.EndTutorialTimeFreeze(); }
         if (startOverlay.alpha > 0) TCUI.Hide(this, startOverlay);
         if (canRevive) { reviveGemBtn.interactable = TCSave.Gems >= TCConfig.I.reviveCostGems; TCUI.Show(this, revivePanel); reviveCo = StartCoroutine(ReviveCountdown()); }
         else ShowResults();

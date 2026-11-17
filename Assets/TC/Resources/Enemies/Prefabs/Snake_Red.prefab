@@ -1147,7 +1147,7 @@ SphereCollider:
   m_Enabled: 1
   serializedVersion: 3
   m_Radius: 0.056
-  m_Center: {x: 0, y: -0.085, z: 0.01}
+  m_Center: {x: 0, y: 0, z: 0.01}
 --- !u!1 &4651350472762644353
 GameObject:
   m_ObjectHideFlags: 0
@@ -1460,7 +1460,7 @@ MonoBehaviour:
   baseAngle: 0
   sweepAngle: 40
   speed: 2.2
-  radius: 0.603
+  radius: 0.5
   y: 0
   pooled: {fileID: 0}
   model: {fileID: 3916739593536683495}

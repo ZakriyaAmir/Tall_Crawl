@@ -9,6 +9,10 @@ public class TCShine : MonoBehaviour
     [Tooltip("polish3: keep the band ~1.9x the button height so the tilted sweep always covers the face.")] public bool autoSize = true;
     float t;
     void OnEnable() { t = -delay; Place(-1); }
+    void OnDisable()
+    {
+        if (band) band.gameObject.SetActive(false);
+    }
     void Place(float k)
     {
         if (!band) return;

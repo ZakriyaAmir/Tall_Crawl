@@ -298,6 +298,39 @@ public static class TCSetup
                 t.SetPixel(x, y, baseCol);
                 continue;
             }
+            if (d.name == "Hiss")
+            {
+                float d_spine = Mathf.Abs(u - 0.25f);
+                if (d_spine > 0.5f) d_spine = 1.0f - d_spine;
+                float d_belly = Mathf.Abs(u - 0.75f);
+                if (d_belly > 0.5f) d_belly = 1.0f - d_belly;
+
+                // Authentic snake skin: green back (#80D14D), deep green saddle blotches (#338033), pale creamy yellow belly (#FFEB85)
+                Color backCol = new Color(0.50f, 0.82f, 0.30f);
+                Color blotchCol = new Color(0.20f, 0.50f, 0.20f);
+                Color bellyCol = new Color(1.0f, 0.92f, 0.52f);
+
+                // Saddle blotches along spine
+                float blotchFreq = 6f;
+                float ph = Mathf.Repeat(v * blotchFreq + 0.3f, 1f);
+                float dv = Mathf.Abs(ph - 0.5f) * 2f;
+                float distSaddle = Mathf.Sqrt(dv * dv * 0.8f + (d_spine / 0.16f) * (d_spine / 0.16f));
+                float saddle = 1f - Mathf.Clamp01((distSaddle - 0.50f) / 0.22f);
+
+                // Base transition between back and pale belly
+                Color baseCol = Color.Lerp(backCol, bellyCol, Mathf.Clamp01((0.24f - d_belly) / 0.16f));
+                baseCol = Color.Lerp(baseCol, blotchCol, saddle * 0.90f);
+
+                // Fine scale speckle pattern
+                float sc = Mathf.Sin(x * 2.4f) * Mathf.Sin(y * 0.55f + (x % 2) * 1.5f);
+                baseCol *= 1f + sc * 0.035f;
+
+                float curv = 0.75f + 0.25f * Mathf.Sin(v * Mathf.PI * 0.5f);
+                float s = 0.94f + 0.06f * Mathf.Cos(d_spine * Mathf.PI * 2f);
+                baseCol *= curv * s; baseCol.a = 1f;
+                t.SetPixel(x, y, baseCol);
+                continue;
+            }
             if (d.name == "Ladybug")
             {
                 float d_spine = Mathf.Abs(u - 0.25f);

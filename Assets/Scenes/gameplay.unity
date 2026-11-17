@@ -840,7 +840,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4292405746
   m_fontColor: {r: 0.9490196, g: 0.9137255, b: 0.84705883, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -2125,7 +2125,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4282334026
+    rgba: 4292405746
   m_fontColor: {r: 0.9490196, g: 0.9137255, b: 0.84705883, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -6342,7 +6342,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4282334026
+    rgba: 4279972170
   m_fontColor: {r: 0.2901961, g: 0.19215687, b: 0.105882354, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -15861,7 +15861,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4282399562
+    rgba: 4279972170
   m_fontColor: {r: 0.2901961, g: 0.19215687, b: 0.105882354, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -16124,7 +16124,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4286226431
+    rgba: 4280353702
   m_fontColor: {r: 0.6509804, g: 0.011764706, b: 0.12941177, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -20614,9 +20614,9 @@ MonoBehaviour:
   roosterSound: {fileID: 8300000, guid: 8e9f2b3c15db47348a623b01ea51a888, type: 3}
   camera: {fileID: 206422001}
   Sun: {fileID: 705507993}
-  chilliSpawnProbability: 0.0624
-  coinMagnetSpawnProbability: 0.042
-  slowMoSpawnProbability: 0.042
+  chilliSpawnProbability: 0.0416
+  coinMagnetSpawnProbability: 0.021
+  slowMoSpawnProbability: 0.028
   webPickupSpawnProbability: 0.32
   coinsCollected: 0
   revivedThisRun: 0
