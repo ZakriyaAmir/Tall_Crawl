@@ -13,6 +13,7 @@ public class TCTrack : MonoBehaviour
 
     TCPool trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool, magnetPool;
     TCPool pineconePool, waspPool, squirrelPool, snakePool;
+    TCPool[] snakePools; // by TCSnake.Variant (Green, Yellow, Red)
     readonly List<TCPooled> live = new List<TCPooled>(256);
     readonly List<float> angles = new List<float>(8);
     float nextTrunkY, nextRowY, safeAngle, lastCoinY = -999f;
@@ -43,7 +44,7 @@ public class TCTrack : MonoBehaviour
     int rowIndex; bool lastWasBee; player pl;
     public static System.Action<float, float, float, float, float, float> OnRow; // y, safe angle, required turn deg, window deg (360 = bees), seconds available, metres
     public int LiveCount => live.Count;
-    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool, magnetPool, pineconePool, waspPool, squirrelPool, snakePool };
+    public TCPool[] Pools => new[] { trunkPool, branchPool, beePool, coinPool, heartPool, boostPool, cooldownPool, magnetPool, pineconePool, waspPool, squirrelPool, snakePool, SnakePoolFor(TCSnake.Variant.Yellow), SnakePoolFor(TCSnake.Variant.Red) };
     public static TCTrack Instance;
     TCConfig C;
 
@@ -149,17 +150,24 @@ public class TCTrack : MonoBehaviour
         letterPool = letterProto ? new TCPool(letterProto, bonusParent, 4) : null;
         clearUntilY = -999f;
 
-        var pProto = pineconePrefab ? pineconePrefab : SafeCreateEnemy(() => TCEnemy.CreatePineconePrefab(hazardParent));
+        // Enemy prefabs (editable in the editor): scene field -> Resources/Enemies/Prefabs/<name> -> procedural fallback
+        var pProto = pineconePrefab ? pineconePrefab : (LoadEnemyPrefab("Pinecone_Enemy") ?? SafeCreateEnemy(() => TCEnemy.CreatePineconePrefab(hazardParent)));
         pineconePool = pProto ? new TCPool(pProto, hazardParent, 5) : null;
 
-        var sProto = squirrelPrefab ? squirrelPrefab : SafeCreateEnemy(() => TCEnemy.CreateSquirrelPrefab(hazardParent));
+        var sProto = squirrelPrefab ? squirrelPrefab : (LoadEnemyPrefab("Squirrel_Enemy") ?? SafeCreateEnemy(() => TCEnemy.CreateSquirrelPrefab(hazardParent)));
         squirrelPool = sProto ? new TCPool(sProto, hazardParent, 5) : null;
 
-        var wProto = waspPrefab ? waspPrefab : SafeCreateEnemy(() => TCEnemy.CreateWaspPrefab(hazardParent));
+        var wProto = waspPrefab ? waspPrefab : (LoadEnemyPrefab("Wasp_Enemy") ?? SafeCreateEnemy(() => TCEnemy.CreateWaspPrefab(hazardParent)));
         waspPool = wProto ? new TCPool(wProto, hazardParent, 5) : null;
 
-        var snProto = SafeCreateEnemy(() => TCSnake.CreateSnakePrefab(hazardParent));
-        snakePool = snProto ? new TCPool(snProto, hazardParent, 2) : null;
+        snakePools = new TCPool[3];
+        for (int v = 0; v < 3; v++)
+        {
+            var variant = (TCSnake.Variant)v;
+            var snProto = LoadEnemyPrefab("Snake_" + variant) ?? SafeCreateEnemy(() => TCSnake.CreateSnakePrefab(hazardParent, variant));
+            snakePools[v] = snProto ? new TCPool(snProto, hazardParent, 2) : null;
+        }
+        snakePool = snakePools[0];
         lastSnakeY = -999f;
 
         float py = player.position.y;
@@ -401,11 +409,17 @@ public class TCTrack : MonoBehaviour
             if (Random.value < snakeProb)
             {
                 float snakeY = y + gap * 0.55f;
-                Spawn(snakePool, "snake", snakeY, safeAngle + Random.Range(-40f, 40f));
+                var variant = PickSnakeVariant(metres, d);
+                // faster / slower variants start higher / lower so the spider still meets them at the same spot as a
+                // green one (the cleared snake row), never down in the previous row's hazards
+                float vc = C.ClimbSpeedAtDistance(metres), dropPerPath = TCSnake.RisePerRadian / TCSnake.ArcPerRadian;
+                float vg = TCSnake.PathSpeed * dropPerPath, vs = TCSnake.PathSpeed * TCSnake.SpeedMulFor(variant) * dropPerPath;
+                float headY = player.position.y + (snakeY - player.position.y) * (vc + vs) / (vc + vg);
+                Spawn(SnakePoolFor(variant) ?? snakePool, "snake", headY, safeAngle + Random.Range(-40f, 40f));
                 lastSnakeY = snakeY;
-                Debug.Log($"[TCTrack] snake row at {metres:0}m (p={snakeProb:0.00})");
+                Debug.Log($"[TCTrack] {variant} snake row at {metres:0}m (p={snakeProb:0.00})");
                 // the snake descends ~0.37u/s while the spider climbs, so keep the stretch below it clear too
-                lastHazardY = snakeY + 0.6f;
+                lastHazardY = Mathf.Max(snakeY, headY) + 0.6f;
                 OnRow?.Invoke(snakeY, safeAngle, 0, 360, gap / C.ClimbSpeedAtDistance(metres), metres);
                 nextRowY = snakeY + gap * 1.6f;
                 return;
@@ -953,13 +967,24 @@ public class TCTrack : MonoBehaviour
         return Spawn(beePool, "bees", y, 0);
     }
 
-    public const float SnakeUnlockMetres = 1000f, SnakeMinSpacing = 25f;
+    public const float SnakeUnlockMetres = 1000f, SnakeMinSpacing = 25f, RedSnakeUnlockMetres = 2000f;
+    public const string EnemyPrefabDir = "Enemies/Prefabs/";
+    static GameObject LoadEnemyPrefab(string name) { var g = Resources.Load<GameObject>(EnemyPrefabDir + name); return g ? g : null; }
+    TCPool SnakePoolFor(TCSnake.Variant v) => snakePools != null && snakePools.Length > (int)v ? snakePools[(int)v] : null;
+
+    /// Green (normal) and yellow (slow) from the unlock; red (2.2x fast) joins at 2000m, 15% -> 35% of snakes as difficulty ramps.
+    static TCSnake.Variant PickSnakeVariant(float metres, float d)
+    {
+        float red = metres >= RedSnakeUnlockMetres ? Mathf.Lerp(0.15f, 0.35f, d) : 0f;
+        if (Random.value < red) return TCSnake.Variant.Red;
+        return Random.value < 0.5f ? TCSnake.Variant.Yellow : TCSnake.Variant.Green;
+    }
     float lastSnakeY = -999f;
 
     /// Debug / capture: snake with its head at (y, angle).
-    public TCSnake SpawnDebugSnake(float y, float angle, int dir)
+    public TCSnake SpawnDebugSnake(float y, float angle, int dir, int variant)
     {
-        var p = Spawn(snakePool, "snake", y, angle);
+        var p = Spawn(SnakePoolFor((TCSnake.Variant)variant) ?? snakePool, "snake", y, angle);
         var sn = p ? p.GetComponent<TCSnake>() : null;
         if (sn) sn.SetupHelix(angle * Mathf.Deg2Rad - dir * TCSnake.BodyLen / TCSnake.ArcPerRadian, y + TCSnake.RisePerRadian * TCSnake.BodyLen / TCSnake.ArcPerRadian, dir, TCSnake.BodyLen);
         return sn;
@@ -967,13 +992,13 @@ public class TCTrack : MonoBehaviour
 
     /// Jump-clearance harness: a snake whose body MIDDLE crosses the lane at laneAngle exactly when a spider climbing
     /// at climbSpeed from yHit reaches it, T seconds from now. bandY = height of the band on that lane.
-    public TCSnake SpawnDebugSnakeCrossing(float laneAngle, float yHit, float climbSpeed, float T, out float bandY)
+    public TCSnake SpawnDebugSnakeCrossing(float laneAngle, float yHit, float climbSpeed, float T, int variant, out float bandY)
     {
         bandY = yHit + climbSpeed * T;
-        var p = Spawn(snakePool, "snake", bandY, laneAngle);
+        var p = Spawn(SnakePoolFor((TCSnake.Variant)variant) ?? snakePool, "snake", bandY, laneAngle);
         var sn = p ? p.GetComponent<TCSnake>() : null;
         if (!sn) return null;
-        float sLane = TCSnake.BodyLen + TCSnake.PathSpeed * T - TCSnake.BodyLen * 0.5f;
+        float sLane = TCSnake.BodyLen + sn.Speed * T - TCSnake.BodyLen * 0.5f;
         float th0 = laneAngle * Mathf.Deg2Rad - sLane / TCSnake.ArcPerRadian;
         // band centre = body centre-line height; the rings sit 0.07 behind the head and the hit spheres are on the centre line
         float y0 = bandY + TCSnake.RisePerRadian * sLane / TCSnake.ArcPerRadian;

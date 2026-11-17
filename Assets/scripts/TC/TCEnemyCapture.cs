@@ -10,7 +10,7 @@ using UnityEngine.UI;
 /// logged jump-over test for the snake at 1x / 1.75x / 2.5x climb speed.
 public class TCEnemyCapture : MonoBehaviour
 {
-    string dir, phase = "after"; int n; const float JumpStep = 0.1f; const int Reps = 3;
+    string dir, phase = "after"; bool noJump; int n; const float JumpStep = 0.1f; const int Reps = 2; int curVariant;
     readonly List<string> log = new List<string>();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -22,6 +22,7 @@ public class TCEnemyCapture : MonoBehaviour
         var g = new GameObject("TCEnemyCapture"); DontDestroyOnLoad(g);
         var c = g.AddComponent<TCEnemyCapture>(); c.dir = i + 1 < a.Length ? a[i + 1] : "/tmp";
         int p = System.Array.IndexOf(a, "-tcphase"); if (p >= 0 && p + 1 < a.Length) c.phase = a[p + 1];
+        c.noJump = System.Array.IndexOf(a, "-tcnojump") >= 0;
     }
 
     void L(string s) { Debug.Log("[TCEnemyCapture] " + s); log.Add(s); System.IO.File.WriteAllLines(dir + "/enemy_log.txt", log); }
@@ -74,8 +75,33 @@ public class TCEnemyCapture : MonoBehaviour
         Clear(); sp.GrantGrace(9999f);
         yield return W(0.6f);
 
-        // ---------- squirrel ----------
+        // ---------- spider reference ----------
         float a = PlayerAngle();
+        { Time.timeScale = 0f; yield return W(0.05f);
+          var spT = sp.transform; Vector3 c = spT.position + new Vector3(spT.position.x, 0, spT.position.z).normalized * 0.05f;
+          CloseUp("spider_ref_close", c, a, 0.75f, 0.25f, 32f);
+          CloseUp("spider_ref_side", c, a, 0.75f, 0.1f, 32f, 0.55f);
+          Time.timeScale = 1f; }
+        yield return W(0.3f);
+
+        // ---------- wasp (day) ----------
+        a = PlayerAngle();
+        var wasp = track.SpawnTutorialWasp(PY + 1.5f, a + 10f);
+        if (wasp) { wasp.UpdateReskin(); yield return W(0.5f); }
+        if (wasp)
+        {
+            Time.timeScale = 0f; yield return W(0.05f);
+            yield return Shot(phase + "_wasp_game");
+            var m = wasp.transform.Find("Model");
+            float wa = Mathf.Atan2(m.position.x, m.position.z) * Mathf.Rad2Deg;
+            CloseUp(phase + "_wasp_close", m.position, wa, 0.9f, 0.15f, 32f);
+            CloseUp(phase + "_wasp_close_side", m.position, wa, 0.9f, 0.1f, 32f, 0.6f);
+            Time.timeScale = 1f;
+        }
+        yield return W(1.2f); Clear();
+
+        // ---------- squirrel ----------
+        a = PlayerAngle();
         var sq = track.SpawnTutorialSquirrel(PY + 3.0f, a + 18f);
         yield return W(0.45f);
         if (sq)
@@ -87,6 +113,17 @@ public class TCEnemyCapture : MonoBehaviour
             CloseUp(phase + "_squirrel_close_side", m.position, a + 18f, 1.5f, 0.2f, 32f, 1.0f);
             Time.timeScale = 1f;
         }
+        yield return W(1.5f); Clear();
+        a = PlayerAngle();
+        var sq2 = track.SpawnTutorialSquirrel(PY + 1.6f, a + 8f);
+        if (sq2) { yield return W(0.35f); Time.timeScale = 0f; yield return W(0.05f);
+            var m2 = sq2.transform.Find("Model"); Vector3 mid = (m2.position + sp.transform.position) * 0.5f;
+            CloseUp(phase + "_squirrel_with_spider", mid, a + 4f, 2.0f, 0.4f, 34f);
+            Time.timeScale = 1f;
+            // gait strip: 4 side-on frames a quarter stride apart
+            for (int g = 0; g < 4; g++) { yield return W(0.11f); Time.timeScale = 0f; yield return null;
+                var gm = sq2 ? sq2.transform.Find("Model") : null; if (gm) CloseUp(phase + "_squirrel_gait_" + g, gm.position, a + 8f, 1.1f, 0.0f, 32f, 0.9f);
+                Time.timeScale = 1f; } }
         yield return W(1.5f); Clear();
 
         // ---------- bat (sunset) ----------
@@ -112,12 +149,15 @@ public class TCEnemyCapture : MonoBehaviour
         if (spawnSnake != null)
         {
             a = PlayerAngle();
-            var snake = spawnSnake.Invoke(track, new object[] { PY + 3.8f, a - 35f, 1 }) as TCEnemy;
+            var snake = spawnSnake.Invoke(track, new object[] { PY + 3.8f, a - 35f, 1, 0 }) as TCEnemy;
             for (int f = 0; f < 4; f++) { yield return W(0.55f); yield return Shot("snake_spiral_" + f); }
             if (snake)
             {
                 Time.timeScale = 0f; yield return W(0.05f);
                 var head = snake.transform.Find("Head");
+                { var bodyR = snake.transform.Find("Body").GetComponent<Renderer>(); var mf = snake.transform.Find("Body").GetComponent<MeshFilter>();
+                  var hd0 = head ? head.position : Vector3.zero; var mv = mf && mf.sharedMesh ? mf.sharedMesh.vertices : new Vector3[0];
+                  L($"snake dbg: root pos {snake.transform.position} rot {snake.transform.eulerAngles} scale {snake.transform.lossyScale}; body tr pos {bodyR.transform.position} scale {bodyR.transform.lossyScale}; head {hd0} (r={new Vector2(hd0.x, hd0.z).magnitude:0.000}); body bounds {bodyR.bounds.center} size {bodyR.bounds.size}; v0 {(mv.Length > 0 ? mv[0] : Vector3.zero)} (r={(mv.Length > 0 ? new Vector2(mv[0].x, mv[0].z).magnitude : 0):0.000}) vmid {(mv.Length > 500 ? mv[500] : Vector3.zero)} n={mv.Length} mat={bodyR.sharedMaterial.name} tex={(bodyR.sharedMaterial.mainTexture ? bodyR.sharedMaterial.mainTexture.name : "-")}"); }
                 Vector3 hp = head ? head.position : snake.transform.position;
                 float ha = Mathf.Atan2(hp.x, hp.z) * Mathf.Rad2Deg;
                 CloseUp("snake_close", hp + Vector3.up * 0.25f, ha, 1.5f, 0.35f, 36f);
@@ -139,7 +179,19 @@ public class TCEnemyCapture : MonoBehaviour
                 Time.timeScale = 1f;
             }
             yield return W(0.5f); Clear();
-            yield return JumpTests();
+            // variant line-up: green / yellow / red near the spider, then a head close-up of each
+            a = PlayerAngle(); var vs = new TCEnemy[3];
+            for (int v = 0; v < 3; v++) vs[v] = spawnSnake.Invoke(track, new object[] { PY + 1.6f + v * 0.9f, a - 40f + v * 25f, 1, v }) as TCEnemy;
+            yield return W(0.35f); Time.timeScale = 0f; yield return W(0.05f);
+            yield return Shot("snake_variants_game");
+            CloseUp("snake_variants_with_spider", sp.transform.position + Vector3.up * 1.4f, a - 10f, 3.0f, 0.6f, 40f);
+            string[] vn = { "green", "yellow", "red" };
+            for (int v = 0; v < 3; v++) { var hd = vs[v] ? vs[v].transform.Find("Head") : null; if (!hd) continue;
+                float hha = Mathf.Atan2(hd.position.x, hd.position.z) * Mathf.Rad2Deg; CloseUp("snake_head_" + vn[v], hd.position, hha, 0.7f, 0.18f, 30f); }
+            Time.timeScale = 1f; yield return W(0.3f);
+            foreach (var e in vs) if (e && e.pooled) e.pooled.Release();
+            Clear();
+            if (!noJump) yield return JumpTests();
         }
         Application.Quit();
     }
@@ -160,9 +212,11 @@ public class TCEnemyCapture : MonoBehaviour
     {
         playerInteract.OnEvent += OnHit;
         var cute = sp.GetComponentInChildren<TCCuteSpider>(); cuteRef = cute;
-        float[] speeds = { 1f, 1.75f, 2.5f };
-        foreach (var mult in speeds)
+        var combos = new (int v, float mult)[] { (2, 1f), (2, 1.75f), (2, 2.5f), (0, 1f), (0, 2.5f), (1, 1f), (1, 2.5f) };
+        foreach (var combo in combos)
         {
+            float mult = combo.mult; curVariant = combo.v; var clean = new SortedDictionary<float, bool>();
+            L($"=== {(TCSnake.Variant)curVariant} snake (speed x{TCSnake.SpeedMulFor((TCSnake.Variant)curVariant)}) vs spider {mult:0.00}x ===");
             SetSpeedMult(mult); yield return W(0.6f);
             // 1) measure the airborne-clear window of a plain jump at this speed
             SetField(sp, "invulnTimer", 0.001f); Clear();
@@ -177,7 +231,7 @@ public class TCEnemyCapture : MonoBehaviour
             L($"speed {mult:0.00}x: climb {v:0.00} u/s, jump peak radial lift {peak:0.00} u, lifted>0.10u {clearStart:0.00}s..{clearEnd:0.00}s (window {clearEnd - clearStart:0.00}s, covers {(clearEnd - clearStart) * v:0.00} u of climb)");
 
             // 2) snake crossing trials: jump at various lead times before reaching the band; plus a no-jump control
-            var leads = new List<float> { -1f }; for (float q = 0f; q <= 0.851f; q += JumpStep) leads.Add(q);
+            var leads = new List<float> { -1f }; for (float q = 0f; q <= 0.751f; q += JumpStep) leads.Add(q);
             foreach (var lead in leads)
             {
                 Clear(); SetField(sp, "invulnTimer", 0.001f); sp.life = Mathf.Max(sp.life, 3); yield return W(0.25f);
@@ -206,9 +260,13 @@ public class TCEnemyCapture : MonoBehaviour
                 }
                 L($"  {mult:0.00}x lead {(lead < 0 ? "no-jump" : lead.ToString("0.00") + "s")}: hits={hits} minGap={minGap:0.00} maxAir={maxAir:0.00} airAtBand={airAtBand:0.00} jumping={sp.IsJumping} [{state}]" + (hits > 0 ? $" (t={hitT - T:+0.00;-0.00}s vs band, air={hitAir:0.00})" : ""));
                 if (snake && snake.gameObject.activeSelf && snake.pooled) snake.pooled.Release();
+                if (lead >= 0) clean[lead] = (!clean.TryGetValue(lead, out var cprev) || cprev) && hits == 0;
                 }
             }
+            var ok = new List<string>(); foreach (var kv in clean) if (kv.Value) ok.Add(kv.Key.ToString("0.0"));
+            L($"  SUMMARY {(TCSnake.Variant)curVariant} @ {mult:0.00}x: clean leads (all reps, 0 hits) = [{string.Join(", ", ok)}]s");
         }
+        curVariant = 0;
         playerInteract.OnEvent -= OnHit;
         // Visual: jump over + hit frames at 1x
         SetPhase(1); SetSpeedMult(1f); yield return W(0.5f);
@@ -235,8 +293,8 @@ public class TCEnemyCapture : MonoBehaviour
         if (m == null) return null;
         float a = PlayerAngle();
         float yHit = sp.HitCollider.bounds.center.y;
-        object[] args = { a, yHit, pl.calcSpeed, T, 0f };
-        var e = m.Invoke(track, args) as TCEnemy; bandY = (float)args[4];
+        object[] args = { a, yHit, pl.calcSpeed, T, curVariant, 0f };
+        var e = m.Invoke(track, args) as TCEnemy; bandY = (float)args[5];
         return e;
     }
 }

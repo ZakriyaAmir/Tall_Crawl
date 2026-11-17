@@ -15,7 +15,7 @@ public class TCSnake : TCEnemy
     public const float HitR = 0.59f;           // axis distance of the hit spheres (spider hit capsule centre ~0.564)
     public const float PathSpeed = 0.97f;      // slither speed along the helix (~85 deg/s around, 0.37 u/s downward)
     public const float WaveLen = 0.52f, WaveAmp = 0.032f;
-    public const int Rings = 26, Sides = 7;
+    public const int Rings = 52, Sides = 18;
     static readonly float K = Slope * TrunkR;                          // dy per radian
     static readonly float Ell = Mathf.Sqrt(TrunkR * TrunkR + K * K);     // arc length per radian
 
@@ -24,6 +24,11 @@ public class TCSnake : TCEnemy
     public const int TongueJoints = 4; public const float TongueSeg = 0.022f;
     public Transform[] hitPoints;              // sphere colliders along the body
     public MeshFilter bodyFilter, hullFilter;
+    public enum Variant { Green, Yellow, Red }
+    public Variant variant = Variant.Green;
+    [Tooltip("Slither speed multiplier: yellow 0.6, green 1, red 2.2")] public float speedMul = 1f;
+    public float Speed => PathSpeed * speedMul;
+    public static float SpeedMulFor(Variant v) => v == Variant.Yellow ? 0.6f : v == Variant.Red ? 2.2f : 1f;
 
     float theta0, y0, sHead; int dir = 1;
     float tongueTimer, tongueClock, hissTimer; bool hissed;
@@ -41,7 +46,7 @@ public class TCSnake : TCEnemy
     Vector3[] centers = new Vector3[Rings], fwd = new Vector3[Rings], outN = new Vector3[Rings];
     Vector3[] flatV, hullV, hullN, flatN;
     int[] flatSrc; bool hullChecked;                              // flat vertex -> smooth vertex index
-    static readonly float[] HitU = { 0.10f, 0.24f, 0.38f, 0.52f, 0.66f, 0.80f };
+    static readonly float[] HitU = { 0.08f, 0.15f, 0.22f, 0.29f, 0.36f, 0.43f, 0.50f, 0.57f, 0.64f, 0.71f, 0.78f }; // ~0.1u apart: no gaps the spider could slip through
 
     public override bool CanJumpOver => true;
 
@@ -70,7 +75,7 @@ public class TCSnake : TCEnemy
 
     public void SetupHelix(float th0Rad, float yTop, int direction, float sHeadStart)
     {
-        theta0 = th0Rad; y0 = yTop; dir = direction; sHead = sHeadStart;
+        theta0 = th0Rad; y0 = yTop; dir = direction; sHead = sHeadStart; sweepPrimed = false;
         hissed = false; tongueClock = Random.Range(0f, TongueCycle); isSmashed = false;
         Pose(0f);
     }
@@ -85,14 +90,47 @@ public class TCSnake : TCEnemy
     {
         if (isSmashed) return;
         float dt = Time.deltaTime;
-        sHead += PathSpeed * (IsPlayerInChilliMode() ? 1.25f : 1f) * dt;
+        sHead += Speed * (IsPlayerInChilliMode() ? 1.25f : 1f) * dt;
         Pose(Time.time);
+        SweepHitCheck();
 
         // warning cue: one hiss as it slides into view from above, tongue flicks faster when the spider is near
         var pl = player.Instance;
         float dy = pl ? y - pl.transform.position.y : 99f;
         if (!hissed && dy < 5.6f && dy > -1f) { hissed = true; TCSfx.Play("hiss", 0.75f, Random.Range(0.95f, 1.08f)); }
-        tongueClock += dt * (dy < 2.5f ? 1.6f : 1f); // flicks faster when the spider is close
+        tongueClock += dt * (dy < 2.5f ? 1.6f : 1f) * Mathf.Lerp(1f, speedMul, 0.6f); // faster near the spider and for quicker variants
+    }
+
+    // ---- swept hit check: at 2.5x the spider climbs ~4 u/s, so on a slow frame (low-end phone, hitch) it can step clean
+    // over the thin body between two physics updates and the trigger never fires. Sweep the spider's hit capsule from
+    // last frame to this one and deliver the same trigger the physics would have, so a no-jump crossing always hurts.
+    static playerInteract sweepPI;
+    Vector3 sweepLast; bool sweepPrimed;
+    SphereCollider[] sweepCols;
+    void SweepHitCheck()
+    {
+        if (!sweepPI) sweepPI = FindFirstObjectByType<playerInteract>();
+        var hcap = sweepPI ? sweepPI.HitCollider : null;
+        if (!hcap || !hcap.enabled || !hcap.gameObject.activeInHierarchy) { sweepPrimed = false; return; }
+        Vector3 c1 = hcap.bounds.center;
+        if (!sweepPrimed) { sweepLast = c1; sweepPrimed = true; return; }
+        Vector3 c0 = sweepLast; sweepLast = c1;
+        float step = Vector3.Distance(c0, c1);
+        if (step < 0.04f || step > 1.5f || sweepPI.Invulnerable) return; // small steps: physics triggers are reliable; big jumps = teleport
+        if (sweepCols == null || sweepCols.Length == 0) sweepCols = GetComponentsInChildren<SphereCollider>(true);
+        Vector3 ext = hcap.bounds.extents; float pr = Mathf.Min(ext.x, ext.z); float half = Mathf.Max(0f, ext.y - pr);
+        int n = Mathf.CeilToInt(step / 0.02f);
+        for (int i = 1; i < n; i++) // interior samples only: both end poses are covered by the physics engine
+        {
+            Vector3 c = Vector3.Lerp(c0, c1, (float)i / n);
+            foreach (var sc in sweepCols)
+            {
+                if (!sc || !sc.enabled || !sc.gameObject.activeInHierarchy) continue;
+                Vector3 sp = sc.bounds.center; float sr = sc.bounds.extents.x;
+                Vector3 q = new Vector3(c.x, Mathf.Clamp(sp.y, c.y - half, c.y + half), c.z); // closest point on the capsule core
+                if ((sp - q).sqrMagnitude < (sr + pr) * (sr + pr)) { sweepPI.SendMessage("OnTriggerEnter", sc, SendMessageOptions.DontRequireReceiver); return; }
+            }
+        }
     }
 
     void Pose(float t)
@@ -128,7 +166,7 @@ public class TCSnake : TCEnemy
             Vector3 f = (hp - centers[0]); if (f.sqrMagnitude < 1e-6f) f = fwd[0];
             f = Vector3.ProjectOnPlane(f.normalized, o).normalized;
             float yaw = Mathf.Sin(2f * Mathf.PI * sHead / WaveLen) * 9f;
-            head.position = centers[0] + f * 0.07f + o * 0.012f;
+            head.position = centers[0] + f * 0.035f + o * 0.012f; // neck end tucked inside the skull (no visible cut)
             head.rotation = Quaternion.AngleAxis(yaw, o) * Quaternion.LookRotation(f, o);
         }
         if (tongue)
@@ -162,150 +200,127 @@ public class TCSnake : TCEnemy
         transform.position = Vector3.zero; transform.rotation = Quaternion.identity;
     }
 
-    // ---------------- dynamic faceted tube ----------------
+    // ---------------- dynamic smooth tube (spider-style: smooth normals, skin texture, shader outline) ----------------
+    Vector2[] tubeUV;
     void EnsureMesh()
     {
         if (bodyMesh) return;
-        int ringV = Sides;
-        int smoothCount = Rings * ringV + 1; // + tail tip
-        hullV = new Vector3[smoothCount]; hullN = new Vector3[smoothCount];
-        var smoothTris = new System.Collections.Generic.List<int>();
-        var stripeTris = new System.Collections.Generic.List<int>();
-        var flatList = new System.Collections.Generic.List<int>();
-        var flatStripe = new System.Collections.Generic.List<int>();
+        int row = Sides + 1; // duplicated seam column for UVs (normals welded)
+        int count = Rings * row + 1;
+        hullV = new Vector3[count]; hullN = new Vector3[count]; tubeUV = new Vector2[count];
+        var tris = new System.Collections.Generic.List<int>();
         for (int i = 0; i < Rings - 1; i++)
-        {
-            bool stripe = (i % 4 == 2);
-            for (int s = 0; s < Sides; s++)
+            for (int k = 0; k < Sides; k++)
             {
-                int a = i * ringV + s, b = i * ringV + (s + 1) % Sides, c = a + ringV, d = b + ringV;
-                int[] q = { a, d, c, a, b, d };
-                smoothTris.AddRange(q);
-                (stripe ? flatStripe : flatList).AddRange(q);
+                int a = i * row + k, b = a + 1, c = a + row, d = b + row;
+                tris.Add(a); tris.Add(d); tris.Add(c); tris.Add(a); tris.Add(b); tris.Add(d);
             }
-        }
-        int tip = smoothCount - 1; int last = (Rings - 1) * ringV;
-        for (int s = 0; s < Sides; s++) { int[] q = { last + s, last + (s + 1) % Sides, tip }; smoothTris.AddRange(q); flatList.AddRange(q); }
-        // front cap (hidden by the head, avoids a see-through neck)
-        for (int s = 1; s < Sides - 1; s++) { int[] q = { 0, s + 1, s }; smoothTris.AddRange(q); flatList.AddRange(q); }
-
-        flatSrc = new int[flatList.Count + flatStripe.Count];
-        flatList.CopyTo(flatSrc, 0); flatStripe.CopyTo(flatSrc, flatList.Count);
-        flatV = new Vector3[flatSrc.Length]; flatN = new Vector3[flatSrc.Length];
+        int tip = count - 1, last = (Rings - 1) * row;
+        for (int k = 0; k < Sides; k++) { tris.Add(last + k); tris.Add(last + k + 1); tris.Add(tip); }
+        for (int k = 1; k < Sides - 1; k++) { tris.Add(0); tris.Add(k + 1); tris.Add(k); } // neck cap (inside the head)
+        for (int i = 0; i < Rings; i++) for (int k = 0; k <= Sides; k++) tubeUV[i * row + k] = new Vector2(k / (float)Sides, i / (float)(Rings - 1));
+        tubeUV[tip] = new Vector2(0.5f, 1f);
         bodyMesh = new Mesh { name = "SnakeBody" }; bodyMesh.MarkDynamic();
-        bodyMesh.vertices = flatV; bodyMesh.subMeshCount = 2;
-        var t0 = new int[flatList.Count]; for (int i = 0; i < t0.Length; i++) t0[i] = i;
-        var t1 = new int[flatStripe.Count]; for (int i = 0; i < t1.Length; i++) t1[i] = flatList.Count + i;
-        bodyMesh.SetTriangles(t0, 0); bodyMesh.SetTriangles(t1, 1);
-        hullMesh = new Mesh { name = "SnakeHull" }; hullMesh.MarkDynamic();
-        hullMesh.vertices = hullV; hullMesh.normals = hullN; hullMesh.triangles = smoothTris.ToArray();
+        bodyMesh.vertices = hullV; bodyMesh.normals = hullN; bodyMesh.uv = tubeUV; bodyMesh.SetTriangles(tris, 0);
         if (bodyFilter) bodyFilter.sharedMesh = bodyMesh;
-        if (hullFilter) hullFilter.sharedMesh = hullMesh;
     }
 
     void BuildMesh()
     {
         EnsureMesh();
-        var smooth = new Vector3[hullV.Length];
+        int row = Sides + 1;
         for (int i = 0; i < Rings; i++)
         {
             float u = (float)i / (Rings - 1); float r = RadiusAt(u);
             Vector3 f = fwd[i], up = Vector3.ProjectOnPlane(outN[i], f).normalized, side = Vector3.Cross(f, up);
-            for (int s = 0; s < Sides; s++)
+            for (int k = 0; k <= Sides; k++)
             {
-                float th = 2f * Mathf.PI * (s + (i % 2) * 0.5f) / Sides;
-                Vector3 d = up * Mathf.Cos(th) * 0.82f + side * Mathf.Sin(th); // slightly flattened against the bark
-                smooth[i * Sides + s] = centers[i] + d * r;
-                hullV[i * Sides + s] = centers[i] + d * (r - 0.004f);
-                hullN[i * Sides + s] = d.normalized;
+                float th = 2f * Mathf.PI * k / Sides;
+                Vector3 d = up * Mathf.Cos(th) * 0.84f + side * Mathf.Sin(th); // slightly flattened against the bark
+                hullV[i * row + k] = centers[i] + d * r;
+                hullN[i * row + k] = (up * Mathf.Cos(th) / 0.84f + side * Mathf.Sin(th)).normalized;
             }
         }
-        Vector3 tipP = centers[Rings - 1] - fwd[Rings - 1] * 0.05f;
-        smooth[hullV.Length - 1] = tipP; hullV[hullV.Length - 1] = tipP; hullN[hullV.Length - 1] = -fwd[Rings - 1];
-        for (int i = 0; i < flatSrc.Length; i += 3)
-        {
-            Vector3 a = smooth[flatSrc[i]], b = smooth[flatSrc[i + 1]], c = smooth[flatSrc[i + 2]];
-            Vector3 n = Vector3.Cross(b - a, c - a).normalized;
-            // keep every facet wound outward (tube sides away from the spine, neck cap forward)
-            int ia = flatSrc[i], ib = flatSrc[i + 1], ic = flatSrc[i + 2];
-            Vector3 want;
-            if (ia < Sides && ib < Sides && ic < Sides) want = fwd[0];
-            else { int ring = Mathf.Min(Rings - 1, Mathf.Min(ia, Mathf.Min(ib, ic)) / Sides); want = (a + b + c) / 3f - centers[ring]; }
-            if (Vector3.Dot(n, want) < 0f) { var tmp = b; b = c; c = tmp; n = -n; }
-            flatV[i] = a; flatV[i + 1] = b; flatV[i + 2] = c;
-            flatN[i] = flatN[i + 1] = flatN[i + 2] = n;
-        }
-        bodyMesh.vertices = flatV; bodyMesh.normals = flatN; bodyMesh.RecalculateBounds();
-        hullMesh.vertices = hullV; hullMesh.normals = hullN;
+        int tip = hullV.Length - 1;
+        hullV[tip] = centers[Rings - 1] - fwd[Rings - 1] * 0.045f; hullN[tip] = -fwd[Rings - 1];
+        bodyMesh.vertices = hullV; bodyMesh.normals = hullN;
         if (!hullChecked)
         {
-            hullChecked = true; var tr = hullMesh.triangles;
+            hullChecked = true; var tr = bodyMesh.triangles;
             Vector3 n0 = Vector3.Cross(hullV[tr[1]] - hullV[tr[0]], hullV[tr[2]] - hullV[tr[0]]);
             if (Vector3.Dot(n0, hullN[tr[0]] + hullN[tr[1]] + hullN[tr[2]]) < 0f)
-            { for (int i = 0; i < tr.Length; i += 3) { int t = tr[i + 1]; tr[i + 1] = tr[i + 2]; tr[i + 2] = t; } hullMesh.triangles = tr; }
+            { for (int i = 0; i < tr.Length; i += 3) { int t = tr[i + 1]; tr[i + 1] = tr[i + 2]; tr[i + 2] = t; } bodyMesh.triangles = tr; }
         }
-        hullMesh.RecalculateBounds();
+        bodyMesh.RecalculateBounds();
     }
 
     // ---------------- prefab ----------------
-    public static readonly Color Green = new Color(0.45f, 0.74f, 0.30f), GreenDark = new Color(0.26f, 0.52f, 0.22f),
-        Belly = new Color(0.98f, 0.86f, 0.42f), Blush = new Color(0.85f, 0.48f, 0.40f), TongueRed = new Color(0.651f, 0.012f, 0.129f); // palette crimson #A60321
-
-    public static GameObject CreateSnakePrefab(Transform parent)
+    public static readonly Color TongueRed = new Color(0.651f, 0.012f, 0.129f); // palette crimson #A60321
+    struct Skin { public Color back, blotch, belly, head, pupil, blush; }
+    static Skin SkinFor(Variant v)
     {
-        var root = new GameObject("Snake_Enemy");
+        switch (v)
+        {
+            case Variant.Yellow: return new Skin { back = new Color(1f, 0.84f, 0.20f), blotch = new Color(0.88f, 0.50f, 0.08f), belly = new Color(1f, 0.97f, 0.78f), head = new Color(1f, 0.82f, 0.22f), pupil = new Color(0.30f, 0.78f, 1f), blush = new Color(1f, 0.55f, 0.35f) };
+            case Variant.Red: return new Skin { back = new Color(0.93f, 0.22f, 0.17f), blotch = new Color(0.48f, 0.05f, 0.08f), belly = new Color(1f, 0.82f, 0.56f), head = new Color(0.92f, 0.24f, 0.18f), pupil = new Color(1f, 0.88f, 0.22f), blush = new Color(1f, 0.55f, 0.55f) };
+            default: return new Skin { back = new Color(0.50f, 0.82f, 0.30f), blotch = new Color(0.20f, 0.50f, 0.20f), belly = new Color(1f, 0.92f, 0.52f), head = new Color(0.52f, 0.83f, 0.32f), pupil = new Color(1f, 0.82f, 0.16f), blush = new Color(1f, 0.55f, 0.45f) };
+        }
+    }
+
+    public static GameObject CreateSnakePrefab(Transform parent) => CreateSnakePrefab(parent, Variant.Green);
+
+    public static GameObject CreateSnakePrefab(Transform parent, Variant variant)
+    {
+        var sk = SkinFor(variant); string vn = variant.ToString();
+        var root = new GameObject("Snake_" + vn);
         if (parent) root.transform.SetParent(parent, false);
         var sn = root.AddComponent<TCSnake>();
-        sn.enemyType = TCEnemyType.Snake; sn.radius = TrunkR;
+        sn.enemyType = TCEnemyType.Snake; sn.radius = TrunkR; sn.variant = variant; sn.speedMul = SpeedMulFor(variant);
         var rb = root.AddComponent<Rigidbody>(); rb.isKinematic = true; rb.useGravity = false;
 
         var body = new GameObject("Body"); body.transform.SetParent(root.transform, false);
         sn.bodyFilter = body.AddComponent<MeshFilter>();
         var mr = body.AddComponent<MeshRenderer>();
-        mr.sharedMaterials = new[] { TCLowPoly.Mat(Green, 0.45f, 1.05f), TCLowPoly.Mat(Belly, 0.40f, 1.05f) };
+        mr.sharedMaterial = TCToon.Mat("snake_body_" + vn, Color.white, TCToon.SnakeSkin("tc_snake_skin_" + vn, sk.back, sk.blotch, sk.belly, 8));
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; mr.receiveShadows = false;
-        var hull = new GameObject("BodyHull"); hull.transform.SetParent(root.transform, false);
-        sn.hullFilter = hull.AddComponent<MeshFilter>();
-        var hr = hull.AddComponent<MeshRenderer>(); hr.sharedMaterial = TCLowPoly.HullMat(TCLowPoly.Ink, 1.25f);
-        hr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; hr.receiveShadows = false;
         sn.model = body.transform;
 
-        // head (local: +Z forward, +Y away from bark)
+        // head (local: +Z forward, +Y away from bark): rounded spade skull, spider eyes on top, smiling chin
+        var headMat = TCToon.Mat("snake_head_" + vn, sk.head);
+        var bellyMat = TCToon.Mat("snake_belly_" + vn, sk.belly);
+        var darkMat = TCToon.Mat("snake_dark_" + vn, sk.blotch);
         var head = new GameObject("Head").transform; head.SetParent(root.transform, false); sn.head = head;
-        var skull = TCLowPoly.Ellipsoid(8, 6, new Vector3(0.072f, 0.05f, 0.098f), 0.03f, 7, t => Mathf.Lerp(1f, 0.92f, t));
-        TCLowPoly.Part("Skull", head, skull, TCLowPoly.Mat(Green, 0.45f, 1.05f), new Vector3(0, 0, 0.0f), Vector3.zero);
-        var jaw = TCLowPoly.Ellipsoid(7, 5, new Vector3(0.06f, 0.026f, 0.08f), 0f, 3);
-        TCLowPoly.Part("Chin", head, jaw, TCLowPoly.Mat(Belly, 0.35f, 1.05f), new Vector3(0, -0.022f, 0.012f), Vector3.zero);
-        var patch = TCLowPoly.Ellipsoid(6, 4, new Vector3(0.03f, 0.012f, 0.05f), 0f, 5);
-        TCLowPoly.Part("Crown", head, patch, TCLowPoly.Mat(GreenDark, 0.4f, 1.0f), new Vector3(0, 0.045f, -0.02f), Vector3.zero, null, false);
-        var eyeW = TCLowPoly.Ellipsoid(8, 6, Vector3.one * 0.03f, 0f, 2);
-        var eyeB = TCLowPoly.Ellipsoid(7, 5, Vector3.one * 0.019f, 0f, 2);
-        var spark = TCLowPoly.Ellipsoid(5, 4, Vector3.one * 0.0075f, 0f, 2);
-        var cheek = TCLowPoly.Ellipsoid(6, 4, new Vector3(0.016f, 0.008f, 0.012f), 0f, 4);
+        TCToon.Part("Skull", head, TCToon.Lathe("tc_snake_skull", -0.065f, 0.112f,
+            a => 0.066f * Mathf.Pow(Mathf.Sin(a * Mathf.PI), 0.42f) * Mathf.Lerp(1.0f, 0.72f, a * a), 1.16f, 0.62f, a => new Vector2(0, 0.010f * Mathf.Sin(a * Mathf.PI))),
+            headMat, new Vector3(0, 0.006f, 0f), Vector3.zero, Vector3.one);
+        TCToon.Part("Chin", head, TCToon.Lathe("tc_snake_chin", -0.05f, 0.09f, a => Mathf.Pow(Mathf.Sin(a * Mathf.PI), 0.55f) * 0.058f, 1.05f, 0.45f),
+            bellyMat, new Vector3(0, -0.024f, 0.012f), Vector3.zero, Vector3.one);
+        TCToon.Ball("Crown", head, darkMat, new Vector3(0, 0.04f, -0.035f), new Vector3(0.022f, 0.008f, 0.03f));
         for (int sgn = -1; sgn <= 1; sgn += 2)
         {
-            var e = TCLowPoly.Part(sgn < 0 ? "EyeL" : "EyeR", head, eyeW, TCLowPoly.Mat(Color.white, 0.2f, 1.1f), new Vector3(sgn * 0.034f, 0.042f, 0.036f), Vector3.zero);
-            TCLowPoly.Part("Pupil", e, eyeB, TCLowPoly.Mat(new Color(0.08f, 0.05f, 0.05f), 0.1f, 1f), new Vector3(sgn * 0.004f, 0.014f, 0.01f), Vector3.zero, null, false);
-            TCLowPoly.Part("Spark", e, spark, TCLowPoly.Mat(Color.white, 0f, 1.2f), new Vector3(sgn * 0.006f + 0.004f, 0.03f, 0.006f), Vector3.zero, null, false);
-            TCLowPoly.Part("Cheek", head, cheek, TCLowPoly.Mat(Blush, 0.2f, 1.05f), new Vector3(sgn * 0.058f, 0.006f, 0.05f), new Vector3(0, sgn * 30f, 0), null, false);
+            string side = sgn < 0 ? "L" : "R";
+            TCToon.Ball("Brow" + side, head, headMat, new Vector3(sgn * 0.037f, 0.036f, 0.028f), new Vector3(0.034f, 0.026f, 0.034f));
+            TCToon.Eye("Eye" + side, head, new Vector3(sgn * 0.037f, 0.058f, 0.03f), new Vector3(sgn * 0.36f, 0.86f, 0.38f), 0.030f, sk.pupil, 0.6f);
+            TCToon.Ball("Nostril" + side, head, TCToon.Mat("snake_nostril", TCToon.EyeBall, null, 0f, 0f, 0f), new Vector3(sgn * 0.016f, 0.022f, 0.098f), new Vector3(0.0055f, 0.004f, 0.004f));
+            TCToon.Ball("Cheek" + side, head, TCToon.Mat("snake_blush_" + vn, sk.blush, null, 0f, 0f, 0f), new Vector3(sgn * 0.058f, 0.004f, 0.05f), new Vector3(0.016f, 0.008f, 0.012f), new Vector3(0, sgn * 30f, 0));
         }
-        // forked tongue
-        var tg = new GameObject("Tongue").transform; tg.SetParent(head, false); tg.localPosition = new Vector3(0, -0.012f, 0.092f); sn.tongue = tg;
-        // flexible tongue: 4-joint chain (each joint bends up/down with a lagging sine) ending in a forked tip
-        var tm = TCLowPoly.Mat(TongueRed, 0.2f, 1.1f);
+        // forked tongue: 4-joint flexible chain (each joint bends up/down with a lagging sine) ending in a forked tip
+        var tg = new GameObject("Tongue").transform; tg.SetParent(head, false); tg.localPosition = new Vector3(0, -0.012f, 0.098f); sn.tongue = tg;
+        var tm = TCToon.Mat("snake_tongue", TongueRed, null, 0.1f, 1.0f, 0f, null, 0.95f);
         Transform link = tg; var joints = new Transform[TongueJoints];
         for (int j = 0; j < TongueJoints; j++)
         {
             var jt = new GameObject("TJ" + j).transform; jt.SetParent(link, false); jt.localPosition = j == 0 ? Vector3.zero : new Vector3(0, 0, TongueSeg);
             float r0 = Mathf.Lerp(0.0078f, 0.0052f, j / (float)TongueJoints), r1 = Mathf.Lerp(0.0078f, 0.0052f, (j + 1) / (float)TongueJoints);
-            TCLowPoly.Part("Seg", jt, TCLowPoly.Cone(4, r0, r1, TongueSeg + 0.002f), tm, Vector3.zero, new Vector3(90, 0, 0), null, false);
+            TCToon.Part("Seg", jt, TCToon.Lathe("tc_snake_tseg" + j, -0.002f, TongueSeg + 0.002f, a => Mathf.Lerp(r0, r1, a), 1f, 0.75f, null, 10, 4), tm, Vector3.zero, Vector3.zero, Vector3.one);
             joints[j] = jt; link = jt;
         }
-        var fork = TCLowPoly.Cone(4, 0.0055f, 0.0f, 0.036f);
+        var fork = TCToon.Lathe("tc_snake_fork", 0f, 0.036f, a => 0.0055f * Mathf.Pow(1f - a, 0.8f), 1f, 0.75f, null, 10, 6);
         var tipT = new GameObject("Fork").transform; tipT.SetParent(link, false); tipT.localPosition = new Vector3(0, 0, TongueSeg);
-        TCLowPoly.Part("ForkL", tipT, fork, tm, Vector3.zero, new Vector3(90, 0, 32), null, false);
-        TCLowPoly.Part("ForkR", tipT, fork, tm, Vector3.zero, new Vector3(90, 0, -32), null, false);
+        TCToon.Part("ForkL", tipT, fork, tm, Vector3.zero, new Vector3(0, -30f, 0), Vector3.one);
+        TCToon.Part("ForkR", tipT, fork, tm, Vector3.zero, new Vector3(0, 30f, 0), Vector3.one);
         sn.tongueJoints = joints;
+        root.AddComponent<TCBlink>();
 
         // hit spheres: head + body (tail tip excluded so only the visible thick body hurts)
         var hp = new Transform[HitU.Length];
