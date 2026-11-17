@@ -190,12 +190,8 @@ public static class TCPolish2Bake
             foreach (var p in paths)
             {
                 var b = FindPath(p) as RectTransform; if (!b) { Debug.LogWarning("TCPolish2Bake: no " + p); continue; }
-                var mask = Ensure<Mask>(b.gameObject); mask.showMaskGraphic = true;
-                var band = Child(b, "Shine"); band.SetAsLastSibling();
-                var i = Ensure<Image>(band.gameObject); i.sprite = shine; i.color = new Color(1, 1, 1, 0.55f); i.raycastTarget = false;
-                band.anchorMin = band.anchorMax = new Vector2(0.5f, 0.5f); band.pivot = new Vector2(0.5f, 0.5f);
-                band.sizeDelta = new Vector2(70, b.rect.height * 1.8f); band.localRotation = Quaternion.Euler(0, 0, -18);
-                var s = Ensure<TCShine>(b.gameObject); s.band = band;
+                // polish3: shine band lives under a ShineClip mask child (see TCTheme.Shine) so it never paints on the drop shadow
+                var btn = b.GetComponent<Button>(); if (btn) TCTheme.Shine(btn);
                 EditorUtility.SetDirty(b.gameObject);
             }
             EditorSceneManager.MarkSceneDirty(sc); EditorSceneManager.SaveScene(sc);

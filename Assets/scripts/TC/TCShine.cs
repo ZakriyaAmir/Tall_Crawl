@@ -6,12 +6,15 @@ public class TCShine : MonoBehaviour
 {
     public RectTransform band;
     public float interval = 2.6f, sweep = 0.55f, delay = 0.8f;
+    [Tooltip("polish3: keep the band ~1.9x the button height so the tilted sweep always covers the face.")] public bool autoSize = true;
     float t;
     void OnEnable() { t = -delay; Place(-1); }
     void Place(float k)
     {
         if (!band) return;
-        var r = (RectTransform)transform; float w = r.rect.width * 0.5f + band.rect.width;
+        var r = (RectTransform)transform;
+        if (autoSize && r.rect.height > 1f && Mathf.Abs(band.sizeDelta.y - r.rect.height * 1.9f) > 1f) band.sizeDelta = new Vector2(Mathf.Max(60f, r.rect.height * 0.45f), r.rect.height * 1.9f);
+        float w = r.rect.width * 0.5f + band.rect.width;
         band.anchoredPosition = new Vector2(Mathf.Lerp(-w, w, k), 0);
     }
     void Update()

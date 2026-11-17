@@ -1326,7 +1326,7 @@ public class TCWebBonus : MonoBehaviour
         swingPopCg = swingPopRt.gameObject.AddComponent<CanvasGroup>();
         swingPopCg.alpha = 0f;
         swingPopCg.blocksRaycasts = false;
-        swingPopLabel = TCUI.Label("Text", swingPopRt, "+5000m", 96, new Color(1f, 0.9f, 0.25f));
+        swingPopLabel = TCUI.Label("Text", swingPopRt, "+5000m", 96, TCUI.Cream); // polish3 palette
         TCUI.Stretch(swingPopLabel.rectTransform, 10, 10, 10, 10);
         TCUI.Outline(swingPopLabel, 0.4f);
         swingPopLabel.enableAutoSizing = true;

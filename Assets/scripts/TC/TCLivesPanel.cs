@@ -133,7 +133,7 @@ public class TCLivesPanel : MonoBehaviour
             var r = background.rectTransform;
             if (shake > 0) { shake -= dt; r.anchoredPosition = bgBasePos + new Vector2(Mathf.Sin(t * 70f) * 9f, Mathf.Cos(t * 55f) * 4f) * Mathf.Clamp01(shake / 0.35f); }
             else if (r.anchoredPosition != bgBasePos) r.anchoredPosition = bgBasePos;
-            background.color = danger ? Color.Lerp(bgBaseColor, new Color(1f, 0.82f, 0.84f, bgBaseColor.a), 0.5f + 0.5f * Beat(t, 0.62f)) : bgBaseColor;
+            background.color = danger ? Color.Lerp(bgBaseColor, new Color(TCUI.Coral.r, TCUI.Coral.g, TCUI.Coral.b, bgBaseColor.a), 0.5f + 0.5f * Beat(t, 0.62f)) : bgBaseColor;
         }
     }
 }

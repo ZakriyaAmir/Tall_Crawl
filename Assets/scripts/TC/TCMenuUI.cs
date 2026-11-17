@@ -41,6 +41,9 @@ public class TCMenuUI : MonoBehaviour
         BuildBackground();
         safe = TCUI.SafeRoot(canvas.transform);
         BuildMain(); BuildSkins(); BuildShop(); BuildSettings(); BuildDaily(); BuildConsent(); BuildToast();
+        // polish3 palette theme: styles anything not already themed in the baked scene (never overrides editor edits)
+        TCTheme.ThemeTree(canvas.transform);
+        TCTheme.MenuBackground(canvas.transform.Find("BG"));
     }
     void Co(IEnumerator e) { if (Application.isPlaying) StartCoroutine(e); }
     void OnDestroy() { TCSave.Changed -= Refresh; if (rt) rt.Release(); }
@@ -631,13 +634,13 @@ public class TCMenuUI : MonoBehaviour
 
         var play = TCUI.Btn("Play", safe, "PLAY", TCUI.Mint, () => StartCoroutine(LoadGame()), 96, TCUI.Icon("play")); // no game-start sound
         TCUI.Place((RectTransform)play.transform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(640, 190));
-        { var glow = TCUI.Img("Glow", safe, new Color(1f, 0.95f, 0.55f, 0.55f), TCUI.Circle); glow.raycastTarget = false;
+        { var glow = TCUI.Img("Glow", safe, new Color(TCUI.CreamLight.r, TCUI.CreamLight.g, TCUI.CreamLight.b, 0.55f), TCUI.Circle); glow.raycastTarget = false;
           TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(820, 290)); if (TCUI.Fresh(glow)) glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1); }
 
         SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 110), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel, pop: true, animateContents: false); });
         SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 110), () => TCUI.Show(this, shopPanel, pop: true, animateContents: false));
         var daily = SmallBtn("Daily", "DAILY", TCUI.Sky, "gift", new Vector2(330, 110), OpenDaily);
-        dailyBadge = TCUI.Img("Badge", daily.transform, TCUI.Hex("#FF6F8E"), TCUI.Circle); TCUI.Place(dailyBadge.rectTransform, new Vector2(1, 1), new Vector2(-10, -10), new Vector2(46, 46));
+        dailyBadge = TCUI.Img("Badge", daily.transform, TCUI.Crimson, TCUI.Circle); TCUI.Place(dailyBadge.rectTransform, new Vector2(1, 1), new Vector2(-10, -10), new Vector2(46, 46));
     }
     Button SmallBtn(string n, string text, Color c, string icon, Vector2 pos, System.Action a)
     {
@@ -651,7 +654,7 @@ public class TCMenuUI : MonoBehaviour
         var t = TCUI.Label("Value", pill.transform, "0", 48, TCUI.Cocoa, TextAlignmentOptions.Right); TCUI.Stretch(t.rectTransform, 90, 24, 0, 0); return t;
     }
     IEnumerator Bob(RectTransform r, float amp, float speed) { var p = r.anchoredPosition; while (r) { r.anchoredPosition = p + new Vector2(0, Mathf.Sin(Time.unscaledTime * speed) * amp); yield return null; } }
-    IEnumerator Glow(Image g) { while (g) { float k = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3f); g.color = new Color(1f, 0.95f, 0.55f, 0.25f + 0.35f * k); g.transform.localScale = Vector3.one * (0.95f + 0.1f * k); yield return null; } }
+    IEnumerator Glow(Image g) { while (g) { float k = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3f); g.color = new Color(TCUI.CreamLight.r, TCUI.CreamLight.g, TCUI.CreamLight.b, 0.25f + 0.35f * k); g.transform.localScale = Vector3.one * (0.95f + 0.1f * k); yield return null; } }
     IEnumerator Breathe(Transform t) { yield return new WaitForSecondsRealtime(1.6f); while (t) { float k = Mathf.Sin(Time.unscaledTime * 3f) * 0.04f; t.localScale = new Vector3(1 + k, 1 - k * 0.6f, 1); yield return null; } }
     IEnumerator Pulse(Transform t) { var ic = t.Find("Icon"); while (ic) { ic.localScale = Vector3.one * (1 + 0.12f * Mathf.Sin(Time.unscaledTime * 5)); yield return null; } }
     bool loadingGame;
@@ -664,8 +667,8 @@ public class TCMenuUI : MonoBehaviour
     {
         if (loadingGame) yield break;
         loadingGame = true;
-        var fade = TCUI.Rect("Fade", canvas.transform); TCUI.Stretch(fade); var img = fade.gameObject.AddComponent<Image>(); img.color = new Color(1, 0.97f, 0.93f, 0);
-        for (float t = 0; t < 0.3f; t += Time.unscaledDeltaTime) { img.color = new Color(1, 0.97f, 0.93f, t / 0.3f); yield return null; }
+        var fade = TCUI.Rect("Fade", canvas.transform); TCUI.Stretch(fade); var img = fade.gameObject.AddComponent<Image>(); img.color = new Color(TCUI.Cream.r, TCUI.Cream.g, TCUI.Cream.b, 0);
+        for (float t = 0; t < 0.3f; t += Time.unscaledDeltaTime) { img.color = new Color(TCUI.Cream.r, TCUI.Cream.g, TCUI.Cream.b, t / 0.3f); yield return null; }
         SceneManager.LoadScene("gameplay");
     }
 
@@ -886,7 +889,7 @@ public class TCMenuUI : MonoBehaviour
         if (head) SetRect(head, new Vector2(0.5f, 1f), Vector2.zero, new Vector2(680, 115));
 
         // Upgrades Section
-        var h1 = TCUI.Label("H", card, "UPGRADES", 36, TCUI.Peach);
+        var h1 = TCUI.Label("H", card, "UPGRADES", 36, TCUI.Crimson);
         SetRect(h1.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -92), new Vector2(880, 38));
         h1.fontSize = 36; h1.fontStyle = FontStyles.Bold;
 
@@ -936,7 +939,7 @@ public class TCMenuUI : MonoBehaviour
         }
 
         // Gems Section (10 GEMS = $1)
-        var hg = TCUI.Label("HG", card, "GEMS  (10 GEMS = $1)", 36, TCUI.Peach);
+        var hg = TCUI.Label("HG", card, "GEMS  (10 GEMS = $1)", 36, TCUI.Crimson);
         SetRect(hg.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -766), new Vector2(880, 38));
         hg.fontSize = 36; hg.fontStyle = FontStyles.Bold;
 
@@ -959,7 +962,7 @@ public class TCMenuUI : MonoBehaviour
         }
 
         // Coin Packs & More Section
-        var h2 = TCUI.Label("H2", card, "COIN PACKS & MORE", 36, TCUI.Peach);
+        var h2 = TCUI.Label("H2", card, "COIN PACKS & MORE", 36, TCUI.Crimson);
         SetRect(h2.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -970), new Vector2(880, 38));
         h2.fontSize = 36; h2.fontStyle = FontStyles.Bold;
 
@@ -1043,7 +1046,7 @@ public class TCMenuUI : MonoBehaviour
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (!card.Find("CheatHint"))
         {
-            cheatHint = TCUI.Label("CheatHint", card, "", 22, new Color(0.3f, 0.25f, 0.28f, 0.45f));
+            cheatHint = TCUI.Label("CheatHint", card, "", 22, new Color(TCUI.Brown.r, TCUI.Brown.g, TCUI.Brown.b, 0.45f));
             TCUI.Place(cheatHint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, -105), new Vector2(700, 32));
             cheatHint.raycastTarget = false;
         }
@@ -1097,7 +1100,13 @@ public class TCMenuUI : MonoBehaviour
         refreshers.Add(() =>
         {
             bool avail = TCSave.DailyAvailable(out int day);
-            for (int i = 0; i < 7; i++) dailyCells[i].color = i < day ? TCUI.Mint : i == day && avail ? TCUI.Butter : Color.white;
+            for (int i = 0; i < 7; i++)
+            {
+                // polish3: claimed = tan, today's reward = crimson highlight, upcoming = cream; labels stay readable
+                var face = i < day ? TCUI.Tan : i == day && avail ? TCUI.Crimson : TCUI.CreamLight;
+                dailyCells[i].color = face; TCTheme.TextOnFace(dailyCells[i].transform, face);
+                foreach (var o in dailyCells[i].GetComponents<UnityEngine.UI.Outline>()) o.effectColor = i == day && avail ? TCUI.CrimsonDark : TCUI.Tan;
+            }
             claimBtn.interactable = avail;
             dblBtn.interactable = avail;
             if (claimBtnText) claimBtnText.text = avail ? "CLAIM" : "CLAIMED";
@@ -1132,7 +1141,7 @@ public class TCMenuUI : MonoBehaviour
     {
         var r = TCUI.Img("Toast", canvas.transform, TCUI.Cocoa); TCUI.Place(r.rectTransform, new Vector2(0.5f, 0.62f), Vector2.zero, new Vector2(760, 110));
         toastGroup = TCUI.Add<CanvasGroup>(r.gameObject); toastGroup.alpha = 0; toastGroup.blocksRaycasts = false;
-        toastText = TCUI.Label("T", r.transform, "", 44, Color.white); TCUI.Stretch(toastText.rectTransform);
+        toastText = TCUI.Label("T", r.transform, "", 44, TCUI.Cream); TCUI.Stretch(toastText.rectTransform);
     }
     Coroutine toastCo;
     void Toast(string msg) { Toast(msg, false); }
@@ -1147,9 +1156,8 @@ public class TCMenuUI : MonoBehaviour
         toastGroup.transform.SetAsLastSibling();
         var img = toastGroup.GetComponent<Image>();
         var original = img ? img.color : TCUI.Cocoa;
-        if (img && flashy) img.color = TCUI.Butter;
-        if (flashy) toastText.color = TCUI.Cocoa;
-        else toastText.color = Color.white;
+        if (img && flashy) img.color = TCUI.Crimson;
+        toastText.color = TCUI.Cream;
         if (flashy) StartCoroutine(TCUI.Punch(toastGroup.transform, 0.45f, 0.4f));
         if (flashy) TCSfx.Play("celebrate", 0.9f);
         for (float t = 0; t < 0.2f; t += Time.unscaledDeltaTime) { toastGroup.alpha = t / 0.2f; yield return null; }
@@ -1158,7 +1166,7 @@ public class TCMenuUI : MonoBehaviour
         for (float t = 0; t < 0.3f; t += Time.unscaledDeltaTime) { toastGroup.alpha = 1 - t / 0.3f; yield return null; }
         toastGroup.alpha = 0;
         if (img) img.color = original;
-        toastText.color = Color.white;
+        toastText.color = TCUI.Cream;
     }
 
     bool FeedCheat(TCCheatCode.Kind kind)

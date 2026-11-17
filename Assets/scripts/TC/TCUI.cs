@@ -9,14 +9,18 @@ using UnityEngine.UI;
 /// feedback, and fade/slide/pop panel transitions (unscaled time, so they work while paused).
 public static class TCUI
 {
-    public static readonly Color Cream = Hex("#FFF7EE"), Cocoa = Hex("#4A3B3F"), Mint = Hex("#5EE0A8"), Peach = Hex("#FF9F7A"),
-        Blush = Hex("#FF9EC0"), Sky = Hex("#6FC3FF"), Butter = Hex("#FFD54F"), Lilac = Hex("#CFC6F5"), White = Color.white,
-        Dim = new Color(0.16f, 0.12f, 0.14f, 0.55f), Grey = Hex("#D9D2CC");
+    // polish3 palette (Zakriya's five colours) + tints/shades derived from them
+    public static readonly Color Crimson = Hex("#A60321"), Cream = Hex("#F2E9D8"), Brown = Hex("#8C5C32"), Tan = Hex("#D9A577"), Coral = Hex("#D97B66"),
+        Ink = Hex("#4A311B"), CrimsonDark = Hex("#710216"), CreamLight = Hex("#F8F3EA"), TanLight = Hex("#E8CAA9"), CoralDark = Hex("#A95D4D");
+    // Legacy role names (pre-polish3 pastels) now resolve to palette roles so every caller stays in the palette family:
+    // Mint = primary, Peach/Blush/Sky = secondary, Butter/Lilac/Grey = tertiary, Cocoa = ink.
+    public static readonly Color Cocoa = Ink, Mint = Crimson, Peach = Coral, Blush = Coral, Sky = Coral, Butter = Tan, Lilac = Tan, White = Color.white,
+        Dim = new Color(0.29f, 0.19f, 0.11f, 0.6f), Grey = Tan;
     public static Color Hex(string h) { ColorUtility.TryParseHtmlString(h, out var c); return c; }
     public static float Luma(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
-    /// Dark text on pastel / light faces, white text on dark faces.
-    public static Color TextOn(Color face) => Luma(face) > 0.58f ? Cocoa : Color.white;
-    public static Color OutlineOn(Color face) => Luma(face) > 0.58f ? new Color(0.16f, 0.11f, 0.13f, 1f) : Cocoa;
+    /// Auto-contrast (polish3): cream text on dark faces (crimson, brown), deep-brown ink on light faces (cream, tan, coral).
+    public static Color TextOn(Color face) => TCTheme.TextOn(face);
+    public static Color OutlineOn(Color face) => TCTheme.LightText(face) ? Ink : Ink;
 
     /// Recolour every TMP label under a button (or a whole panel) so it stays readable on its face colour.
     public static void ApplyReadable(Transform root)
@@ -28,29 +32,7 @@ public static class TCUI
             if (img) ApplyReadable(b.transform, img.color);
         }
     }
-    public static void ApplyReadable(Transform root, Color face)
-    {
-        if (!root) return;
-        var col = TextOn(face);
-        var ol = OutlineOn(face);
-        bool light = Luma(face) > 0.58f;
-        foreach (var tmp in root.GetComponentsInChildren<TextMeshProUGUI>(true))
-        {
-            tmp.color = col;
-            try
-            {
-                var m = tmp.fontMaterial;
-                m.EnableKeyword("OUTLINE_ON");
-                m.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.22f);
-                m.SetColor(ShaderUtilities.ID_OutlineColor, ol);
-            }
-            catch (Exception) { }
-            var sh = tmp.GetComponent<Shadow>();
-            if (!sh) sh = tmp.gameObject.AddComponent<Shadow>();
-            sh.effectColor = new Color(0f, 0f, 0f, light ? 0.32f : 0.45f);
-            sh.effectDistance = new Vector2(0, -3);
-        }
-    }
+    public static void ApplyReadable(Transform root, Color face) => TCTheme.TextOnFace(root, face);
 
     static Sprite _round, _circle;
     public static Sprite Round { get { if (!_round && !Readable) _round = Resources.Load<Sprite>("TCUI/round"); if (!_round) _round = MakeRound(64, 26); return _round; } }
@@ -226,22 +208,22 @@ public static class TCUI
             case "gift":
             {
                 var b = new Vector2(Mathf.Abs(p.x) - 0.7f, Mathf.Abs(p.y + 0.15f) - 0.55f);
-                var c = Fill(Mathf.Max(b.x, b.y), Hex("#FF8FA8"));
-                c = Over(c, Fill(Mathf.Max(Mathf.Abs(p.x) - 0.12f, b.y), Hex("#FFE08A")));
-                c = Over(c, Fill(Mathf.Max(Mathf.Abs(p.y - 0.12f) - 0.1f, b.x), Hex("#FFE08A")));
-                return Over(c, Fill(Mathf.Min(Vector2.Distance(p, new Vector2(-0.22f, 0.55f)), Vector2.Distance(p, new Vector2(0.22f, 0.55f))) - 0.2f, Hex("#FFE08A")));
+                var c = Fill(Mathf.Max(b.x, b.y), Hex("#F2E9D8"));
+                c = Over(c, Fill(Mathf.Max(Mathf.Abs(p.x) - 0.12f, b.y), Hex("#A60321")));
+                c = Over(c, Fill(Mathf.Max(Mathf.Abs(p.y - 0.12f) - 0.1f, b.x), Hex("#A60321")));
+                return Over(c, Fill(Mathf.Min(Vector2.Distance(p, new Vector2(-0.22f, 0.55f)), Vector2.Distance(p, new Vector2(0.22f, 0.55f))) - 0.2f, Hex("#A60321")));
             }
             case "bag":
             {
                 var b = new Vector2(Mathf.Abs(p.x) - 0.62f, Mathf.Abs(p.y + 0.2f) - 0.55f);
                 float handle = Mathf.Abs(Vector2.Distance(p, new Vector2(0, 0.38f)) - 0.3f) - 0.08f; if (p.y < 0.38f) handle = 9;
-                return Over(Fill(handle, Cocoa), Over(Fill(Mathf.Max(b.x, b.y) - 0.06f, Cocoa), Fill(Mathf.Max(b.x, b.y) + 0.0f, Hex("#FFF6EC"))));
+                return Over(Fill(handle, Cocoa), Over(Fill(Mathf.Max(b.x, b.y) - 0.06f, Cocoa), Fill(Mathf.Max(b.x, b.y) + 0.0f, Hex("#F2E9D8"))));
             }
             case "shirt":
             {
                 var b = new Vector2(Mathf.Abs(p.x) - 0.45f, Mathf.Abs(p.y + 0.1f) - 0.6f);
                 var s = new Vector2(Mathf.Abs(Mathf.Abs(p.x) - 0.6f) - 0.2f, Mathf.Abs(p.y - 0.25f) - 0.25f);
-                return Fill(Mathf.Min(Mathf.Max(b.x, b.y), Mathf.Max(s.x, s.y)), Hex("#8FDCC4"));
+                return Fill(Mathf.Min(Mathf.Max(b.x, b.y), Mathf.Max(s.x, s.y)), Hex("#F2E9D8"));
             }
             case "home":
             {
@@ -359,13 +341,11 @@ public static class TCUI
             bb.onClick.AddListener(() => { TCAudio.Click(); onClick?.Invoke(); });
             return bb;
         }
-        var shadow = Img("Shadow", rt, Color.Lerp(face, Cocoa, 0.35f)); Stretch(shadow.rectTransform, 0, 0, 10, -10);
+        var shadow = Img("Shadow", rt, new Color(Ink.r, Ink.g, Ink.b, 0.55f)); Stretch(shadow.rectTransform, 0, 0, 10, -10);
         var img = rt.gameObject.AddComponent<Image>(); img.sprite = Round; img.type = Image.Type.Sliced; img.color = face;
-        var rim = rt.gameObject.AddComponent<UnityEngine.UI.Outline>(); rim.effectColor = Color.Lerp(face, Cocoa, 0.6f); rim.effectDistance = new Vector2(5, -5); // thick hypercasual rim
         var b = rt.gameObject.AddComponent<Button>(); b.targetGraphic = img;
-        var cb = b.colors; cb.pressedColor = new Color(0.92f, 0.92f, 0.92f); cb.disabledColor = new Color(0.8f, 0.8f, 0.8f, 0.7f); b.colors = cb;
         shadow.transform.SetAsFirstSibling();
-        // face is the root image; shadow sits behind via a separate child under it, so we render shadow first using a nested canvas trick-free approach:
+        // face is the root image; the shadow is a sibling right behind it that follows the button's rect
         shadow.transform.SetParent(rt.parent, false); shadow.transform.SetSiblingIndex(rt.GetSiblingIndex());
         shadow.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
         var follow = shadow.gameObject.AddComponent<TCFollowRect>(); follow.target = rt; follow.offset = new Vector2(0, -10);
@@ -377,12 +357,11 @@ public static class TCUI
         }
         if (!string.IsNullOrEmpty(text))
         {
-            var l = Label("Text", rt, text, fontSize, TextOn(face)); Stretch(l.rectTransform, icon ? fontSize * 1.9f : 16, 16, 6, 6); Outline(l, 0.28f);
-            try { var m = l.fontMaterial; m.SetColor(ShaderUtilities.ID_OutlineColor, OutlineOn(face)); } catch (Exception) { }
-            var sh = l.gameObject.AddComponent<Shadow>(); sh.effectColor = new Color(0, 0, 0, Luma(face) > 0.58f ? 0.32f : 0.45f); sh.effectDistance = new Vector2(0, -3);
+            var l = Label("Text", rt, text, fontSize, TextOn(face)); Stretch(l.rectTransform, icon ? fontSize * 1.9f : 16, 16, 6, 6);
             l.enableAutoSizing = true; l.fontSizeMax = fontSize; l.fontSizeMin = fontSize * 0.5f;
         }
-        rt.gameObject.AddComponent<TCPress>();
+        // polish3: rim, deep-brown drop shadow, bevel/gloss, readable text, squash press, shine on primary CTAs
+        TCTheme.StyleButton(b, face, TCTheme.PrimaryNames.Contains(name) && face == Crimson);
         b.onClick.AddListener(() => { TCAudio.Click(); onClick?.Invoke(); });
         return b;
     }
@@ -402,7 +381,7 @@ public static class TCUI
         for (int i = card.childCount - 1; i >= 0; i--)
         {
             var child = card.GetChild(i);
-            if (child.name != "Header")
+            if (child.name != "Header" && !child.name.StartsWith("Deco"))
                 UnityEngine.Object.Destroy(child.gameObject);
         }
 
@@ -464,10 +443,9 @@ public static class TCUI
         var dim = Img("Dim", root, Dim); Stretch(dim.rectTransform); dim.raycastTarget = true; dim.sprite = null; dim.type = Image.Type.Simple;
         card = Img("Card", root, Cream).rectTransform; Place(card, new Vector2(0.5f, 0.5f), new Vector2(0, 0), size);
         card.GetComponent<Image>().raycastTarget = true;
-        { var o = card.gameObject.AddComponent<UnityEngine.UI.Outline>(); o.effectColor = Hex("#E8CDBF"); o.effectDistance = new Vector2(7, -7); var sh = card.gameObject.AddComponent<UnityEngine.UI.Shadow>(); sh.effectColor = new Color(0, 0, 0, 0.18f); sh.effectDistance = new Vector2(0, -18); }
-        var head = Img("Header", card, Peach); var hr = head.rectTransform; hr.anchorMin = new Vector2(0.5f, 1); hr.anchorMax = new Vector2(0.5f, 1); hr.sizeDelta = new Vector2(size.x * 0.7f, 120); hr.anchoredPosition = new Vector2(0, 0);
-        head.gameObject.AddComponent<UnityEngine.UI.Outline>().effectColor = Color.Lerp(Peach, Cocoa, 0.5f); head.GetComponent<UnityEngine.UI.Outline>().effectDistance = new Vector2(5, -5);
-        var ht = Label("Title", hr, title, 64, Color.white); Outline(ht, 0.3f); Stretch(ht.rectTransform, 24, 24, 0, 0); ht.enableWordWrapping = false; ht.enableAutoSizing = true; ht.fontSizeMin = 30; ht.fontSizeMax = 64;
+        var head = Img("Header", card, Crimson); var hr = head.rectTransform; hr.anchorMin = new Vector2(0.5f, 1); hr.anchorMax = new Vector2(0.5f, 1); hr.sizeDelta = new Vector2(size.x * 0.7f, 120); hr.anchoredPosition = new Vector2(0, 0);
+        var ht = Label("Title", hr, title, 64, Cream); Outline(ht, 0.3f); Stretch(ht.rectTransform, 24, 24, 0, 0); ht.enableWordWrapping = false; ht.enableAutoSizing = true; ht.fontSizeMin = 30; ht.fontSizeMax = 64;
+        TCTheme.StylePanel(root); // polish3: cream card + gradient + inner tan border + crimson ribbon header
         root.gameObject.SetActive(false);
         LiftOverlay(root, 80);
         return cg;
@@ -499,7 +477,7 @@ public static class TCUI
     {
         if (!Fresh(t)) return;
         if (Baking && BakeOutlineMat != null) { var bm = BakeOutlineMat(w); if (bm) { t.fontSharedMaterial = bm; return; } }
-        try { var m = t.fontMaterial; m.EnableKeyword("OUTLINE_ON"); m.SetFloat("_OutlineWidth", w); m.SetColor("_OutlineColor", Cocoa); }
+        try { var m = t.fontMaterial; m.EnableKeyword("OUTLINE_ON"); m.SetFloat("_OutlineWidth", w); m.SetColor("_OutlineColor", Ink); }
         catch (Exception) { }
     }
     // Panels currently animating out: a second Hide (double tap, timer + button) used to run the
@@ -512,6 +490,7 @@ public static class TCUI
         if (!hiding.Add(cg)) return;
         host.StartCoroutine(Anim(cg, false, true, () => { hiding.Remove(cg); done?.Invoke(); }));
     }
+    static readonly System.Collections.Generic.Dictionary<RectTransform, Vector2> cardBase = new System.Collections.Generic.Dictionary<RectTransform, Vector2>();
     static IEnumerator Anim(CanvasGroup cg, bool show, bool pop, Action done = null, bool animateContents = true)
     {
         var card = cg.transform.Find("Card");
@@ -521,9 +500,13 @@ public static class TCUI
         if (card && pop && show && animateContents)
         {
             kids = new Transform[card.childCount]; kidBase = new Vector3[card.childCount];
-            for (int i = 0; i < card.childCount; i++) { kids[i] = card.GetChild(i); kidBase[i] = kids[i].localScale; }
+            for (int i = 0; i < card.childCount; i++) { var ch = card.GetChild(i); kids[i] = ch.name.StartsWith("Deco") ? null : ch; kidBase[i] = ch.localScale; }
         }
         float dur = show ? 0.42f : 0.18f, total = dur + (kids != null ? Mathf.Min(0.36f, kids.Length * 0.035f) : 0f);
+        // polish3: the card also rises into place (and sinks a little on close); the ribbon header swings in
+        var cardRt = card as RectTransform; Vector2 cardPos = Vector2.zero;
+        if (cardRt) { if (!cardBase.TryGetValue(cardRt, out cardPos)) { cardPos = cardRt.anchoredPosition; cardBase[cardRt] = cardPos; } }
+        Transform header = kids != null && card ? card.Find("Header") : null;
         for (float t = 0; t < total; t += Time.unscaledDeltaTime)
         {
             if (!show && !hiding.Contains(cg)) yield break; // re-opened mid-close
@@ -533,6 +516,7 @@ public static class TCUI
             {
                 if (show) { float e = Elastic(k); card.localScale = new Vector3(Mathf.LerpUnclamped(0.7f, 1f, e), Mathf.LerpUnclamped(0.7f, 1f, Elastic(Mathf.Clamp01(k * 1.1f - 0.04f))), 1); }
                 else card.localScale = Vector3.one * Mathf.Lerp(1f, 0.86f, EaseOut(k));
+                if (cardRt) cardRt.anchoredPosition = cardPos + new Vector2(0, show ? -90f * (1 - EaseOutBack(Mathf.Clamp01(k * 1.25f))) : -50f * EaseOut(k));
             }
             if (kids != null)
                 for (int i = 0; i < kids.Length; i++)
@@ -540,11 +524,14 @@ public static class TCUI
                     if (!kids[i]) continue;
                     float kk = Mathf.Clamp01((t - 0.06f - i * 0.035f) / 0.28f);
                     kids[i].localScale = kidBase[i] * Mathf.LerpUnclamped(0.5f, 1f, EaseOutBack(kk));
+                    if (kids[i] == header) header.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(kk * Mathf.PI * 2.2f) * 7f * (1 - kk));
                 }
             yield return null;
         }
         if (!show && !hiding.Contains(cg)) yield break;
         if (kids != null) for (int i = 0; i < kids.Length; i++) if (kids[i]) kids[i].localScale = kidBase[i];
+        if (header) header.localRotation = Quaternion.identity;
+        if (cardRt) cardRt.anchoredPosition = cardPos;
         cg.alpha = show ? 1 : 0; if (card) card.localScale = Vector3.one;
         cg.interactable = show; cg.blocksRaycasts = show;
         if (!show) cg.gameObject.SetActive(false);

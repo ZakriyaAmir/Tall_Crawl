@@ -80,7 +80,7 @@ public class TCGameUI : MonoBehaviour
         BuildHud(); BuildStart(); BuildPause(); BuildRevive(); BuildResults();
         var fr = TCUI.Rect("Flash", canvas.transform); bool fresh = TCUI.Fresh(fr);
         flash = TCUI.Add<CanvasGroup>(fr.gameObject); TCUI.Stretch(fr);
-        if (fresh) { var fi = fr.gameObject.AddComponent<Image>(); fi.color = new Color(1, 0.35f, 0.4f, 0.35f); fi.raycastTarget = false; }
+        if (fresh) { var fi = fr.gameObject.AddComponent<Image>(); fi.color = new Color(TCUI.Crimson.r, TCUI.Crimson.g, TCUI.Crimson.b, 0.35f); fi.raycastTarget = false; }
         flash.alpha = 0;
 
         // Frozen screen frame overlay for slow-motion cooldown power up
@@ -103,6 +103,8 @@ public class TCGameUI : MonoBehaviour
         frozenOverlay.alpha = 0f;
         frozenOverlay.interactable = false;
         frozenOverlay.blocksRaycasts = false;
+        // polish3 palette theme: styles anything not already themed in the baked scene (never overrides editor edits)
+        TCTheme.ThemeTree(canvas.transform);
     }
     void OnDestroy()
     {
@@ -194,7 +196,7 @@ public class TCGameUI : MonoBehaviour
                 if (slowmoTimerText != null)
                 {
                     slowmoTimerText.name = "SlowmoTime";
-                    slowmoTimerText.color = TCUI.Hex("#3A9BDC");
+                    slowmoTimerText.color = TCUI.Brown;
                 }
                 var smIcon = smRow.Find("ChilliIcon")?.GetComponent<Image>() ?? smRow.Find("SlowmoIcon")?.GetComponent<Image>();
                 if (smIcon != null)
@@ -228,7 +230,7 @@ public class TCGameUI : MonoBehaviour
                 if (magnetTimerText != null)
                 {
                     magnetTimerText.name = "MagnetTime";
-                    magnetTimerText.color = TCUI.Hex("#FFB703");
+                    magnetTimerText.color = TCUI.Crimson;
                 }
                 var magIcon = magRow.Find("ChilliIcon")?.GetComponent<Image>() ?? magRow.Find("MagnetIcon")?.GetComponent<Image>();
                 if (magIcon != null)
@@ -262,7 +264,7 @@ public class TCGameUI : MonoBehaviour
                 if (slowmoStockText != null)
                 {
                     slowmoStockText.name = "StockText";
-                    slowmoStockText.color = TCUI.Hex("#4EA8DE");
+                    slowmoStockText.color = TCUI.Brown;
                 }
                 var stIcon = stRow.Find("ChilliIcon")?.GetComponent<Image>() ?? stRow.Find("SlowmoIcon")?.GetComponent<Image>() ?? stRow.Find("StockIcon")?.GetComponent<Image>();
                 if (stIcon != null)
@@ -274,7 +276,7 @@ public class TCGameUI : MonoBehaviour
             }
         }
 
-        boostText = TCUI.Label("Boost", safe, "BOOST!", 110, TCUI.Peach); TCUI.Place(boostText.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(900, 160));
+        boostText = TCUI.Label("Boost", safe, "BOOST!", 110, TCUI.Cream); TCUI.Place(boostText.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(900, 160));
         TCUI.Outline(boostText, 0.25f); boostText.gameObject.SetActive(false);
     }
 
@@ -361,7 +363,7 @@ public class TCGameUI : MonoBehaviour
                     lastSpeedTenths = speedTenths;
                     speedText.text = (speedTenths / 10f).ToString("0.0") + "x";
                 }
-                Color targetCol = slowActive ? TCUI.Hex("#3A9BDC") : (pl.boost ? TCUI.Peach : TCUI.Cocoa);
+                Color targetCol = slowActive ? TCUI.Brown : (pl.boost ? TCUI.Crimson : TCUI.Ink);
                 if (speedText.color != targetCol) speedText.color = targetCol;
             }
 
@@ -480,13 +482,13 @@ public class TCGameUI : MonoBehaviour
                 break;
             case "chilli_kill":
                 // 5 coins spawn and fly to coin counter with bonus coin sound
-                Pop("+5 BONUS COINS!", pos, TCUI.Hex("#FFD166"));
+                Pop("+5 BONUS COINS!", pos, TCUI.Cream);
                 StartCoroutine(SpawnChilliBonusCoins(pos));
                 break;
             case "heart": Pop("+1 HEART", pos, TCUI.Blush); StartCoroutine(TCUI.Punch(heartsRow, 0.25f)); break;
             case "boost": Pop("BOOST", pos, TCUI.Peach); break;
-            case "cooldown": Pop("SLOW-MO +1", pos, TCUI.Hex("#4EA8DE")); if (slowmoStockRect) StartCoroutine(TCUI.Punch(slowmoStockRect, 0.25f)); break;
-            case "smash": Pop("SMASH!", pos, TCUI.Mint); break;
+            case "cooldown": Pop("SLOW-MO +1", pos, TCUI.Tan); if (slowmoStockRect) StartCoroutine(TCUI.Punch(slowmoStockRect, 0.25f)); break;
+            case "smash": Pop("SMASH!", pos, TCUI.Coral); break;
             case "hit": flash.alpha = 1; StartCoroutine(TCUI.Punch(heartsRow, 0.3f)); break;
         }
     }
@@ -615,13 +617,13 @@ public class TCGameUI : MonoBehaviour
             var go = new GameObject("FlyLetterRoot");
             root = go.AddComponent<RectTransform>();
             root.SetParent(fxRoot, false);
-            bg = TCUI.Img("Bg", root, TCUI.Mint);
+            bg = TCUI.Img("Bg", root, TCUI.Crimson);
             TCUI.Stretch(bg.rectTransform);
             bg.raycastTarget = false;
-            label = TCUI.Label("T", root, "", 36, TCUI.Cocoa);
+            label = TCUI.Label("T", root, "", 36, TCUI.Cream);
             TCUI.Stretch(label.rectTransform);
             label.raycastTarget = false;
-            TCUI.Outline(label, 0.2f);
+            TCTheme.StyleText(label, TCUI.Cream, 0.26f, true);
         }
         else
         {
@@ -721,7 +723,7 @@ public class TCGameUI : MonoBehaviour
         startOverlay.blocksRaycasts = false;
         var hit = root.GetComponent<Image>(); if (hit) hit.raycastTarget = false;
         var b = root.GetComponent<Button>(); if (b) b.enabled = false;
-        hintText = TCUI.Label("Hint", root, "TOUCH TO CLIMB", 72, Color.white);
+        hintText = TCUI.Label("Hint", root, "TOUCH TO CLIMB", 72, TCUI.Cream);
         TCUI.Outline(hintText, 0.25f);
         hintText.raycastTarget = false;
         TCUI.Place(hintText.rectTransform, new Vector2(0.5f, 0.3f), Vector2.zero, new Vector2(1000, 260));
@@ -1578,14 +1580,14 @@ public class TCGameUI : MonoBehaviour
         var row = TCUI.Rect(label, card); TCUI.Place(row, new Vector2(0.5f, 0.5f), new Vector2(0, y), new Vector2(width, 90));
         var l = TCUI.Label("L", row, label, 48, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Stretch(l.rectTransform, 0, 200, 0, 0);
         Button b = null; TextMeshProUGUI bt = null;
-        b = TCUI.Btn("T", row, "", get() ? TCUI.Mint : TCUI.Grey, () =>
+        b = TCUI.Btn("T", row, "", get() ? TCUI.Crimson : TCUI.Tan, () =>
         {
             set(!get());
-            b.GetComponent<Image>().color = get() ? TCUI.Mint : TCUI.Grey; bt.text = get() ? "ON" : "OFF";
+            TCTheme.SetFace(b, get() ? TCUI.Crimson : TCUI.Tan); bt.text = get() ? "ON" : "OFF";
         }, 44);
         TCUI.Place((RectTransform)b.transform, new Vector2(1, 0.5f), new Vector2(-90, 0), new Vector2(180, 84));
         bt = TCUI.Label("V", b.transform, get() ? "ON" : "OFF", 44, TCUI.Cocoa); TCUI.Stretch(bt.rectTransform);
-        b.GetComponent<Image>().color = get() ? TCUI.Mint : TCUI.Grey; bt.text = get() ? "ON" : "OFF"; // live state (also for baked UI)
+        TCTheme.SetFace(b, get() ? TCUI.Crimson : TCUI.Tan); bt.text = get() ? "ON" : "OFF"; // live state (also for baked UI)
     }
 
     public void ShowPause()
@@ -1636,9 +1638,9 @@ public class TCGameUI : MonoBehaviour
     void BuildRevive()
     {
         revivePanel = TCUI.Panel("Revive", safe.parent, out var card, new Vector2(840, 940), "KEEP CLIMBING?");
-        var timerBg = TCUI.Img("TimerBg", card, new Color(1f, 0.92f, 0.85f, 0.95f), TCUI.Circle);
+        var timerBg = TCUI.Img("TimerBg", card, TCUI.Cream, TCUI.Circle);
         TCUI.Place(timerBg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(160, 160));
-        reviveTimer = TCUI.Label("Timer", timerBg.transform, "5", 100, TCUI.Peach);
+        reviveTimer = TCUI.Label("Timer", timerBg.transform, "5", 100, TCUI.Crimson);
         TCUI.Stretch(reviveTimer.rectTransform);
         TCUI.Outline(reviveTimer, 0.2f);
 
@@ -1699,16 +1701,16 @@ public class TCGameUI : MonoBehaviour
     {
         resultPanel = TCUI.Panel("Results", safe.parent, out var card, new Vector2(860, 1200), "GAME OVER");
 
-        var caption = TCUI.Label("Caption", card, "DISTANCE CLIMBED", 32, new Color(0.24f, 0.19f, 0.27f, 0.65f));
+        var caption = TCUI.Label("Caption", card, "DISTANCE CLIMBED", 32, TCUI.Brown);
         TCUI.Place(caption.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 465), new Vector2(600, 38));
 
         resMetres = TCUI.Label("Metres", card, "0 M", 92, TCUI.Cocoa);
         if (TCUI.Fresh(resMetres)) { resMetres.enableAutoSizing = true; resMetres.fontSizeMin = 56; resMetres.fontSizeMax = 92; }
         TCUI.Place(resMetres.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 390), new Vector2(760, 95));
 
-        var bestBadge = TCUI.Img("BestBadge", card, new Color(1f, 0.93f, 0.86f, 0.95f), TCUI.Round);
+        var bestBadge = TCUI.Img("BestBadge", card, TCUI.Tan, TCUI.Round);
         TCUI.Place(bestBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 295), new Vector2(380, 58));
-        resBest = TCUI.Label("Best", bestBadge.transform, "BEST 0 M", 34, TCUI.Peach);
+        resBest = TCUI.Label("Best", bestBadge.transform, "BEST 0 M", 34, TCUI.Ink);
         if (TCUI.Fresh(resBest)) { resBest.enableWordWrapping = false; resBest.enableAutoSizing = true; resBest.fontSizeMin = 20; resBest.fontSizeMax = 34; }
         TCUI.Stretch(resBest.rectTransform, 14, 14, 4, 4);
 
@@ -1716,7 +1718,7 @@ public class TCGameUI : MonoBehaviour
         resBonus = Row(card, "Distance Bonus", 95, false);
         resTotal = Row(card, "Total Coins Earned", -10, true);
 
-        doubleBtn = TCUI.Btn("Double", card, "x2 BONUS (WATCH AD)", TCUI.Butter, () => TCServices.Rewarded(() =>
+        doubleBtn = TCUI.Btn("Double", card, "x2 BONUS (WATCH AD)", TCUI.Crimson, () => TCServices.Rewarded(() =>
         {
             if (!gm.ClaimDouble()) return; // reward callbacks can fire twice; never double-pay
             resCoins.text = (gm.coinsCollected * 2).ToString("N0");
@@ -1742,7 +1744,7 @@ public class TCGameUI : MonoBehaviour
 
     TextMeshProUGUI Row(RectTransform card, string label, float y, bool isTotal)
     {
-        Color bgCol = isTotal ? new Color(1f, 0.95f, 0.88f, 0.98f) : new Color(1f, 1f, 1f, 0.92f);
+        Color bgCol = isTotal ? TCUI.TanLight : TCUI.CreamLight;
         var row = TCUI.Img(label, card, bgCol);
         TCUI.Place(row.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, y), new Vector2(740, isTotal ? 94 : 84));
 
@@ -1753,13 +1755,13 @@ public class TCGameUI : MonoBehaviour
         var ic = TCUI.Img("I", row.transform, Color.white, TCUI.Icon("coin"));
         TCUI.Place(ic.rectTransform, new Vector2(1, 0.5f), new Vector2(-42, 0), new Vector2(isTotal ? 54 : 46, isTotal ? 54 : 46));
 
-        var v = TCUI.Label("V", row.transform, "0", isTotal ? 46 : 40, isTotal ? TCUI.Hex("#E07A5F") : TCUI.Cocoa, TextAlignmentOptions.Right);
+        var v = TCUI.Label("V", row.transform, "0", isTotal ? 46 : 40, isTotal ? TCUI.Crimson : TCUI.Ink, TextAlignmentOptions.Right);
         if (TCUI.Fresh(v)) { v.enableWordWrapping = false; v.enableAutoSizing = true; v.fontSizeMin = 22; v.fontSizeMax = isTotal ? 46 : 40; }
         TCUI.Stretch(v.rectTransform, 300, 84, 0, 0);
         return v;
     }
 
-    string GemSuffix() => gm.RunGems > 0 ? "  <color=#5FA8D3>+" + gm.RunGems + " GEM" + (gm.RunGems > 1 ? "S" : "") + "</color>" : "";
+    string GemSuffix() => gm.RunGems > 0 ? "  <color=#8C5C32>+" + gm.RunGems + " GEM" + (gm.RunGems > 1 ? "S" : "") + "</color>" : "";
 
     void ShowResults()
     {
@@ -1828,11 +1830,16 @@ public class TCGameUI : MonoBehaviour
         countDownGroup.alpha = 0f;
         countDownGroup.interactable = false;
         countDownGroup.blocksRaycasts = false;
-        var bg = TCUI.Img("Dim", countDownRoot, new Color(0.12f, 0.09f, 0.14f, 0.35f));
+        var bg = TCUI.Img("Dim", countDownRoot, new Color(TCUI.Ink.r, TCUI.Ink.g, TCUI.Ink.b, 0.38f));
         TCUI.Stretch(bg.rectTransform); bg.raycastTarget = false;
-        countDownText = TCUI.Label("N", countDownRoot, "3", 220, Color.white);
+        // polish3: crimson medallion behind a big cream number (cream ring, deep-brown drop)
+        var medal = TCUI.Img("Medal", countDownRoot, TCUI.Crimson, TCUI.Circle);
+        TCUI.Place(medal.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(330, 330));
+        { var o = TCUI.Add<Outline>(medal.gameObject); o.effectColor = TCUI.Cream; o.effectDistance = new Vector2(9, -9); var sh = medal.gameObject.AddComponent<Shadow>(); sh.effectColor = new Color(TCUI.Ink.r, TCUI.Ink.g, TCUI.Ink.b, 0.55f); sh.effectDistance = new Vector2(0, -16); }
+        var mb = TCUI.Img("Gloss", medal.transform, new Color(1f, 1f, 1f, 0.24f), TCUI.Circle); TCUI.Place(mb.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(230, 120));
+        countDownText = TCUI.Label("N", countDownRoot, "3", 220, TCUI.Cream);
         TCUI.Place(countDownText.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(400, 400));
-        TCUI.Outline(countDownText, 0.35f);
+        TCTheme.StyleText(countDownText, TCUI.Cream, 0.3f, true);
         countDownRoot.gameObject.SetActive(false);
     }
 
@@ -1846,9 +1853,10 @@ public class TCGameUI : MonoBehaviour
         char[] letters = { 'W', 'E', 'B' };
         for (int i = 0; i < 3; i++)
         {
-            var bg = TCUI.Img("Letter" + letters[i], row, new Color(1f, 1f, 1f, 0.55f));
+            var bg = TCUI.Img("Letter" + letters[i], row, WebOff);
             TCUI.Place(bg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2((i - 1) * 80f, 0), new Vector2(68, 58));
-            var lab = TCUI.Label("T", bg.transform, letters[i].ToString(), 40, new Color(0.3f, 0.24f, 0.28f, 0.4f));
+            if (TCUI.Fresh(bg)) { var o = bg.gameObject.AddComponent<Outline>(); o.effectColor = new Color(TCUI.Brown.r, TCUI.Brown.g, TCUI.Brown.b, 0.6f); o.effectDistance = new Vector2(3, -3); var sh = bg.gameObject.AddComponent<Shadow>(); sh.effectColor = new Color(TCUI.Ink.r, TCUI.Ink.g, TCUI.Ink.b, 0.35f); sh.effectDistance = new Vector2(0, -5); var bv = TCUI.Img("Bevel", bg.transform, new Color(1, 1, 1, 0.8f), TCTheme.Spr("ui_bevel")); TCUI.Stretch(bv.rectTransform); bv.type = Image.Type.Sliced; }
+            var lab = TCUI.Label("T", bg.transform, letters[i].ToString(), 40, WebOffText);
             TCUI.Stretch(lab.rectTransform);
             webLetterBg[i] = bg;
             webLetterText[i] = lab;
@@ -1878,19 +1886,23 @@ public class TCGameUI : MonoBehaviour
         ApplyWebLetter(2, hasB, !first);
     }
 
+    static Color WebOff => new Color(TCUI.Cream.r, TCUI.Cream.g, TCUI.Cream.b, 0.72f);
+    static Color WebOffText => new Color(TCUI.Brown.r, TCUI.Brown.g, TCUI.Brown.b, 0.6f);
     void ApplyWebLetter(int i, bool on, bool punch)
     {
         if (webLetterBg == null || i >= webLetterBg.Length || !webLetterBg[i]) return;
         if (on)
         {
-            webLetterBg[i].color = TCUI.Mint;
-            if (webLetterText[i]) webLetterText[i].color = TCUI.Cocoa;
+            webLetterBg[i].color = TCUI.Crimson;
+            foreach (var o in webLetterBg[i].GetComponents<Outline>()) o.effectColor = TCUI.Cream;
+            if (webLetterText[i]) TCTheme.StyleText(webLetterText[i], TCUI.Cream, 0.26f, true);
             if (punch) StartCoroutine(TCUI.Punch(webLetterBg[i].transform, 0.28f, 0.25f));
         }
         else
         {
-            webLetterBg[i].color = new Color(1f, 1f, 1f, 0.55f);
-            if (webLetterText[i]) webLetterText[i].color = new Color(0.3f, 0.24f, 0.28f, 0.4f);
+            webLetterBg[i].color = WebOff;
+            foreach (var o in webLetterBg[i].GetComponents<Outline>()) o.effectColor = new Color(TCUI.Brown.r, TCUI.Brown.g, TCUI.Brown.b, 0.6f);
+            if (webLetterText[i]) webLetterText[i].color = WebOffText;
         }
     }
 
@@ -1899,13 +1911,8 @@ public class TCGameUI : MonoBehaviour
         // Burst vibrant celebratory confetti pieces across the finish card
         Color[] confettiColors = new Color[]
         {
-            TCUI.Hex("#FFD166"), // Golden yellow
-            TCUI.Hex("#06D6A0"), // Mint green
-            TCUI.Hex("#118AB2"), // Vivid sky blue
-            TCUI.Hex("#EF476F"), // Coral pink
-            TCUI.Hex("#F78C6B"), // Warm orange
-            TCUI.Hex("#8338EC"), // Purple
-            TCUI.Hex("#FFFFFF")  // Pure shine white
+            // polish3 palette confetti
+            TCUI.Crimson, TCUI.Coral, TCUI.Tan, TCUI.Cream, TCUI.Brown, TCUI.TanLight, TCUI.CreamLight
         };
 
         var container = new GameObject("ConfettiContainer").AddComponent<RectTransform>();
