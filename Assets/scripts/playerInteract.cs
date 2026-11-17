@@ -40,6 +40,32 @@ public class playerInteract : MonoBehaviour
     Vector3 lastTrackPosition; bool hasLastTrackPosition;
     TCCuteSpider cachedCuteSpider;
 
+    public static playerInteract Instance { get; private set; }
+    public bool IsChilliActive => boostDuration > 0f;
+    public int ChilliComboCount { get; private set; }
+    public int ChilliCoinsEarned { get; private set; }
+    public float ChilliComboMultiplier => 1.0f + ChilliComboCount * 0.1f;
+
+    public void OnCoinCollected()
+    {
+        if (boostDuration > 0f)
+        {
+            ChilliCoinsEarned++;
+        }
+    }
+
+    public void OnEnemySmashedInChilli()
+    {
+        if (boostDuration <= 0f) return;
+        ChilliComboCount++;
+        ChilliCoinsEarned += 5; // The 5 bonus coins from this enemy kill
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+    }
+
     public bool IsAirborneClear
     {
         get
@@ -53,6 +79,7 @@ public class playerInteract : MonoBehaviour
 
     void Awake()
     {
+        Instance = this;
         p = GetComponentInParent<player>();
         SetupColliders();
     }
@@ -134,11 +161,16 @@ public class playerInteract : MonoBehaviour
         {
             p.boost = true;
             boostDuration -= dt;
-            if (boostDuration <= 0) { p.boost = false; invulnTimer = 1.0f; }
-
-            // Active forward sweep detection during chilli mode:
-            // Prevents tunneling through moving or static enemies when climbing at 2.2x speed
-            PerformChilliProximitySmash();
+            if (boostDuration <= 0)
+            {
+                OnBoostEnded();
+            }
+            else
+            {
+                // Active forward sweep detection during chilli mode:
+                // Prevents tunneling through moving or static enemies when climbing at 2.2x speed
+                PerformChilliProximitySmash();
+            }
         }
 
         // Continuous swept trigger check: prevents discrete tunneling through bee swarms at high speed
@@ -240,6 +272,7 @@ public class playerInteract : MonoBehaviour
                 TCFx.Shake(0.18f);
                 TCSave.AddBeeKnock(1);
                 TCSkins.CheckAchievements();
+                OnEnemySmashedInChilli();
                 OnEvent?.Invoke("chilli_kill", transform.position);
             }
         }
@@ -280,6 +313,7 @@ public class playerInteract : MonoBehaviour
         {
             other.gameObject.SetActive(false);
             PlayCoinCollect();
+            OnCoinCollected();
             gameManager.Instance?.addCoin();
             OnEvent?.Invoke("coin", other.transform.position);
             return true;
@@ -397,6 +431,7 @@ public class playerInteract : MonoBehaviour
                 TCSkins.CheckAchievements();
                 if (boostDuration > 0)
                 {
+                    OnEnemySmashedInChilli();
                     OnEvent?.Invoke("chilli_kill", transform.position);
                 }
                 else
@@ -489,6 +524,7 @@ public class playerInteract : MonoBehaviour
                 if (pooled) pooled.Release(); else beeObj.SetActive(false);
                 TCSave.AddBeeKnock(1);
                 TCSkins.CheckAchievements();
+                OnEnemySmashedInChilli();
                 OnEvent?.Invoke("chilli_kill", transform.position);
                 TCFx.Shake(0.1f);
                 return;
@@ -541,6 +577,7 @@ public class playerInteract : MonoBehaviour
 
         if (boostDuration > 0)
         {
+            OnEnemySmashedInChilli();
             OnEvent?.Invoke("chilli_kill", hitWorldPos);
         }
         else
@@ -625,17 +662,48 @@ public class playerInteract : MonoBehaviour
     {
         if (IsDead || (p != null && p.GameOver)) return;
         if (TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging) return;
-        if (boostDuration <= 0) TCPickupFX.Burst(TCPickupKind.BoostStart, transform.position + transform.up * 0.2f);
+        if (boostDuration <= 0)
+        {
+            TCPickupFX.Burst(TCPickupKind.BoostStart, transform.position + transform.up * 0.2f);
+            ChilliComboCount = 0;
+            ChilliCoinsEarned = 0;
+            TCGameUI.Instance?.OnChilliBoostStarted();
+        }
         boostDuration = Mathf.Max(boostDuration, secs);
         OnEvent?.Invoke("boost", transform.position);
+    }
+
+    void OnBoostEnded()
+    {
+        boostDuration = 0f;
+        if (p) p.boost = false;
+        invulnTimer = 1.0f;
+        TriggerChilliComboPayout();
+    }
+
+    void TriggerChilliComboPayout()
+    {
+        int combo = ChilliComboCount;
+        int coins = ChilliCoinsEarned;
+        ChilliComboCount = 0;
+        ChilliCoinsEarned = 0;
+
+        if (TCGameUI.Instance != null)
+        {
+            TCGameUI.Instance.ProcessChilliComboEnd(combo, coins);
+        }
     }
 
     /// <summary>Ends active chilli boost cleanly without triggering post-boost invulnerability blink.</summary>
     public void EndBoost()
     {
-        boostDuration = 0f;
-        if (!p) p = GetComponentInParent<player>();
-        if (p != null) p.boost = false;
+        if (boostDuration > 0f)
+        {
+            boostDuration = 0f;
+            if (!p) p = GetComponentInParent<player>();
+            if (p != null) p.boost = false;
+            TriggerChilliComboPayout();
+        }
     }
 
     public void jump(float duration = 0.6f)

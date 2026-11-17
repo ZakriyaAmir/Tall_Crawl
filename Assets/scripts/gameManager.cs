@@ -692,10 +692,10 @@ public class gameManager : MonoBehaviour
         }
     }
 
-    /// One collected coin = exactly one coin in the wallet (no multipliers, no doubling).
-    public void addCoin()
+    /// One collected coin = exactly one coin in the wallet.
+    public void addCoin(int amount = 1)
     {
-        coinsCollected += CoinValue;
+        coinsCollected += amount * CoinValue;
     }
 
     public const int CoinValue = 1;

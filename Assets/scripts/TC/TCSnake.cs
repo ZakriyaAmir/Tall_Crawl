@@ -68,6 +68,7 @@ public class TCSnake : TCEnemy
     /// Head placed at (y, angle) with the body trailing up-trunk behind it.
     public override void Init(float startY, float startAngle, float sweep = 40f, float spd = 2.2f)
     {
+        // Randomly decide clockwise (dir = 1) or anticlockwise (dir = -1) spin direction
         dir = Random.value < 0.5f ? 1 : -1;
         SetupHelix(startAngle * Mathf.Deg2Rad - dir * BodyLen / Ell, startY + K * BodyLen / Ell, dir, BodyLen);
         base.Init(startY, startAngle, sweep, spd);
@@ -75,7 +76,7 @@ public class TCSnake : TCEnemy
 
     public void SetupHelix(float th0Rad, float yTop, int direction, float sHeadStart)
     {
-        theta0 = th0Rad; y0 = yTop; dir = direction; sHead = sHeadStart; sweepPrimed = false;
+        theta0 = th0Rad; y0 = yTop; dir = (direction == 0) ? (Random.value < 0.5f ? 1 : -1) : direction; sHead = sHeadStart; sweepPrimed = false;
         hissed = false; tongueClock = Random.Range(0f, TongueCycle); isSmashed = false;
         Pose(0f);
     }

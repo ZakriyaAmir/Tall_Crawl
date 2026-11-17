@@ -354,24 +354,30 @@ public class TCTrack : MonoBehaviour
                     }
                     else
                     {
-                        // Coin spiral that guarantees no overlap with hazards or powerups
+                        // Coin string in open breather: 50% spiral around the tree, 50% curving/straight trail
                         float spiralStartY = Mathf.Max(y + 0.35f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
                         float spiralEndY = y + gap - 0.35f;
                         if (spiralEndY - spiralStartY >= 1.2f)
                         {
-                            SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
+                            if (Random.value < 0.5f)
+                                SpawnCoinSpiral(spiralStartY, spiralEndY, from, 360f);
+                            else
+                                SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
                         }
                     }
                 }
             }
             else
             {
-                // Coin spiral that guarantees no overlap with hazards or powerups
+                // Coin string in open breather: 50% spiral around the tree, 50% curving/straight trail
                 float spiralStartY = Mathf.Max(y + 0.35f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
                 float spiralEndY = y + gap - 0.35f;
                 if (spiralEndY - spiralStartY >= 1.2f)
                 {
-                    SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
+                    if (Random.value < 0.5f)
+                        SpawnCoinSpiral(spiralStartY, spiralEndY, from, 360f);
+                    else
+                        SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
                 }
             }
 
@@ -419,7 +425,9 @@ public class TCTrack : MonoBehaviour
                 float vc = C.ClimbSpeedAtDistance(metres), dropPerPath = TCSnake.RisePerRadian / TCSnake.ArcPerRadian;
                 float vg = TCSnake.PathSpeed * dropPerPath, vs = TCSnake.PathSpeed * TCSnake.SpeedMulFor(variant) * dropPerPath;
                 float headY = player.position.y + (snakeY - player.position.y) * (vc + vs) / (vc + vg);
-                Spawn(SnakePoolFor(variant) ?? snakePool, "snake", headY, safeAngle + Random.Range(-40f, 40f));
+                // Start the snake at a random rotation around the tree trunk (0 to 360 degrees)
+                float spawnAngle = Random.Range(0f, 360f);
+                Spawn(SnakePoolFor(variant) ?? snakePool, "snake", headY, spawnAngle);
                 lastSnakeY = snakeY;
                 Debug.Log($"[TCTrack] {variant} snake row at {metres:0}m (p={snakeProb:0.00})");
                 // the snake descends ~0.37u/s while the spider climbs, so keep the stretch below it clear too
@@ -554,8 +562,11 @@ public class TCTrack : MonoBehaviour
         if (!spawnedPowerup && Random.value < C.coinTrailChance)
         {
             // Coin string generation:
-            // Arc / Jump string probability is set to exactly 1/10 (10%).
-            // Remaining 9/10 (90%) is shared among zigzag string, straight string, and curving string.
+            // - Arc / Jump string: 10%
+            // - Spiral string (spirals around the tree): 22%
+            // - Zigzag string: 23%
+            // - Straight string: 23%
+            // - Curving string: 22%
             float roll = Random.value;
             int stringCount = Random.Range(6, 11); // 6 to 10 coins
             float trailSpan = (stringCount - 1) * UniformCoinSpacing;
@@ -567,7 +578,7 @@ public class TCTrack : MonoBehaviour
             {
                 if (roll < 0.10f)
                 {
-                    // 1/10: Vertical jump arc string (straight vertical constant angle, spider hops in arc)
+                    // Vertical jump arc string (straight vertical constant angle, spider hops in arc)
                     const float jumpSpan = LongestArcSpan;
                     float arcEndY = y - 0.35f;
                     float arcStartY = Mathf.Max(arcEndY - jumpSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
@@ -576,20 +587,37 @@ public class TCTrack : MonoBehaviour
                         SpawnCoinArc(arcStartY, arcEndY, newSafe, SpiderJumpHeight, 8);
                     }
                 }
-                else if (roll < 0.40f)
+                else if (roll < 0.32f)
                 {
-                    // 3/10: Zigzag string (weaves left and right along the climb path)
-                    float zigzagAmp = Mathf.Min(14f, window * 0.28f);
-                    SpawnCoinZigzag(trailStartY, trailEndY, newSafe, zigzagAmp, stringCount);
+                    // Spiral string: spirals around the tree cylinder (clockwise or anticlockwise)
+                    float sEndY = y - 0.35f;
+                    float sStartY = Mathf.Max(sEndY - Mathf.Max(trailSpan, 2.2f), Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
+                    if (sEndY - sStartY >= 1.2f)
+                    {
+                        float spiralDir = Random.value < 0.5f ? 1f : -1f;
+                        SpawnCoinSpiral(sStartY, sEndY, newSafe, 360f, spiralDir);
+                    }
                 }
-                else if (roll < 0.70f)
+                else if (roll < 0.55f)
                 {
-                    // 3/10: Straight vertical string (dead straight at newSafe angle)
+                    // Zigzag string: intense left/right weaving along the climb path requiring active steering
+                    float zigzagAmp = Mathf.Min(Random.Range(38f, 44f), window * 0.42f);
+                    float zEndY = y - 0.35f;
+                    float zSpan = Mathf.Max(trailSpan, 2.4f);
+                    float zStartY = Mathf.Max(zEndY - zSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
+                    if (zEndY - zStartY >= 1.2f)
+                    {
+                        SpawnCoinZigzag(zStartY, zEndY, newSafe, zigzagAmp, 0);
+                    }
+                }
+                else if (roll < 0.78f)
+                {
+                    // Straight vertical string (dead straight at newSafe angle)
                     SpawnCoinTrail(trailStartY, trailEndY, newSafe, newSafe, stringCount);
                 }
                 else
                 {
-                    // 3/10: Curving string (smoothly curves from previous safe angle towards newSafe)
+                    // Curving string (smoothly curves from previous safe angle towards newSafe)
                     float curveFrom = Mathf.LerpAngle(safeAngle, newSafe, 0.25f);
                     SpawnCoinTrail(trailStartY, trailEndY, curveFrom, newSafe, stringCount);
                 }
@@ -646,16 +674,55 @@ public class TCTrack : MonoBehaviour
         }
     }
 
-    void SpawnCoinZigzag(float startY, float endY, float centerAngle, float amplitudeDeg = 18f, int count = 8)
+    /// <summary>
+    /// Spawns a string of coins that spirals around the tree cylinder.
+    /// startAngle: starting angle around the tree trunk.
+    /// totalTurnDeg: total angle to wind around the trunk (360 degrees for a complete spiral loop).
+    /// direction: +1 (clockwise) or -1 (anticlockwise). If 0, randomly picks direction.
+    /// </summary>
+    public void SpawnCoinSpiral(float startY, float endY, float startAngle, float totalTurnDeg = 360f, float direction = 0f, int preferredCount = 0)
     {
         float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
         float spanY = endY - minY;
-        if (spanY < 1.2f || count < 4) return;
+        if (spanY < 1.1f) return;
+
+        const float trunkRadius = 0.603f;
+        float dir = (direction != 0f) ? Mathf.Sign(direction) : (Random.value < 0.5f ? 1f : -1f);
+        float turnDeg = Mathf.Abs(totalTurnDeg);
+        float deltaAngleRad = turnDeg * Mathf.Deg2Rad;
+        float arcDistance = trunkRadius * deltaAngleRad;
+        float totalPathLength = Mathf.Sqrt(spanY * spanY + arcDistance * arcDistance);
+
+        // Derive coin count directly from 3D helical path length and UniformCoinSpacing
+        int steps = Mathf.Max(4, Mathf.RoundToInt(totalPathLength / UniformCoinSpacing));
+        if (preferredCount > 0)
+        {
+            steps = Mathf.Max(4, preferredCount - 1);
+        }
+
+        float stepY = spanY / steps;
+        float stepAngle = (dir * turnDeg) / steps;
+
+        for (int i = 0; i <= steps; i++)
+        {
+            float cy = minY + i * stepY;
+            float ca = startAngle + i * stepAngle;
+            Spawn(coinPool, "coin", cy, ca);
+            lastCoinY = cy;
+        }
+    }
+
+    public void SpawnCoinZigzag(float startY, float endY, float centerAngle, float amplitudeDeg = 40f, int count = 0)
+    {
+        float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+        float spanY = endY - minY;
+        if (spanY < 1.1f || (count > 0 && count < 4)) return;
 
         const float trunkRadius = 0.603f;
         // Start zigzag direction randomly (-1 or +1)
         float dir = Random.value < 0.5f ? -1f : 1f;
-        float freq = Mathf.PI * 2.5f;
+        float cycles = (spanY >= 2.8f) ? 2f : 1f;
+        float freq = Mathf.PI * 2f * cycles;
 
         // Discretize the continuous zigzag path at high resolution to measure true arc-length on the trunk cylinder
         const int Samples = 240;
@@ -691,8 +758,8 @@ public class TCTrack : MonoBehaviour
         float totalPathLen = cumDist[Samples];
         if (totalPathLen < UniformCoinSpacing * 0.7f) return;
 
-        // Determine number of steps matching UniformCoinSpacing
-        int steps = Mathf.Max(2, Mathf.RoundToInt(totalPathLen / UniformCoinSpacing));
+        // Determine number of steps matching UniformCoinSpacing (allowing dynamic expansion for wide zigzags)
+        int steps = Mathf.Max(4, Mathf.RoundToInt(totalPathLen / UniformCoinSpacing));
         if (count > 0)
         {
             steps = Mathf.Min(steps, count - 1);
@@ -830,6 +897,7 @@ public class TCTrack : MonoBehaviour
                 live.RemoveAt(i);
 
                 TCSfx.Play("coin", 0.55f);
+                playerInteract.Instance?.OnCoinCollected();
                 gameManager.Instance?.addCoin();
                 playerInteract.OnEvent?.Invoke("coin", spiderPos);
                 continue;
@@ -971,15 +1039,16 @@ public class TCTrack : MonoBehaviour
         return Spawn(beePool, "bees", y, 0);
     }
 
-    public TCSnake SpawnTutorialSnake(float y, float angle, int dir = 1, TCSnake.Variant variant = TCSnake.Variant.Green)
+    public TCSnake SpawnTutorialSnake(float y, float angle, int dir = 0, TCSnake.Variant variant = TCSnake.Variant.Green)
     {
         var p = Spawn(SnakePoolFor(variant) ?? snakePool, "snake", y, angle);
         var sn = p ? p.GetComponent<TCSnake>() : null;
         if (sn)
         {
-            float th0 = angle * Mathf.Deg2Rad - dir * TCSnake.BodyLen / TCSnake.ArcPerRadian;
+            int spinDir = (dir != 0) ? dir : (Random.value < 0.5f ? 1 : -1);
+            float th0 = angle * Mathf.Deg2Rad - spinDir * TCSnake.BodyLen / TCSnake.ArcPerRadian;
             float y0 = y + TCSnake.RisePerRadian * TCSnake.BodyLen / TCSnake.ArcPerRadian;
-            sn.SetupHelix(th0, y0, dir, TCSnake.BodyLen);
+            sn.SetupHelix(th0, y0, spinDir, TCSnake.BodyLen);
         }
         return sn;
     }
