@@ -27,6 +27,21 @@ public class TCSquirrel : TCEnemy
     static player cachedPlayer;
     static playerInteract cachedInteract;
 
+    static bool HasPlayerStartedAndCovered(float minDistanceMetres)
+    {
+        // Tutorial mode scripts explicitly spawn and handle the tutorial squirrel
+        if (TCGameUI.Instance != null && TCGameUI.Instance.IsTutorialRun) return true;
+
+        if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
+        if (cachedPlayer != null)
+        {
+            if (cachedPlayer.paused) return false;
+            if (TCGameUI.Instance != null && !TCGameUI.Instance.Started) return false;
+            return cachedPlayer.currentScore >= minDistanceMetres;
+        }
+        return false;
+    }
+
     static bool IsPlayerInChilliMode()
     {
         if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
@@ -90,8 +105,12 @@ public class TCSquirrel : TCEnemy
         if (warningPS) { warningPS.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); warningPS = null; }
         if (warningGO) { Object.Destroy(warningGO); warningGO = null; }
 
+        // Ensure model and hit colliders start hidden and disabled
+        if (model) model.gameObject.SetActive(false);
+        SetCollidersActive(false);
+
         // If player is already in chilli boost mode, start scampering immediately, play sound, and DO NOT spawn leaves
-        if (IsPlayerInChilliMode())
+        if (IsPlayerInChilliMode() && HasPlayerStartedAndCovered(200f))
         {
             delayTimer = 0f;
             if (model) model.gameObject.SetActive(true);
@@ -102,10 +121,10 @@ public class TCSquirrel : TCEnemy
         else
         {
             delayTimer = 2.0f; // Leaves fall from top of camera view 2.0s before squirrel arrives
-            if (model) model.gameObject.SetActive(false);
-            // Disable hit colliders while hidden so no premature collision can happen during the advance warning
-            SetCollidersActive(false);
-            SpawnFallingLeavesWarning(startAngle);
+            if (HasPlayerStartedAndCovered(200f))
+            {
+                SpawnFallingLeavesWarning(startAngle);
+            }
         }
     }
 
@@ -248,6 +267,9 @@ public class TCSquirrel : TCEnemy
     void Update()
     {
         if (isSmashed) return;
+        // Squirrel only comes into action once the player has started moving and covered 200m
+        if (!HasPlayerStartedAndCovered(200f)) return;
+
         float dt = Time.deltaTime;
         bool isChilli = IsPlayerInChilliMode();
 

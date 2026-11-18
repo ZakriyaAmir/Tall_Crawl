@@ -90,6 +90,14 @@ public class TCSnake : TCEnemy
     void Update()
     {
         if (isSmashed) return;
+        bool isTutorial = TCGameUI.Instance != null && TCGameUI.Instance.IsTutorialRun;
+        if (!isTutorial)
+        {
+            var p = player.Instance;
+            if (p && (p.paused || p.currentScore < 200f)) return;
+            if (TCGameUI.Instance && !TCGameUI.Instance.Started) return;
+        }
+
         float dt = Time.deltaTime;
         sHead += Speed * (IsPlayerInChilliMode() ? 1.25f : 1f) * dt;
         Pose(Time.time);

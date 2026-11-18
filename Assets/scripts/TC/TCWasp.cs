@@ -172,15 +172,16 @@ public class TCWasp : TCEnemy
                          : (TCSfx.Get("wasp") ?? Resources.Load<AudioClip>("Sfx/wasp"));
         if (clip)
         {
+            float playVol = isBat ? 0.85f : 0.62f; // Soothing, gentle volume for wasp chime
             if (audioSrc)
             {
                 audioSrc.loop = false;
-                audioSrc.volume = 0.85f;
-                audioSrc.PlayOneShot(clip, 0.85f);
+                audioSrc.volume = playVol;
+                audioSrc.PlayOneShot(clip, playVol);
             }
             else
             {
-                TCAudio.Play(clip, 0.85f);
+                TCAudio.Play(clip, playVol);
             }
         }
     }
@@ -188,6 +189,14 @@ public class TCWasp : TCEnemy
     void Update()
     {
         if (isSmashed) return;
+        bool isTutorial = TCGameUI.Instance != null && TCGameUI.Instance.IsTutorialRun;
+        if (!isTutorial)
+        {
+            if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
+            if (cachedPlayer && (cachedPlayer.paused || cachedPlayer.currentScore < 200f)) return;
+            if (TCGameUI.Instance && !TCGameUI.Instance.Started) return;
+        }
+
         float t = Time.time;
 
         // If a reskin shift was deferred because the enemy was on-screen/close to spider,

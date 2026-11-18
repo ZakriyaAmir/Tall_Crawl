@@ -48,6 +48,8 @@ public class TCPool
         if (!g) return;
         var tag = g.GetComponent<TCPooled>();
         if (tag) { if (tag.inPool) return; tag.inPool = true; }
+        var coinItem = g.GetComponent<TCCoinItem>();
+        if (coinItem != null) coinItem.ResetToNormal();
         g.SetActive(false); free.Push(g);
     }
     public int FreeCount => free.Count;

@@ -275,6 +275,11 @@ public class TCTrack : MonoBehaviour
 
         bool webSwinging = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
 
+        // Enemies (squirrel, snake, bees, wasps/bats) only unlock once the player has started moving and covered at least 200m
+        float playerCoveredMetres = pl ? pl.currentScore : 0f;
+        bool gameStarted = pl != null && !pl.paused && (TCGameUI.Instance == null || TCGameUI.Instance.Started);
+        bool enemiesUnlocked = gameStarted && playerCoveredMetres >= 200f;
+
         // Heart check: every HeartCheckInterval seconds, HeartCheckChance probability.
         bool heartEligible = false;
         if (Time.time >= nextHeartEligibleTime)
@@ -354,40 +359,24 @@ public class TCTrack : MonoBehaviour
                     }
                     else
                     {
-                        // Coin string in open breather: 50% spiral around the tree, 50% curving/straight trail
-                        float spiralStartY = Mathf.Max(y + 0.35f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
-                        float spiralEndY = y + gap - 0.35f;
-                        if (spiralEndY - spiralStartY >= 1.2f)
-                        {
-                            if (Random.value < 0.5f)
-                                SpawnCoinSpiral(spiralStartY, spiralEndY, from, 360f);
-                            else
-                                SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
-                        }
+                        // Coin string in open breather: 18% spiral (clockwise/counter-clockwise), remainder divided among other types
+                        SpawnBreatherCoinString(y, gap, from, safeAngle);
                     }
                 }
             }
             else
             {
-                // Coin string in open breather: 50% spiral around the tree, 50% curving/straight trail
-                float spiralStartY = Mathf.Max(y + 0.35f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
-                float spiralEndY = y + gap - 0.35f;
-                if (spiralEndY - spiralStartY >= 1.2f)
-                {
-                    if (Random.value < 0.5f)
-                        SpawnCoinSpiral(spiralStartY, spiralEndY, from, 360f);
-                    else
-                        SpawnCoinTrail(spiralStartY, spiralEndY, from, safeAngle);
-                }
+                // Coin string in open breather: 18% spiral (clockwise/counter-clockwise), remainder divided among other types
+                SpawnBreatherCoinString(y, gap, from, safeAngle);
             }
 
             nextRowY = y + gap * 1.3f;
             return;
         }
 
-        // Bee swarms only spawn after crossing 200 metres (never during WEB boost)
+        // Bee swarms only spawn after player has started the game and covered 200 metres (never during WEB boost)
         float beeMinDistance = C != null ? C.beeMinMetres : 200f;
-        if (!webSwinging && !lastWasBee && metres >= beeMinDistance && Random.value < C.beeChance * d + 0.02f)
+        if (!webSwinging && !lastWasBee && enemiesUnlocked && playerCoveredMetres >= beeMinDistance && Random.value < C.beeChance * d + 0.02f)
         {
             // Bee swarm row: full 360 jump ring hazard. Spawns an arching coin string over the bees!
             float beeY = y + gap * 0.4f;
@@ -410,9 +399,9 @@ public class TCTrack : MonoBehaviour
         }
 
         // Snake row: a low-poly snake spirals down the trunk from above (like the squirrel, but wrapping the trunk).
-        // Own row with no branches so the jump over it is always clean. Unlocks after 200m, ramps 5% -> 12% of rows,
+        // Own row with no branches so the jump over it is always clean. Unlocks after player covered 200m, ramps 5% -> 12% of rows,
         // never back-to-back, at least 25u (500m) apart, and cut by 30% once max speed (2.5x) is reached.
-        if (!webSwinging && !lastWasBee && snakePool != null && metres >= SnakeUnlockMetres && y > lastSnakeY + SnakeMinSpacing)
+        if (!webSwinging && !lastWasBee && snakePool != null && enemiesUnlocked && playerCoveredMetres >= SnakeUnlockMetres && y > lastSnakeY + SnakeMinSpacing)
         {
             float snakeProb = Mathf.Lerp(0.05f, 0.12f, d);
             if (C.SpeedMultiplierAtDistance(metres) >= 2.49f) snakeProb *= 0.70f;
@@ -474,17 +463,17 @@ public class TCTrack : MonoBehaviour
         OnRow?.Invoke(y, newSafe, Mathf.Abs(Mathf.DeltaAngle(safeAngle, newSafe)), window, secs, metres);
 
         // Enemy / Hurdle Spawns based on distance and probability rules:
-        // - Wasps: unlock after 200m, scaling with distance difficulty d (12% base up to 26%)
-        // - Squirrels: unlock after 200m with advance leaf warning (15% base up to 28%)
+        // - Wasps: unlock after player has started and covered 200m, scaling with distance difficulty d (12% base up to 26%)
+        // - Squirrels: unlock after player has started and covered 200m with advance leaf warning (15% base up to 28%)
         if (!webSwinging)
         {
-            float waspProb = metres >= 200f ? Mathf.Lerp(0.12f, 0.26f, d) : 0f;
+            float waspProb = enemiesUnlocked ? Mathf.Lerp(0.12f, 0.26f, d) : 0f;
             // Reduce bats during night by 30%
             if (gameManager.Instance != null && gameManager.Instance.IsBatPhase)
             {
                 waspProb *= 0.70f;
             }
-            float squirrelProb = metres >= 200f ? Mathf.Lerp(0.15f, 0.28f, d) : 0f;
+            float squirrelProb = enemiesUnlocked ? Mathf.Lerp(0.15f, 0.28f, d) : 0f;
 
             if (waspProb > 0f && Random.value < waspProb)
             {
@@ -563,10 +552,10 @@ public class TCTrack : MonoBehaviour
         {
             // Coin string generation:
             // - Arc / Jump string: 10%
-            // - Spiral string (spirals around the tree): 22%
-            // - Zigzag string: 23%
-            // - Straight string: 23%
-            // - Curving string: 22%
+            // - Spiral string (spirals around the tree): 18% (User requested 18%)
+            // - Zigzag string: 24%
+            // - Straight string: 24%
+            // - Curving string: 24%
             float roll = Random.value;
             int stringCount = Random.Range(6, 11); // 6 to 10 coins
             float trailSpan = (stringCount - 1) * UniformCoinSpacing;
@@ -574,11 +563,11 @@ public class TCTrack : MonoBehaviour
             float trailStartY = Mathf.Max(trailEndY - trailSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
 
             // Only spawn if there is sufficient vertical space for a clean string (never squeeze into a cluster)
-            if (trailEndY - trailStartY >= 1.2f)
+            if (trailEndY - trailStartY >= 1.0f)
             {
                 if (roll < 0.10f)
                 {
-                    // Vertical jump arc string (straight vertical constant angle, spider hops in arc)
+                    // Vertical jump arc string: 10% weight (straight vertical constant angle, spider hops in arc)
                     const float jumpSpan = LongestArcSpan;
                     float arcEndY = y - 0.35f;
                     float arcStartY = Mathf.Max(arcEndY - jumpSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
@@ -587,37 +576,37 @@ public class TCTrack : MonoBehaviour
                         SpawnCoinArc(arcStartY, arcEndY, newSafe, SpiderJumpHeight, 8);
                     }
                 }
-                else if (roll < 0.32f)
+                else if (roll < 0.28f)
                 {
-                    // Spiral string: spirals around the tree cylinder (clockwise or anticlockwise)
+                    // Spiral string: 18% weight (0.10f to 0.28f), randomly counter-clockwise (-1) or clockwise (+1)
                     float sEndY = y - 0.35f;
                     float sStartY = Mathf.Max(sEndY - Mathf.Max(trailSpan, 2.2f), Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
-                    if (sEndY - sStartY >= 1.2f)
+                    if (sEndY - sStartY >= 1.0f)
                     {
-                        float spiralDir = Random.value < 0.5f ? 1f : -1f;
-                        SpawnCoinSpiral(sStartY, sEndY, newSafe, 360f, spiralDir);
+                        float spiralDir = (Random.value < 0.5f) ? -1f : 1f; // 50% counter-clockwise, 50% clockwise
+                        SpawnCoinSpiral(sStartY, sEndY, newSafe, 180f, spiralDir);
                     }
                 }
-                else if (roll < 0.55f)
+                else if (roll < 0.52f)
                 {
-                    // Zigzag string: intense left/right weaving along the climb path requiring active steering
+                    // Zigzag string: 24% weight (0.28f to 0.52f), intense left/right weaving
                     float zigzagAmp = Mathf.Min(Random.Range(38f, 44f), window * 0.42f);
                     float zEndY = y - 0.35f;
                     float zSpan = Mathf.Max(trailSpan, 2.4f);
                     float zStartY = Mathf.Max(zEndY - zSpan, Mathf.Max(prevRowY + 0.35f, lastBonusY + BonusCoinMargin));
-                    if (zEndY - zStartY >= 1.2f)
+                    if (zEndY - zStartY >= 1.0f)
                     {
                         SpawnCoinZigzag(zStartY, zEndY, newSafe, zigzagAmp, 0);
                     }
                 }
-                else if (roll < 0.78f)
+                else if (roll < 0.76f)
                 {
-                    // Straight vertical string (dead straight at newSafe angle)
+                    // Straight vertical string: 24% weight (0.52f to 0.76f, dead straight at newSafe angle)
                     SpawnCoinTrail(trailStartY, trailEndY, newSafe, newSafe, stringCount);
                 }
                 else
                 {
-                    // Curving string (smoothly curves from previous safe angle towards newSafe)
+                    // Curving string: 24% weight (0.76f to 1.00f, smoothly curves from previous safe angle towards newSafe)
                     float curveFrom = Mathf.LerpAngle(safeAngle, newSafe, 0.25f);
                     SpawnCoinTrail(trailStartY, trailEndY, curveFrom, newSafe, stringCount);
                 }
@@ -665,50 +654,100 @@ public class TCTrack : MonoBehaviour
         float stepY = spanY / steps;
         float stepAngle = deltaAngleDeg / steps;
 
+        var coinNodes = new List<TCPooled>(steps + 1);
         for (int i = 0; i <= steps; i++)
         {
             float cy = minY + i * stepY;
             float ca = fromAngle + i * stepAngle;
-            Spawn(coinPool, "coin", cy, ca);
+            var c = Spawn(coinPool, "coin", cy, ca);
+            if (c) coinNodes.Add(c);
             lastCoinY = cy;
+        }
+
+        if (coinNodes.Count > 0)
+        {
+            new TCCoinString(coinNodes);
+        }
+    }
+
+    void SpawnBreatherCoinString(float y, float gap, float fromAngle, float toAngle)
+    {
+        float startY = Mathf.Max(y + 0.35f, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
+        float endY = y + gap - 0.35f;
+        if (endY - startY < 1.0f) return;
+
+        float roll = Random.value;
+        if (roll < 0.18f)
+        {
+            // Spiral string: 18% weight, randomly counter-clockwise (-1) or clockwise (+1)
+            float spiralDir = (Random.value < 0.5f) ? -1f : 1f;
+            SpawnCoinSpiral(startY, endY, fromAngle, 180f, spiralDir);
+        }
+        else if (roll < 0.45f)
+        {
+            // Zigzag string: 27% weight
+            float zigzagAmp = 40f;
+            SpawnCoinZigzag(startY, endY, fromAngle, zigzagAmp, 0);
+        }
+        else if (roll < 0.72f)
+        {
+            // Straight trail: 27% weight
+            SpawnCoinTrail(startY, endY, fromAngle, fromAngle);
+        }
+        else
+        {
+            // Curving trail: 28% weight
+            SpawnCoinTrail(startY, endY, fromAngle, toAngle);
         }
     }
 
     /// <summary>
     /// Spawns a string of coins that spirals around the tree cylinder.
     /// startAngle: starting angle around the tree trunk.
-    /// totalTurnDeg: total angle to wind around the trunk (360 degrees for a complete spiral loop).
-    /// direction: +1 (clockwise) or -1 (anticlockwise). If 0, randomly picks direction.
+    /// totalTurnDeg: total angle to wind around the trunk (180 degrees for a half spiral loop).
+    /// direction: +1 (clockwise) or -1 (counter-clockwise). If 0, randomly picks 50/50.
     /// </summary>
-    public void SpawnCoinSpiral(float startY, float endY, float startAngle, float totalTurnDeg = 360f, float direction = 0f, int preferredCount = 0)
+    public void SpawnCoinSpiral(float startY, float endY, float startAngle, float totalTurnDeg = 180f, float direction = 0f, int preferredCount = 0)
     {
         float minY = Mathf.Max(startY, Mathf.Max(lastCoinY + UniformCoinSpacing, lastBonusY + BonusCoinMargin));
         float spanY = endY - minY;
-        if (spanY < 1.1f) return;
+        if (spanY < 1.0f) return;
 
         const float trunkRadius = 0.603f;
-        float dir = (direction != 0f) ? Mathf.Sign(direction) : (Random.value < 0.5f ? 1f : -1f);
+        // Randomly choose counter-clockwise (-1) or clockwise (+1) when not explicitly set
+        float dir;
+        if (direction > 0.01f) dir = 1f;
+        else if (direction < -0.01f) dir = -1f;
+        else dir = (Random.value < 0.5f) ? -1f : 1f;
+
         float turnDeg = Mathf.Abs(totalTurnDeg);
         float deltaAngleRad = turnDeg * Mathf.Deg2Rad;
         float arcDistance = trunkRadius * deltaAngleRad;
         float totalPathLength = Mathf.Sqrt(spanY * spanY + arcDistance * arcDistance);
 
         // Derive coin count directly from 3D helical path length and UniformCoinSpacing
-        int steps = Mathf.Max(4, Mathf.RoundToInt(totalPathLength / UniformCoinSpacing));
+        int steps = Mathf.Max(5, Mathf.RoundToInt(totalPathLength / UniformCoinSpacing));
         if (preferredCount > 0)
         {
-            steps = Mathf.Max(4, preferredCount - 1);
+            steps = Mathf.Max(5, preferredCount - 1);
         }
 
         float stepY = spanY / steps;
         float stepAngle = (dir * turnDeg) / steps;
 
+        var coinNodes = new List<TCPooled>(steps + 1);
         for (int i = 0; i <= steps; i++)
         {
             float cy = minY + i * stepY;
             float ca = startAngle + i * stepAngle;
-            Spawn(coinPool, "coin", cy, ca);
+            var c = Spawn(coinPool, "coin", cy, ca);
+            if (c) coinNodes.Add(c);
             lastCoinY = cy;
+        }
+
+        if (coinNodes.Count > 0)
+        {
+            new TCCoinString(coinNodes);
         }
     }
 
@@ -770,6 +809,7 @@ public class TCTrack : MonoBehaviour
         // Spawn coins along the zigzag trajectory with strictly uniform surface distance between consecutive coins
         int sampleIdx = 0;
         int sampleSafety = 0;
+        var coinNodes = new List<TCPooled>(steps + 1);
         for (int i = 0; i <= steps; i++)
         {
             float targetDist = i * targetSpacing;
@@ -785,8 +825,14 @@ public class TCTrack : MonoBehaviour
             float coinY = Mathf.Lerp(sampleY[sampleIdx], sampleY[Mathf.Min(sampleIdx + 1, Samples)], segFrac);
             float coinAngle = Mathf.LerpAngle(sampleAngle[sampleIdx], sampleAngle[Mathf.Min(sampleIdx + 1, Samples)], segFrac);
 
-            Spawn(coinPool, "coin", coinY, coinAngle);
+            var c = Spawn(coinPool, "coin", coinY, coinAngle);
+            if (c) coinNodes.Add(c);
             lastCoinY = coinY;
+        }
+
+        if (coinNodes.Count > 0)
+        {
+            new TCCoinString(coinNodes);
         }
     }
 
@@ -817,6 +863,7 @@ public class TCTrack : MonoBehaviour
         const float trunkRadius = 0.603f;
         float stepY = spanY / (count - 1);
 
+        var coinNodes = new List<TCPooled>(count);
         for (int i = 0; i < count; i++)
         {
             float t = (float)i / (count - 1);
@@ -831,8 +878,14 @@ public class TCTrack : MonoBehaviour
             float normHeight = EvaluateJumpTrajectory(t);
             float r = trunkRadius + normHeight * peakArcHeight;
 
-            SpawnCoinAtRadius(cy, ca, r);
+            var c = SpawnCoinAtRadius(cy, ca, r);
+            if (c) coinNodes.Add(c);
             lastCoinY = cy;
+        }
+
+        if (coinNodes.Count > 0)
+        {
+            new TCCoinString(coinNodes);
         }
     }
 
@@ -888,6 +941,13 @@ public class TCTrack : MonoBehaviour
             float collectDist = webSwing ? 0.65f : 0.45f;
             if (dist <= collectDist)
             {
+                var coinItem = p.GetComponent<TCCoinItem>();
+                Vector3 collectPos = p.transform.position;
+                if (coinItem != null && coinItem.stringParent != null)
+                {
+                    coinItem.stringParent.OnCoinCollected(coinItem, collectPos);
+                }
+
                 coinChild.gameObject.SetActive(false);
                 coinChild.localPosition = new Vector3(0f, 0f, 0.603f);
                 coinChild.localRotation = Quaternion.Euler(0f, 0f, 90f);
@@ -1119,6 +1179,10 @@ public class TCTrack : MonoBehaviour
             var c = Spawn(coinPool, "coin", cy, angle);
             lastCoinY = cy;
             if (c) list.Add(c);
+        }
+        if (list.Count > 0)
+        {
+            new TCCoinString(list);
         }
         return list;
     }

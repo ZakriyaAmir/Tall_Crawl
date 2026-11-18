@@ -54,6 +54,14 @@ public class playerInteract : MonoBehaviour
         }
     }
 
+    public void AddChilliBonusCoins(int amount)
+    {
+        if (boostDuration > 0f && amount > 0)
+        {
+            ChilliCoinsEarned += amount;
+        }
+    }
+
     public void OnEnemySmashedInChilli()
     {
         if (boostDuration <= 0f) return;
@@ -311,11 +319,17 @@ public class playerInteract : MonoBehaviour
 
         if (other.CompareTag("points"))
         {
+            Vector3 coinPos = other.transform.position;
+            var coinItem = other.GetComponentInParent<TCCoinItem>();
             other.gameObject.SetActive(false);
             PlayCoinCollect();
             OnCoinCollected();
             gameManager.Instance?.addCoin();
-            OnEvent?.Invoke("coin", other.transform.position);
+            if (coinItem != null && coinItem.stringParent != null)
+            {
+                coinItem.stringParent.OnCoinCollected(coinItem, coinPos);
+            }
+            OnEvent?.Invoke("coin", coinPos);
             return true;
         }
         else if (other.CompareTag("health"))

@@ -12,8 +12,8 @@ public class bees : MonoBehaviour
     static player cachedPlayer;
 
     const float NearDistance = 1.8f;   // Loud / normal volume when spider is near
-    const float FadeDistance = 8.0f;   // Completely faded away when spider is far
-    const float MaxVolume = 0.95f;     // Full normal volume
+    const float FadeDistance = 7.5f;   // Completely faded away when spider is far
+    const float MaxVolume = 0.55f;     // Gentle, soothing ambient volume
 
     void Awake()
     {
@@ -60,8 +60,22 @@ public class bees : MonoBehaviour
 
         if (!audioSrc) return;
 
+        bool isTutorial = TCGameUI.Instance != null && TCGameUI.Instance.IsTutorialRun;
         if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
         if (cachedPlayer == null) return;
+        if (!isTutorial)
+        {
+            if (cachedPlayer.paused || cachedPlayer.currentScore < 200f)
+            {
+                if (audioSrc.isPlaying) { audioSrc.volume = 0f; audioSrc.Stop(); }
+                return;
+            }
+            if (TCGameUI.Instance != null && !TCGameUI.Instance.Started)
+            {
+                if (audioSrc.isPlaying) { audioSrc.volume = 0f; audioSrc.Stop(); }
+                return;
+            }
+        }
 
         float dist = Vector3.Distance(transform.position, cachedPlayer.transform.position);
 

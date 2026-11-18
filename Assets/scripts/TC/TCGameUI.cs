@@ -10,7 +10,8 @@ public class TCGameUI : MonoBehaviour
     public static TCGameUI Instance;
     player pl; playerInteract spider; gameManager gm;
     RectTransform safe, heartsRow, coinIconTarget; TextMeshProUGUI scoreText, coinText, hintText, boostText, comboText;
-    RectTransform comboPayoutBanner; TextMeshProUGUI comboPayoutTitle, comboPayoutValue; Coroutine comboPunchCo, comboPayoutCo; int lastChilliCombo = -1;
+    CanvasGroup comboCanvasGroup; Image comboBg;
+    Coroutine comboPunchCo, comboPayoutCo; int lastChilliCombo = -1;
     RectTransform speedPanel; TextMeshProUGUI speedText, chilliTimerText, slowmoTimerText, magnetTimerText, slowmoStockText; GameObject chilliRow, slowmoRow, magnetRow, slowmoStockRow; RectTransform chilliRect, slowmoRect, magnetRect, slowmoStockRect;
     int lastCooldownCount = -1;
     Vector2 panelNormalSize;
@@ -148,6 +149,44 @@ public class TCGameUI : MonoBehaviour
         var ci = TCUI.Img("Icon", cp.transform, Color.white, TCUI.Icon("coin")); TCUI.Place(ci.rectTransform, new Vector2(0, 0.5f), new Vector2(46, 0), new Vector2(68, 68));
         coinIconTarget = ci.rectTransform;
         coinText = TCUI.Label("Value", cp.transform, "0", 50, TCUI.Cocoa, TextAlignmentOptions.Right); TCUI.Stretch(coinText.rectTransform, 82, 22, 0, 0);
+
+        // Combo & bonus calculation pill panel directly centered below Coins panel with breathing room
+        var comboPill = top.Find("CoinComboPill");
+        if (comboPill != null) Destroy(comboPill.gameObject);
+
+        comboBg = TCUI.Img("CoinComboPill", top, new Color(0.12f, 0.08f, 0.05f, 0.90f));
+        var pillRt = comboBg.rectTransform;
+        // Coins panel is baked in scene at anchoredPosition (-144.2f, 0), size (240, 96), pivot (0.5, 0.5)
+        // Center bonus panel to Coins panel x position:
+        float coinCenterX = cp ? cp.rectTransform.anchoredPosition.x : -144.2f;
+        float coinBottomY = cp ? (cp.rectTransform.anchoredPosition.y - cp.rectTransform.rect.height * cp.rectTransform.pivot.y) : -48f;
+
+        pillRt.anchorMin = new Vector2(1f, 0.5f);
+        pillRt.anchorMax = new Vector2(1f, 0.5f);
+        pillRt.pivot = new Vector2(0.5f, 1f);
+        // Clean 12px space under the Coins panel bottom, perfectly centered with Coins panel horizontally
+        pillRt.anchoredPosition = new Vector2(coinCenterX, coinBottomY - 12f);
+        pillRt.sizeDelta = new Vector2(240f, 62f);
+
+        comboCanvasGroup = comboBg.gameObject.GetComponent<CanvasGroup>();
+        if (!comboCanvasGroup) comboCanvasGroup = comboBg.gameObject.AddComponent<CanvasGroup>();
+
+        comboText = TCUI.Label("Text", comboBg.transform, "", 22, Color.white, TextAlignmentOptions.Center);
+        var comboRt = comboText.rectTransform;
+        TCUI.Stretch(comboRt, 10, 10, 4, 4);
+
+        comboText.alignment = TextAlignmentOptions.Center;
+        comboText.enableWordWrapping = true;
+        comboText.enableAutoSizing = true;
+        comboText.fontSizeMin = 14f;
+        comboText.fontSizeMax = 22f;
+
+        var outline = comboText.GetComponent<Outline>();
+        if (!outline) outline = comboText.gameObject.AddComponent<Outline>();
+        outline.effectColor = new Color(0f, 0f, 0f, 0.95f);
+        outline.effectDistance = new Vector2(1.5f, -1.5f);
+
+        comboBg.gameObject.SetActive(false);
         heartsRow = TCUI.Rect("Hearts", top); TCUI.Place(heartsRow, new Vector2(0, 0.5f), new Vector2(170, 10), new Vector2(300, 80));
         var pause = TCUI.Btn("Pause", top, "", TCUI.Butter, ShowPause, 40, TCUI.Icon("pause"));
         // Perfectly balanced on the top-right header row alongside Coins, ScorePill, and Hearts
@@ -300,24 +339,6 @@ public class TCGameUI : MonoBehaviour
 
         boostText = TCUI.Label("Boost", safe, "BOOST!", 110, TCUI.Cream); TCUI.Place(boostText.rectTransform, new Vector2(0.5f, 0.72f), Vector2.zero, new Vector2(900, 160));
         TCUI.Outline(boostText, 0.25f); boostText.gameObject.SetActive(false);
-
-        comboText = TCUI.Label("ChilliCombo", safe, "", 66, TCUI.Hex("#FFD200"));
-        TCUI.Place(comboText.rectTransform, new Vector2(0.5f, 0.64f), Vector2.zero, new Vector2(900, 120));
-        TCUI.Outline(comboText, 0.28f); comboText.gameObject.SetActive(false);
-
-        comboPayoutBanner = TCUI.Rect("ComboPayoutBanner", safe);
-        TCUI.Place(comboPayoutBanner, new Vector2(0.5f, 0.65f), Vector2.zero, new Vector2(760, 190));
-        var cpBg = TCUI.Img("CardBg", comboPayoutBanner, new Color(0.12f, 0.05f, 0.03f, 0.92f));
-        TCUI.Stretch(cpBg.rectTransform);
-        var cpBorder = TCUI.Img("CardBorder", comboPayoutBanner, TCUI.Hex("#FFD200"));
-        TCUI.Stretch(cpBorder.rectTransform, -4, -4, -4, -4);
-        comboPayoutTitle = TCUI.Label("Title", comboPayoutBanner, "COMBO BONUS!", 40, TCUI.Hex("#FFD200"));
-        TCUI.Place(comboPayoutTitle.rectTransform, new Vector2(0.5f, 0.73f), Vector2.zero, new Vector2(720, 60));
-        TCUI.Outline(comboPayoutTitle, 0.25f);
-        comboPayoutValue = TCUI.Label("Value", comboPayoutBanner, "+0 COINS", 58, TCUI.Cream);
-        TCUI.Place(comboPayoutValue.rectTransform, new Vector2(0.5f, 0.30f), Vector2.zero, new Vector2(720, 70));
-        TCUI.Outline(comboPayoutValue, 0.25f);
-        comboPayoutBanner.gameObject.SetActive(false);
     }
 
     TCLivesPanel livesPanel; bool livesChecked;
@@ -388,24 +409,30 @@ public class TCGameUI : MonoBehaviour
         if (pl.boost)
         {
             boostText.transform.localScale = Vector3.one * (1 + 0.06f * Mathf.Sin(Time.time * 14));
-            if (spider != null && comboText != null)
+            if (spider != null && comboBg != null && comboPayoutCo == null)
             {
+                if (!comboBg.gameObject.activeSelf)
+                {
+                    comboBg.gameObject.SetActive(true);
+                    if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f;
+                }
                 int combo = spider.ChilliComboCount;
-                if (!comboText.gameObject.activeSelf) comboText.gameObject.SetActive(true);
+                int coins = spider.ChilliCoinsEarned;
+                float mult = spider.ChilliComboMultiplier;
                 if (combo > 0)
                 {
-                    float mult = spider.ChilliComboMultiplier;
-                    comboText.text = $"x{combo} COMBO!  <color=#FFF8D0><size=72%>({mult:0.0}x COINS)</size></color>";
+                    comboText.text = $"{coins} x {mult:0.0}x <color=#FFE082><size=80%>(x{combo})</size></color>";
                 }
                 else
                 {
-                    comboText.text = "<color=#FFF0D0><size=70%>SMASH ENEMIES FOR COMBO!</size></color>";
+                    comboText.text = $"{coins} x 1.0x";
                 }
             }
         }
         else
         {
-            if (comboText != null && comboText.gameObject.activeSelf) comboText.gameObject.SetActive(false);
+            if (comboPayoutCo == null && comboBg != null && comboBg.gameObject.activeSelf)
+                comboBg.gameObject.SetActive(false);
         }
 
         // Speed Multiplier, Chilli Mode & Slow-Mo Panel (dirtied only when values change)
@@ -548,11 +575,9 @@ public class TCGameUI : MonoBehaviour
                 // 5 coins spawn and fly to coin counter with bonus coin sound
                 int curCombo = spider != null ? spider.ChilliComboCount : 1;
                 Pop($"x{curCombo} COMBO!\n+5 COINS", pos, TCUI.Hex("#FFD200"));
-                if (comboText != null)
-                {
-                    if (comboPunchCo != null) StopCoroutine(comboPunchCo);
-                    comboPunchCo = StartCoroutine(ComboPunch(comboText.transform));
-                }
+                if (comboPunchCo != null) StopCoroutine(comboPunchCo);
+                if (comboBg != null)
+                    comboPunchCo = StartCoroutine(ComboPunch(comboBg.transform));
                 StartCoroutine(SpawnChilliBonusCoins(pos));
                 break;
             case "heart": Pop("+1 HEART", pos, TCUI.Blush); StartCoroutine(TCUI.Punch(heartsRow, 0.25f)); break;
@@ -579,22 +604,22 @@ public class TCGameUI : MonoBehaviour
 
     public void OnChilliBoostStarted()
     {
-        if (comboPayoutBanner != null && comboPayoutBanner.gameObject.activeSelf)
+        if (comboPayoutCo != null)
         {
-            if (comboPayoutCo != null) StopCoroutine(comboPayoutCo);
-            comboPayoutBanner.gameObject.SetActive(false);
+            StopCoroutine(comboPayoutCo);
+            comboPayoutCo = null;
         }
-        if (comboText != null)
+        if (comboBg != null && comboText != null)
         {
-            comboText.text = "<color=#FFF0D0><size=70%>SMASH ENEMIES FOR COMBO!</size></color>";
-            comboText.gameObject.SetActive(true);
+            if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f;
+            comboText.alpha = 1f;
+            comboText.text = "0 x 1.0x";
+            comboBg.gameObject.SetActive(true);
         }
     }
 
     public void ProcessChilliComboEnd(int combo, int coinsEarned)
     {
-        if (comboText != null) comboText.gameObject.SetActive(false);
-
         if (combo > 0 && coinsEarned > 0)
         {
             float multiplier = 1.0f + combo * 0.1f;
@@ -607,59 +632,89 @@ public class TCGameUI : MonoBehaviour
             if (comboPayoutCo != null) StopCoroutine(comboPayoutCo);
             comboPayoutCo = StartCoroutine(ShowChilliComboPayoutRoutine(combo, coinsEarned, bonusCoins, multiplier));
         }
+        else
+        {
+            if (comboBg != null) comboBg.gameObject.SetActive(false);
+        }
+    }
+
+    public void ShowStringBonusCalculation(int totalStringCoins, int bonusCoins, Vector3 worldPos)
+    {
+        if (comboPayoutCo != null) StopCoroutine(comboPayoutCo);
+        comboPayoutCo = StartCoroutine(ShowStringBonusPayoutRoutine(totalStringCoins, bonusCoins, worldPos));
+    }
+
+    IEnumerator ShowStringBonusPayoutRoutine(int totalStringCoins, int bonusCoins, Vector3 worldPos)
+    {
+        if (comboBg == null || comboText == null) yield break;
+        comboBg.gameObject.SetActive(true);
+        if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f;
+        comboText.alpha = 1f;
+        // Calculation & bonus text placed cleanly below the coins panel
+        comboText.text = $"{totalStringCoins} COINS x 1.5\n<color=#FFB300>+{bonusCoins} BONUS!</color>";
+
+        if (comboPunchCo != null) StopCoroutine(comboPunchCo);
+        comboPunchCo = StartCoroutine(ComboPunch(comboBg.transform));
+
+        // Hold calculation below coins panel for 2.2 seconds
+        yield return new WaitForSecondsRealtime(2.2f);
+
+        // Smooth fade out
+        float fadeDuration = 0.35f;
+        for (float elapsed = 0; elapsed < fadeDuration; elapsed += Time.unscaledDeltaTime)
+        {
+            float t = elapsed / fadeDuration;
+            if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f - t;
+            else comboText.alpha = 1f - t;
+            yield return null;
+        }
+        comboBg.gameObject.SetActive(false);
+        if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f;
+        comboText.alpha = 1f;
+        comboPayoutCo = null;
     }
 
     IEnumerator ShowChilliComboPayoutRoutine(int combo, int coinsEarned, int bonusCoins, float multiplier)
     {
-        if (comboPayoutBanner == null) yield break;
-        comboPayoutBanner.gameObject.SetActive(true);
-        comboPayoutBanner.localScale = Vector3.zero;
-
-        if (comboPayoutTitle != null)
-            comboPayoutTitle.text = $"x{combo} COMBO BONUS!";
-        if (comboPayoutValue != null)
-            comboPayoutValue.text = $"+{bonusCoins} BONUS COINS! <size=72%><color=#FFE082>({multiplier:0.0}x)</color></size>";
+        if (comboBg == null || comboText == null) yield break;
+        comboBg.gameObject.SetActive(true);
+        if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f;
+        comboText.alpha = 1f;
+        comboText.text = $"{coinsEarned} x {multiplier:0.0} = <color=#FFF8D0>+{bonusCoins} BONUS</color>";
 
         TCSfx.Play("menu_flip", 0.85f);
         TCSfx.Play("coin", 0.9f, 1.25f);
 
-        // Pop in with smooth punch
-        float inDuration = 0.22f;
-        for (float elapsed = 0; elapsed < inDuration; elapsed += Time.unscaledDeltaTime)
-        {
-            float t = elapsed / inDuration;
-            float s = Mathf.Lerp(0f, 1.15f, t);
-            comboPayoutBanner.localScale = Vector3.one * s;
-            yield return null;
-        }
-        comboPayoutBanner.localScale = Vector3.one;
+        // Punch little calculation pill panel under coin counter
+        if (comboPunchCo != null) StopCoroutine(comboPunchCo);
+        comboPunchCo = StartCoroutine(ComboPunch(comboBg.transform));
 
-        // Burst flying coins to wallet target
-        int flyCount = Mathf.Clamp(bonusCoins, 6, 12);
+        // Burst flying coins from player directly to wallet coin icon
+        int flyCount = Mathf.Clamp(bonusCoins, 4, 10);
         for (int i = 0; i < flyCount; i++)
         {
-            Vector3 bannerPos = (cam != null)
-                ? cam.ViewportToWorldPoint(new Vector3(0.5f, 0.65f, 2f))
-                : (spider != null ? spider.transform.position + Vector3.up * 0.8f : Vector3.zero);
-            FlyCoin(bannerPos);
-            TCSfx.Play("coin", 0.40f, 1.0f + i * 0.05f);
+            Vector3 startPos = spider != null ? spider.transform.position + Vector3.up * 0.8f : (cam != null ? cam.transform.position + cam.transform.forward * 4f : Vector3.zero);
+            FlyCoin(startPos);
+            TCSfx.Play("coin", 0.35f, 1.0f + i * 0.05f);
             yield return new WaitForSecondsRealtime(0.045f);
         }
 
-        // Hold banner for player celebration
-        yield return new WaitForSecondsRealtime(1.8f);
+        // Hold calculation under coin counter for 2.2 seconds
+        yield return new WaitForSecondsRealtime(2.2f);
 
-        // Smooth fade/collapse out
-        float outDuration = 0.25f;
-        Vector3 startScale = comboPayoutBanner.localScale;
-        for (float elapsed = 0; elapsed < outDuration; elapsed += Time.unscaledDeltaTime)
+        // Smooth fade out
+        float fadeDuration = 0.35f;
+        for (float elapsed = 0; elapsed < fadeDuration; elapsed += Time.unscaledDeltaTime)
         {
-            float t = elapsed / outDuration;
-            comboPayoutBanner.localScale = Vector3.Lerp(startScale, new Vector3(1f, 0f, 1f), t);
+            float t = elapsed / fadeDuration;
+            if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f - t;
+            else comboText.alpha = 1f - t;
             yield return null;
         }
-        comboPayoutBanner.gameObject.SetActive(false);
-        comboPayoutBanner.localScale = Vector3.one;
+        comboBg.gameObject.SetActive(false);
+        if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f;
+        comboText.alpha = 1f;
+        comboPayoutCo = null;
     }
 
     IEnumerator ComboPunch(Transform target)
@@ -670,7 +725,7 @@ public class TCGameUI : MonoBehaviour
         for (float elapsed = 0; elapsed < duration; elapsed += Time.unscaledDeltaTime)
         {
             float t = elapsed / duration;
-            float scale = 1.0f + 0.35f * Mathf.Sin(t * Mathf.PI);
+            float scale = 1.0f + 0.2f * Mathf.Sin(t * Mathf.PI);
             target.localScale = orig * scale;
             yield return null;
         }
