@@ -797,7 +797,8 @@ public class gameManager : MonoBehaviour
     public int DistanceBonus => (int)p.currentScore / 100 * BonusPerHundred;
     public int Metres => p ? (int)p.currentScore : 0;
 
-    public void Restart() { MaybeInterstitial(); Time.timeScale = 1; SceneManager.LoadScene("gameplay"); }
+    // Every restart shows a (test) interstitial unless NoAds is owned; the next one is preloaded on close.
+    public void Restart() { TCServices.Interstitial(); Time.timeScale = 1; SceneManager.LoadScene("gameplay"); }
     public void Home() { MaybeInterstitial(); Time.timeScale = 1; SceneManager.LoadScene("MainMenu"); }
     void MaybeInterstitial()
     {

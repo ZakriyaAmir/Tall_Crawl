@@ -1,5 +1,16 @@
 {
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.google.ads.mobile"
+      ]
+    }
+  ],
   "dependencies": {
+    "com.google.ads.mobile": "11.7.0",
+    "com.unity.external-dependency-manager": "2.1.1",
     "com.unity.ai.navigation": "2.0.15",
     "com.unity.collab-proxy": "2.13.6",
     "com.unity.ext.nunit": "2.0.5",

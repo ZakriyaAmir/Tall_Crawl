@@ -9,12 +9,17 @@ public class TCSafeArea : MonoBehaviour
 {
     public float bottomReserve; Rect last; float lastReserve = -1;
     public static bool BannerVisible = true;
+    /// Real AdMob banner height in screen pixels (set by AdmobManager when the banner loads).
+    public static float BannerHeightPx;
     void Update()
     {
-        var sa = Screen.safeArea; float reserve = BannerVisible && !TCSave.NoAds ? bottomReserve : 0;
-        if (sa == last && reserve == lastReserve) return; last = sa; lastReserve = reserve;
+        var sa = Screen.safeArea;
         var rt = (RectTransform)transform; var canvas = GetComponentInParent<Canvas>();
         float scale = canvas ? canvas.scaleFactor : 1;
+        // Reserve at least the design value, or the real adaptive banner height (+ small gap) if taller,
+        // so bottom UI never sits under the banner on any screen size.
+        float reserve = BannerVisible && !TCSave.NoAds ? Mathf.Max(bottomReserve, BannerHeightPx / Mathf.Max(0.01f, scale) + 12f) : 0;
+        if (sa == last && reserve == lastReserve) return; last = sa; lastReserve = reserve;
         Vector2 min = sa.position, max = sa.position + sa.size;
         min.x /= Screen.width; max.x /= Screen.width; min.y /= Screen.height; max.y /= Screen.height;
         rt.anchorMin = min; rt.anchorMax = max; rt.offsetMin = new Vector2(0, reserve); rt.offsetMax = Vector2.zero;
