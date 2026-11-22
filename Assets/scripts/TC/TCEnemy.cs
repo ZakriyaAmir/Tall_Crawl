@@ -78,14 +78,21 @@ public class TCEnemy : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Checks if the run is completely ended or paused (pause menu open).
+    /// Note: Does NOT freeze enemies when player is dead, allowing existing enemies to move through.
+    /// </summary>
+    public static bool IsGamePausedOrEnded()
+    {
+        var gm = gameManager.Instance;
+        if (gm != null && (gm.runEnded || gm.IsPaused)) return true;
+        return false;
+    }
+
     public static bool IsGameOverOrDead()
     {
-        var p = player.Instance != null ? player.Instance : FindObjectOfType<player>();
-        if (p != null && p.GameOver) return true;
         var gm = gameManager.Instance;
-        if (gm != null && gm.runEnded) return true;
-        var pi = playerInteract.Instance;
-        if (pi != null && pi.IsDead) return true;
+        if (gm != null && (gm.runEnded || gm.IsPaused)) return true;
         return false;
     }
 

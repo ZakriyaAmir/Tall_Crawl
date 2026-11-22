@@ -279,25 +279,33 @@ public class player : MonoBehaviour
             float lockDist = Screen.height * 0.025f;
             float touchAge = Time.unscaledTime - rawTouchDownTime;
 
-            // If the gesture has been held/dragged for more than 1.0s without completing a jump swipe,
+            // If the gesture has been held/dragged for more than 0.5s without completing a jump swipe,
             // cancel vertical axis lock and revert to horizontal steering so dragging moves the spider.
-            if (axisLock == GestureAxis.Vertical && touchAge >= 1.0f)
+            if (axisLock == GestureAxis.Vertical && touchAge >= 0.5f)
             {
                 axisLock = GestureAxis.Horizontal;
             }
 
-            // Dominant-axis lock: only allow locking to vertical within the 1.0s swipe threshold window
+            // Dominant-axis lock: only lock to vertical if vertical movement STRONGLY dominates horizontal movement.
+            // If the user drags left/right with even a slight upward slant, immediately favor horizontal steering
+            // so accidental upward thumb curvature never halts player movement.
             if (axisLock == GestureAxis.None)
             {
-                if (touchAge < 1.0f && Mathf.Abs(upwardDist) > lockDist && Mathf.Abs(upwardDist) > sideDist * 1.15f)
+                if (sideDist > lockDist * 0.6f && sideDist >= Mathf.Abs(upwardDist) * 0.7f)
+                {
+                    axisLock = GestureAxis.Horizontal;
+                }
+                else if (touchAge < 0.5f && Mathf.Abs(upwardDist) > lockDist && Mathf.Abs(upwardDist) > sideDist * 1.8f)
+                {
                     axisLock = GestureAxis.Vertical;
-                else if (sideDist > lockDist && sideDist > Mathf.Abs(upwardDist) * 0.9f)
+                }
+                else if (touchAge >= 0.5f)
+                {
                     axisLock = GestureAxis.Horizontal;
-                else if (touchAge >= 1.0f)
-                    axisLock = GestureAxis.Horizontal;
+                }
             }
 
-            // Only apply left/right steering on a horizontal (or still-undecided and not vertical) drag
+            // Apply left/right steering on horizontal drag (or while undecided, so movement never feels laggy or halted)
             if (steerAllowed && axisLock != GestureAxis.Vertical && Mathf.Abs(dx) > 0.001f)
             {
                 targetYaw -= dx * degPerPixel;
@@ -308,8 +316,8 @@ public class player : MonoBehaviour
             bool isGenuineSwipeUp = jumpAllowed
                 && axisLock != GestureAxis.Horizontal
                 && upwardDist > minSwipeDist
-                && upwardDist > sideDist * 1.15f
-                && touchAge < 1.0f;
+                && upwardDist > sideDist * 1.5f
+                && touchAge < 0.5f;
 
             if (isGenuineSwipeUp)
             {
@@ -327,8 +335,8 @@ public class player : MonoBehaviour
                 && slowmoAllowed
                 && axisLock != GestureAxis.Horizontal
                 && (-upwardDist) > minSwipeDist
-                && (-upwardDist) > sideDist * 1.15f
-                && touchAge < 1.0f
+                && (-upwardDist) > sideDist * 1.5f
+                && touchAge < 0.5f
                 && playerInteract.CooldownInventory > 0
                 && (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive);
 

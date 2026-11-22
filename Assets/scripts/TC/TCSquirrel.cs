@@ -36,7 +36,7 @@ public class TCSquirrel : TCEnemy
         if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
         if (cachedPlayer != null)
         {
-            if (cachedPlayer.paused) return false;
+            if (!cachedPlayer.GameOver && cachedPlayer.paused) return false;
             if (TCGameUI.Instance != null && !TCGameUI.Instance.Started) return false;
             return cachedPlayer.currentScore >= minDistanceMetres;
         }

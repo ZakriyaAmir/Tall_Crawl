@@ -87,6 +87,7 @@ public static class TCTheme
         foreach (var t in root.GetComponentsInChildren<TextMeshProUGUI>(true))
         {
             if (skipUnder && t.transform.IsChildOf(skipUnder)) continue;
+            if (t.name == "PriceText" || (t.transform.parent && t.transform.parent.name == "PriceBanner")) { StyleText(t, Color.white, 0.14f, true); continue; }
             var pb = t.GetComponentInParent<Button>(true); // a nested real button keeps its own face's text colour
             if (pb && pb.transform != root && pb.transform.IsChildOf(root) && pb.GetComponent<Image>()) continue;
             StyleText(t, col, light ? 0.26f : 0.12f, light);
@@ -338,6 +339,16 @@ public static class TCTheme
                     StyleChip(img, TCUI.TanLight, TCUI.Brown, 3.5f, 4f, false);
                     var v = img.transform.Find("V")?.GetComponent<TextMeshProUGUI>(); if (v) StyleText(v, TCUI.Crimson, 0.14f, false); break;
                 case "Badge": img.color = TCUI.Crimson; Effects(img, TCUI.Cream, 4f, A(TCUI.Ink, 0.4f), 4f); Mark(img, "badge"); break;
+                case "PriceBanner":
+                    img.color = TCUI.Crimson;
+                    img.sprite = TCUI.Round;
+                    img.type = Image.Type.Sliced;
+                    img.raycastTarget = false;
+                    Effects(img, TCUI.CrimsonDark, 1.5f, Color.clear, 0);
+                    var ptext = img.GetComponentInChildren<TextMeshProUGUI>(true);
+                    if (ptext) StyleText(ptext, Color.white, 0.14f, true);
+                    Mark(img, "price_banner");
+                    break;
                 case "Shadow": if (img.GetComponent<TCFollowRect>()) { if (img.color.a > 0.05f) img.color = A(TCUI.Ink, 0.55f); Mark(img, "shadow"); } break;
                 case "Toast": img.color = A(TCUI.Ink, 0.95f); Effects(img, TCUI.Tan, 4f, A(TCUI.Ink, 0.4f), 8f); Deco(img.transform, "Bevel", Spr("ui_bevel"), A(Color.white, 0.5f), 0); TextOnFace(img.transform, TCUI.Ink); Mark(img, "toast"); break;
                 case "Flash": img.color = A(TCUI.Crimson, 0.35f); Mark(img, "flash"); break;

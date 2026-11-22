@@ -197,7 +197,8 @@ public class TCWasp : TCEnemy
         if (!isTutorial)
         {
             if (!cachedPlayer) cachedPlayer = FindObjectOfType<player>();
-            if (cachedPlayer && (cachedPlayer.paused || cachedPlayer.currentScore < 200f)) return;
+            if (cachedPlayer && !cachedPlayer.GameOver && cachedPlayer.paused) return;
+            if (cachedPlayer && cachedPlayer.currentScore < 200f) return;
             if (TCGameUI.Instance && !TCGameUI.Instance.Started) return;
         }
 

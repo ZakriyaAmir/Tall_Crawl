@@ -94,7 +94,8 @@ public class TCSnake : TCEnemy
         if (!isTutorial)
         {
             var p = player.Instance;
-            if (p && (p.paused || p.currentScore < 200f)) return;
+            if (p && !p.GameOver && p.paused) return;
+            if (p && p.currentScore < 200f) return;
             if (TCGameUI.Instance && !TCGameUI.Instance.Started) return;
         }
 

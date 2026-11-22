@@ -1963,13 +1963,13 @@ public class TCGameUI : MonoBehaviour
                 }
             });
         }, 50, TCUI.Icon("play"));
-        TCUI.Place((RectTransform)reviveAdBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 60), new Vector2(680, 130));
+        TCUI.Place((RectTransform)reviveAdBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -45), new Vector2(680, 130));
 
         reviveGemBtn = TCUI.Btn("Gems", card, "REVIVE (" + TCConfig.I.reviveCostGems + " GEMS)", TCUI.Sky, () =>
         {
             if (TCSave.Gems >= TCConfig.I.reviveCostGems) { TCSave.Gems -= TCConfig.I.reviveCostGems; DoRevive(); }
         }, 48, TCUI.Icon("gem"));
-        TCUI.Place((RectTransform)reviveGemBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -115), new Vector2(680, 120));
+        TCUI.Place((RectTransform)reviveGemBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -225), new Vector2(680, 120));
 
         var skipBtn = TCUI.Btn("Skip", card, "NO THANKS", Color.clear, SkipRevive, 42);
         TCUI.Place((RectTransform)skipBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -385), new Vector2(440, 95));
@@ -2010,7 +2010,7 @@ public class TCGameUI : MonoBehaviour
                 reviveGemBtn.interactable = TCSave.Gems >= TCConfig.I.reviveCostGems;
                 var gemRt = (RectTransform)reviveGemBtn.transform;
                 // Center the gem button nicely if the watch-ad button is hidden
-                gemRt.anchoredPosition = new Vector2(0, adReady ? -115 : -10);
+                gemRt.anchoredPosition = new Vector2(0, adReady ? -225 : -135);
             }
             TCUI.Show(this, revivePanel);
             reviveCo = StartCoroutine(ReviveCountdown());

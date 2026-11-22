@@ -71,7 +71,7 @@ public class bees : MonoBehaviour
         if (cachedPlayer == null) return;
         if (!isTutorial)
         {
-            if (cachedPlayer.paused || cachedPlayer.currentScore < 200f)
+            if ((!cachedPlayer.GameOver && cachedPlayer.paused) || cachedPlayer.currentScore < 200f)
             {
                 if (audioSrc.isPlaying) { audioSrc.volume = 0f; audioSrc.Stop(); }
                 return;

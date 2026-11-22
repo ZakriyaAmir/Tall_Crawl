@@ -276,8 +276,8 @@ public class TCCheatCode
     {
         var skins = TCSkins.All;
         for (int i = 0; i < skins.Length; i++) TCSave.UnlockSkin(i);
-        // Shop upgrades are ids 1..6 with caps {_,5,2,3,3,5,5}
-        int[] max = { 0, 5, 2, 3, 3, 5, 5 };
+        // Shop upgrades are ids 1..6 with caps {_,5,2,0,0,5,5} (Head Start & Climb Bonus removed)
+        int[] max = { 0, 5, 2, 0, 0, 5, 5 };
         for (int u = 1; u < max.Length; u++) TCSave.SetUpgrade(u, max[u]);
         TCSave.Coins = 9_000_000;
         TCSave.Gems = 9_000_000;

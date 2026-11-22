@@ -699,8 +699,8 @@ public class gameManager : MonoBehaviour
     }
 
     public const int CoinValue = 1;
-    /// Distance bonus per 100 m: base + "Climb Bonus" upgrade level.
-    public static int BonusPerHundred => TCConfig.I.coinsPerHundredMetres + TCSave.Upgrade(3);
+    /// Distance bonus per 100 m: base rate.
+    public static int BonusPerHundred => TCConfig.I.coinsPerHundredMetres;
     public void SetMusic(bool on)
     {
         if (musicPrimary) musicPrimary.mute = !on;

@@ -25,7 +25,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
         DontDestroyOnLoad(gameObject);
 
     }
-    public string[] kProductIDs;
+    public string[] kProductIDs = { "com.zakriya.tallcrawl.coins_1000", "com.zakriya.tallcrawl.noads", "com.zakriya.tallcrawl.premium" };
     /// Standalone gem packs (consumable, 10 gems per USD). Dummy IDs: replace with the real Play Console IDs.
     public static readonly string[] GemProductIDs = { "com.zakriya.tallcrawl.gems_10", "com.zakriya.tallcrawl.gems_50", "com.zakriya.tallcrawl.gems_100", "com.zakriya.tallcrawl.gems_200" };
     public static readonly int[] GemPackAmounts = { 10, 50, 100, 200 };
@@ -73,7 +73,16 @@ public class UnityIAP : MonoBehaviour, IStoreListener
     /// Store-localised price string, or null before the store is initialised.
     public string LocalizedPrice(string id)
     {
-        try { var p = m_StoreController?.products.WithID(id); return p != null && p.metadata.localizedPrice > 0.05m ? p.metadata.localizedPriceString : null; /* fake store reports $0.01 */ } catch { return null; }
+        try
+        {
+            if (string.IsNullOrEmpty(id) || m_StoreController == null) return null;
+            var p = m_StoreController.products.WithID(id);
+            if (p == null || string.IsNullOrEmpty(p.metadata.localizedPriceString)) return null;
+            if (p.metadata.localizedPrice > 0.05m || !Application.isEditor)
+                return p.metadata.localizedPriceString;
+            return null;
+        }
+        catch { return null; }
     }
     public void GeneralFunctionl(int id)
     {

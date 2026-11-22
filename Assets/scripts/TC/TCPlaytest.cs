@@ -86,8 +86,8 @@ public class TCPlaytest : MonoBehaviour
         // ---- Economy: upgrades ----
         TCSave.Gems = 50;
         var shop = menu.GetPanel("Shop"); TCUI.Show(menu, shop); yield return W(0.5f);
-        int before = TCSave.Gems; Click("TC_MenuUI/Safe/Shop/Card/Upg3/Buy");
-        Check(TCSave.Upgrade(3) == 1 && TCSave.Gems == before - TCConfig.I.upgradeCosts[0], $"upgrade climb bonus: lvl {TCSave.Upgrade(3)} cost {before - TCSave.Gems}");
+        int before = TCSave.Gems; Click("TC_MenuUI/Safe/Shop/Card/Upg2/Buy");
+        Check(TCSave.Upgrade(2) == 1 && TCSave.Gems == before - TCConfig.I.upgradeCosts[0], $"upgrade heart: lvl {TCSave.Upgrade(2)} cost {before - TCSave.Gems}");
         TCSave.Gems = 1; Click("TC_MenuUI/Safe/Shop/Card/Upg1/Buy");
         Check(TCSave.Upgrade(1) == 0 && TCSave.Gems == 1, "cannot buy upgrade without gems");
         TCSave.Coins = -20; Check(TCSave.Coins == 0, "coins never negative");

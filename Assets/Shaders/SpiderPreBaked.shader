@@ -26,8 +26,7 @@ Shader "TallCrawl/SpiderPreBaked"
             ZWrite On
             ZTest LEqual
             Offset 1, 1
-            ColorMask RGBA
-            Blend SrcAlpha OneMinusSrcAlpha
+            ColorMask RGB
 
             CGPROGRAM
             #pragma vertex vert
@@ -134,7 +133,7 @@ Shader "TallCrawl/SpiderPreBaked"
             }
 
             o.Emission = _EmissionColor.rgb;
-            o.Alpha = tex.a * _Color.a;
+            o.Alpha = 1.0;
         }
         ENDCG
     }

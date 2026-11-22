@@ -5,7 +5,7 @@ using UnityEngine;
 /// Coin Magnet Controller & 3D Pickup Generator.
 /// When active, draws nearby coins along the trunk directly into the spider,
 /// while emitting a subtle, elegant, 70% transparent yellow circular ripple around the spider.
-/// Duration scales with Store Upgrade ID 6: 8.0s base up to 20.0s at Max Level 5 (+2.4s per level).
+/// Duration scales with Store Upgrade ID 6: 8.0s base up to 16.0s at Max Level 5 (+1.6s per level, double of base).
 /// </summary>
 [DefaultExecutionOrder(100)]
 public class TCCoinMagnet : MonoBehaviour
@@ -13,12 +13,12 @@ public class TCCoinMagnet : MonoBehaviour
     public static TCCoinMagnet Instance { get; private set; }
 
     public const float BaseDuration = 8.0f;
-    public const float MaxDuration = 20.0f;
-    public const float DurationPerUpgrade = 2.4f;
+    public const float MaxDuration = 16.0f;
+    public const float DurationPerUpgrade = 1.6f;
 
     /// <summary>
     /// Effective duration of Coin Magnet, scaling with Store Upgrade ID 6.
-    /// Base: 8.0s, +2.4s per level (Level 5 = 20.0s).
+    /// Base: 8.0s, +1.6s per level (Level 5 Max = 16.0s, double of base duration).
     /// </summary>
     public static float Duration => BaseDuration + DurationPerUpgrade * Mathf.Clamp(TCSave.Upgrade(6), 0, 5);
 

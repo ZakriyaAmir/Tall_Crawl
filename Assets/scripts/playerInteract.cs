@@ -344,7 +344,7 @@ public class playerInteract : MonoBehaviour
         {
             other.gameObject.SetActive(false);
             Play(TCSfx.Get("chilli"), 0.8f);
-            StartBoost(3f + 0.75f * TCSave.Upgrade(1));
+            StartBoost(6f + 1.2f * Mathf.Clamp(TCSave.Upgrade(1), 0, 5));
             TCFx.Shake(0.12f);
             TCTrack.OnChilliCollected();
             return true;

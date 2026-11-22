@@ -121,7 +121,7 @@ public class TCMenuUI : MonoBehaviour
     void BuildPreview()
     {
         var a = TCAssets.I;
-        rt = new RenderTexture(768, 768, 16) { antiAliasing = 2 };
+        rt = new RenderTexture(768, 768, 16, RenderTextureFormat.ARGB32) { antiAliasing = 2 };
 
         // Use preview camera already present in the scene, or locate by name
         if (!previewCam)
@@ -133,6 +133,8 @@ public class TCMenuUI : MonoBehaviour
         Transform stageParent = null;
         if (previewCam)
         {
+            previewCam.clearFlags = CameraClearFlags.SolidColor;
+            previewCam.backgroundColor = new Color(0, 0, 0, 0);
             previewCam.targetTexture = rt;
             stageParent = previewCam.transform.parent;
         }
@@ -866,8 +868,9 @@ public class TCMenuUI : MonoBehaviour
     }
 
     // ---------- Shop ----------
+    static readonly int[] activeUpgradeIds = { 1, 2, 5, 6 };
     static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Climb Bonus", "Head Start", "Slow-Mo Time", "Coin Magnet" };
-    static readonly int[] upgMax = { 0, 5, 2, 3, 3, 5, 5 };
+    static readonly int[] upgMax = { 0, 5, 2, 0, 0, 5, 5 };
     public CanvasGroup GetPanel(string n) => n == "Skins" ? skinsPanel : n == "Shop" ? shopPanel : n == "Settings" ? settingsPanel : n == "Daily" ? dailyPanel : consentPanel;
 
     static void SetRect(RectTransform rt, Vector2 anchor, Vector2 pos, Vector2 size)
@@ -888,115 +891,118 @@ public class TCMenuUI : MonoBehaviour
         rt.offsetMax = new Vector2(-r, -t);
     }
 
+    static readonly string[] packFallbackPrices = { "$0.99", "$2.99", "$4.99" };
+    static readonly string[] gemFallbackPrices = { "$0.99", "$4.99", "$9.99", "$19.99" };
+
     void BuildShop()
     {
-        shopPanel = TCUI.Panel("Shop", safe, out var card, new Vector2(980, 1540), "SHOP");
-        SetRect(card, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(980, 1540));
-        var head = card.Find("Header") as RectTransform;
-        if (head) SetRect(head, new Vector2(0.5f, 1f), Vector2.zero, new Vector2(680, 115));
+        shopPanel = TCUI.Panel("Shop", safe, out var card, new Vector2(980, 1680), "SHOP");
+
+        // Hide obsolete upgrade rows if present in baked scene
+        var oldUpg3 = card.Find("Upg3"); if (oldUpg3) oldUpg3.gameObject.SetActive(false);
+        var oldUpg4 = card.Find("Upg4"); if (oldUpg4) oldUpg4.gameObject.SetActive(false);
 
         // Upgrades Section
-        var h1 = TCUI.Label("H", card, "UPGRADES", 36, TCUI.Crimson);
-        SetRect(h1.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -92), new Vector2(880, 38));
-        h1.fontSize = 36; h1.fontStyle = FontStyles.Bold;
-
-        for (int id = 1; id <= 6; id++)
+        for (int i = 0; i < activeUpgradeIds.Length; i++)
         {
-            int u = id; float y = -160 - (id - 1) * 102;
-            var row = TCUI.Img("Upg" + id, card, Color.white);
-            if (TCUI.Fresh(row))
+            int id = activeUpgradeIds[i];
+            int u = id;
+            var row = card.Find("Upg" + id);
+            if (!row) continue;
+
+            var name = row.Find("N")?.GetComponent<TextMeshProUGUI>();
+            if (name) name.text = upgNames[id];
+
+            var pips = row.Find("P")?.GetComponent<TextMeshProUGUI>();
+            var buy = row.Find("Buy")?.GetComponent<Button>();
+            var bt = buy ? buy.GetComponentInChildren<TextMeshProUGUI>() : null;
+
+            if (buy)
             {
-                SetRect(row.rectTransform, new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(880, 88));
-                var sh = row.gameObject.AddComponent<Shadow>();
-                sh.effectColor = new Color(0, 0, 0, 0.08f);
-                sh.effectDistance = new Vector2(0, -4);
-            }
-
-            var name = TCUI.Label("N", row.transform, upgNames[id], 34, TCUI.Cocoa, TextAlignmentOptions.Left);
-            if (TCUI.Fresh(name)) SetStretch(name.rectTransform, 26, 270, 0, 32);
-            name.fontSize = 34; name.alignment = TextAlignmentOptions.Left;
-
-            var pips = TCUI.Label("P", row.transform, "", 26, TCUI.Mint, TextAlignmentOptions.Left);
-            if (TCUI.Fresh(pips)) SetStretch(pips.rectTransform, 26, 270, 44, 0);
-            pips.fontSize = 26; pips.alignment = TextAlignmentOptions.Left;
-
-            var buy = TCUI.Btn("Buy", row.transform, "0", TCUI.Sky, () =>
-            {
-                int lvl = TCSave.Upgrade(u); if (lvl >= upgMax[u]) return; int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
-                if (TCSave.Gems < cost) { Toast("Not enough gems"); return; }
-                TCSave.Gems -= cost; TCSave.SetUpgrade(u, lvl + 1); TCAudio.Play(TCAssets.I.purchase); Toast(upgNames[u] + " upgraded!"); TCServices.Log("upgrade", "id", u);
-            }, 32, TCUI.Icon("gem"));
-            if (TCUI.Fresh(buy)) SetRect((RectTransform)buy.transform, new Vector2(1, 0.5f), new Vector2(-140, 0), new Vector2(240, 68));
-
-            var bt = buy.GetComponentInChildren<TextMeshProUGUI>();
-            if (bt) { bt.fontSize = 32; bt.alignment = TextAlignmentOptions.Center; }
-            var iconImg = buy.transform.Find("Icon")?.GetComponent<Image>();
-            if (iconImg != null)
-            {
-                iconImg.sprite = TCUI.Icon("gem");
+                buy.onClick.RemoveAllListeners();
+                buy.onClick.AddListener(() =>
+                {
+                    TCAudio.Click();
+                    int lvl = TCSave.Upgrade(u); if (lvl >= upgMax[u]) return; int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
+                    if (TCSave.Gems < cost) { Toast("Not enough gems"); return; }
+                    TCSave.Gems -= cost; TCSave.SetUpgrade(u, lvl + 1); TCAudio.Play(TCAssets.I.purchase); Toast(upgNames[u] + " upgraded!"); TCServices.Log("upgrade", "id", u);
+                });
             }
 
             refreshers.Add(() =>
             {
-                int lvl = TCSave.Upgrade(u); pips.text = "Level " + lvl + " / " + upgMax[u];
-                bool max = lvl >= upgMax[u]; int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
-                if (bt) bt.text = max ? "MAX" : cost.ToString(); buy.interactable = !max && TCSave.Gems >= cost;
+                int lvl = TCSave.Upgrade(u);
+                if (pips) pips.text = "Level " + lvl + " / " + upgMax[u];
+                bool max = lvl >= upgMax[u];
+                int cost = TCConfig.I.upgradeCosts[Mathf.Min(lvl, TCConfig.I.upgradeCosts.Length - 1)];
+                if (bt) bt.text = max ? "MAX" : cost.ToString();
+                if (buy) buy.interactable = !max && TCSave.Gems >= cost;
             });
         }
 
-        // Gems Section (10 GEMS = $1)
-        var hg = TCUI.Label("HG", card, "GEMS  (10 GEMS = $1)", 36, TCUI.Crimson);
-        SetRect(hg.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -766), new Vector2(880, 38));
-        hg.fontSize = 36; hg.fontStyle = FontStyles.Bold;
-
+        // Gems Section
         for (int g = 0; g < UnityIAP.GemProductIDs.Length; g++)
         {
             int pack = g, gems = UnityIAP.GemPackAmounts[g];
-            string price = "$" + UnityIAP.GemPackUsd[g].ToString("0");
-            var gb = TCUI.Btn("Gems" + g, card, gems + "\n" + price, TCUI.Sky, () => TCServices.BuyGems(pack, () =>
-            {
-                TCSave.Gems += gems; TCAudio.Play(TCAssets.I.purchase); Toast("+" + gems + " gems!"); TCServices.Log("iap_gems", "gems", gems);
-            }), 30, TCUI.Icon("gem"));
-            float xPos = -339f + g * 226f;
-            if (TCUI.Fresh(gb))
-            {
-                SetRect((RectTransform)gb.transform, new Vector2(0.5f, 1), new Vector2(xPos, -860), new Vector2(202, 98));
-                var gtFresh = gb.GetComponentInChildren<TextMeshProUGUI>();
-                if (gtFresh) SetStretch(gtFresh.rectTransform, 6, 6, 30, 6);
-                var gIconFresh = gb.transform.Find("Icon")?.GetComponent<Image>();
-                if (gIconFresh) SetRect(gIconFresh.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -18), new Vector2(32, 32));
-            }
+            var gb = card.Find("Gems" + g)?.GetComponent<Button>();
+            if (!gb) continue;
 
-            var gt = gb.GetComponentInChildren<TextMeshProUGUI>();
-            if (gt) { gt.fontSize = 28; gt.alignment = TextAlignmentOptions.Center; gt.lineSpacing = -15f; }
-            refreshers.Add(() => { var lp = UnityIAP.Instance ? UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[pack]) : null; if (gt && !string.IsNullOrEmpty(lp)) gt.text = gems + "\n" + lp; });
+            gb.onClick.RemoveAllListeners();
+            gb.onClick.AddListener(() =>
+            {
+                TCAudio.Click();
+                TCServices.BuyGems(pack, () =>
+                {
+                    TCSave.Gems += gems; TCAudio.Play(TCAssets.I.purchase); Toast("+" + gems + " gems!"); TCServices.Log("iap_gems", "gems", gems);
+                });
+            });
+
+            var gt = gb.transform.Find("Text")?.GetComponent<TextMeshProUGUI>();
+            if (gt) gt.text = gems + " GEMS";
+
+            var pt = gb.transform.Find("PriceBanner/PriceText")?.GetComponent<TextMeshProUGUI>();
+            if (!pt) pt = gb.transform.Find("PriceText")?.GetComponent<TextMeshProUGUI>();
+
+            refreshers.Add(() =>
+            {
+                var lp = UnityIAP.Instance ? UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[pack]) : null;
+                if (pt && !string.IsNullOrEmpty(lp)) pt.text = lp;
+            });
         }
 
         // Coin Packs & More Section
-        var h2 = TCUI.Label("H2", card, "COIN PACKS & MORE", 36, TCUI.Crimson);
-        SetRect(h2.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -970), new Vector2(880, 38));
-        h2.fontSize = 36; h2.fontStyle = FontStyles.Bold;
-
-        Pack(card, new Vector2(-228, -1066), "1,000 coins", "BUY", 0, () => TCSave.Coins += 1000);
-        Pack(card, new Vector2(228, -1066), "No Ads + 20 gems", "BUY", 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
-        Pack(card, new Vector2(-228, -1186), "Premium: 5,000\ncoins + 50 gems", "BUY", 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
+        Pack(card, 0, () => TCSave.Coins += 1000);
+        Pack(card, 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
+        Pack(card, 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
 
         int adCoins = TCConfig.I.adCoinReward;
-        var free = TCUI.Btn("FreeCoins", card, "FREE " + adCoins + " (AD)", TCUI.Mint, () => TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); }, "shop_coins"), 32, TCUI.Icon("play"));
-        if (TCUI.Fresh(free)) SetRect((RectTransform)free.transform, new Vector2(0.5f, 1), new Vector2(228, -1186), new Vector2(424, 94));
-        var ft = free.GetComponentInChildren<TextMeshProUGUI>();
-        if (ft) { ft.fontSize = 30; ft.alignment = TextAlignmentOptions.Center; }
+        var free = card.Find("FreeCoins")?.GetComponent<Button>();
+        if (free)
+        {
+            free.onClick.RemoveAllListeners();
+            free.onClick.AddListener(() =>
+            {
+                TCAudio.Click();
+                TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); }, "shop_coins");
+            });
+            var ft = free.GetComponentInChildren<TextMeshProUGUI>();
+            if (ft) ft.text = "FREE " + adCoins + " (AD)";
+        }
 
         // Bottom Actions (Restore & Close)
-        var restore = TCUI.Btn("Restore", card, "RESTORE", TCUI.Lilac, OnRestoreClicked, 34);
-        if (TCUI.Fresh(restore)) SetRect((RectTransform)restore.transform, new Vector2(0.5f, 0), new Vector2(-185, 70), new Vector2(330, 90));
-        var rt = restore.GetComponentInChildren<TextMeshProUGUI>();
-        if (rt) rt.fontSize = 34;
+        var restore = card.Find("Restore")?.GetComponent<Button>();
+        if (restore)
+        {
+            restore.onClick.RemoveAllListeners();
+            restore.onClick.AddListener(() => { TCAudio.Click(); OnRestoreClicked(); });
+        }
 
-        var close = TCUI.Btn("Close", card, "BACK", TCUI.Grey, () => TCUI.Hide(this, shopPanel), 38);
-        if (TCUI.Fresh(close)) SetRect((RectTransform)close.transform, new Vector2(0.5f, 0), new Vector2(185, 70), new Vector2(330, 90));
-        var ct = close.GetComponentInChildren<TextMeshProUGUI>();
-        if (ct) ct.fontSize = 38;
+        var close = card.Find("Close")?.GetComponent<Button>();
+        if (close)
+        {
+            close.onClick.RemoveAllListeners();
+            close.onClick.AddListener(() => { TCAudio.Click(); TCUI.Hide(this, shopPanel); });
+        }
     }
 
     void OnRestoreClicked()
@@ -1024,12 +1030,31 @@ public class TCMenuUI : MonoBehaviour
         );
     }
 
-    void Pack(RectTransform card, Vector2 pos, string title, string btn, int productIndex, System.Action grant)
+    void Pack(RectTransform card, int productIndex, System.Action grant)
     {
-        var b = TCUI.Btn("Pack" + productIndex, card, title, TCUI.Sky, () => TCServices.Buy(productIndex, () => { grant(); TCAudio.Play(TCAssets.I.purchase); Toast("Purchase complete!"); TCServices.Log("iap_purchase", "index", productIndex); }), 32);
-        if (TCUI.Fresh(b)) SetRect((RectTransform)b.transform, new Vector2(0.5f, 1), pos, new Vector2(424, 94));
-        var bt = b.GetComponentInChildren<TextMeshProUGUI>();
-        if (bt) { bt.fontSize = 30; bt.alignment = TextAlignmentOptions.Center; bt.lineSpacing = -15f; }
+        var b = card.Find("Pack" + productIndex)?.GetComponent<Button>();
+        if (!b) return;
+
+        b.onClick.RemoveAllListeners();
+        b.onClick.AddListener(() =>
+        {
+            TCAudio.Click();
+            TCServices.Buy(productIndex, () =>
+            {
+                grant(); TCAudio.Play(TCAssets.I.purchase); Toast("Purchase complete!"); TCServices.Log("iap_purchase", "index", productIndex);
+            });
+        });
+
+        var pt = b.transform.Find("PriceBanner/PriceText")?.GetComponent<TextMeshProUGUI>();
+        if (!pt) pt = b.transform.Find("PriceText")?.GetComponent<TextMeshProUGUI>();
+
+        refreshers.Add(() =>
+        {
+            string id = (UnityIAP.Instance != null && UnityIAP.Instance.kProductIDs != null && productIndex < UnityIAP.Instance.kProductIDs.Length)
+                ? UnityIAP.Instance.kProductIDs[productIndex] : null;
+            var lp = (!string.IsNullOrEmpty(id) && UnityIAP.Instance) ? UnityIAP.Instance.LocalizedPrice(id) : null;
+            if (pt && !string.IsNullOrEmpty(lp)) pt.text = lp;
+        });
     }
 
     // ---------- Settings ----------
