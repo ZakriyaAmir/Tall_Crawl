@@ -26,7 +26,7 @@ public class TCPinecone : TCEnemy
 
     void Update()
     {
-        if (isSmashed) return;
+        if (isSmashed || IsGameOverOrDead()) return;
         float dt = Time.deltaTime;
 
         // 1. Tumble smoothly down the trunk in its designated lane

@@ -277,14 +277,23 @@ public class player : MonoBehaviour
             float upwardDist = p.y - rawTouchDownPos.y;
             float sideDist = Mathf.Abs(p.x - rawTouchDownPos.x);
             float lockDist = Screen.height * 0.025f;
+            float touchAge = Time.unscaledTime - rawTouchDownTime;
 
-            // Dominant-axis lock: once the gesture is clearly a jump/slow-mo swipe, never steer,
-            // and once it's clearly a turn, never jump or slow-mo.
+            // If the gesture has been held/dragged for more than 1.0s without completing a jump swipe,
+            // cancel vertical axis lock and revert to horizontal steering so dragging moves the spider.
+            if (axisLock == GestureAxis.Vertical && touchAge >= 1.0f)
+            {
+                axisLock = GestureAxis.Horizontal;
+            }
+
+            // Dominant-axis lock: only allow locking to vertical within the 1.0s swipe threshold window
             if (axisLock == GestureAxis.None)
             {
-                if (Mathf.Abs(upwardDist) > lockDist && Mathf.Abs(upwardDist) > sideDist * 1.15f)
+                if (touchAge < 1.0f && Mathf.Abs(upwardDist) > lockDist && Mathf.Abs(upwardDist) > sideDist * 1.15f)
                     axisLock = GestureAxis.Vertical;
                 else if (sideDist > lockDist && sideDist > Mathf.Abs(upwardDist) * 0.9f)
+                    axisLock = GestureAxis.Horizontal;
+                else if (touchAge >= 1.0f)
                     axisLock = GestureAxis.Horizontal;
             }
 
@@ -300,7 +309,7 @@ public class player : MonoBehaviour
                 && axisLock != GestureAxis.Horizontal
                 && upwardDist > minSwipeDist
                 && upwardDist > sideDist * 1.15f
-                && (Time.unscaledTime - rawTouchDownTime) < 0.5f;
+                && touchAge < 1.0f;
 
             if (isGenuineSwipeUp)
             {
@@ -319,7 +328,7 @@ public class player : MonoBehaviour
                 && axisLock != GestureAxis.Horizontal
                 && (-upwardDist) > minSwipeDist
                 && (-upwardDist) > sideDist * 1.15f
-                && (Time.unscaledTime - rawTouchDownTime) < 0.5f
+                && touchAge < 1.0f
                 && playerInteract.CooldownInventory > 0
                 && (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive);
 

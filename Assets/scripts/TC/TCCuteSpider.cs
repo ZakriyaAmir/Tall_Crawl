@@ -859,6 +859,27 @@ public partial class TCCuteSpider : MonoBehaviour
         rollTimer = duration;
     }
 
+    public void OnRevive()
+    {
+        flip = 0f;
+        backflipTimer = 0f;
+        rollTimer = 0f;
+        rollBlend = 0f;
+        currentAirHeight = 0f;
+        jumpBlend = 0f;
+        hasSwingWorldRot = false;
+        if (body)
+        {
+            body.localPosition = bodyRest;
+            body.localRotation = Quaternion.identity;
+            body.localScale = bodyScale != Vector3.zero ? bodyScale : Vector3.one;
+        }
+        if (root && hasRestRoot)
+        {
+            root.localPosition = restRoot;
+        }
+    }
+
     public Vector3 VisualCenter()
     {
         if (body) return body.position;

@@ -29,6 +29,7 @@ public class TCSquirrel : TCEnemy
 
     static bool HasPlayerStartedAndCovered(float minDistanceMetres)
     {
+        if (IsGameOverOrDead()) return false;
         // Tutorial mode scripts explicitly spawn and handle the tutorial squirrel
         if (TCGameUI.Instance != null && TCGameUI.Instance.IsTutorialRun) return true;
 
@@ -266,7 +267,12 @@ public class TCSquirrel : TCEnemy
 
     void Update()
     {
-        if (isSmashed) return;
+        if (isSmashed || IsGameOverOrDead())
+        {
+            if (warningPS) { warningPS.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); warningPS = null; }
+            if (warningGO) { Object.Destroy(warningGO); warningGO = null; }
+            return;
+        }
         // Squirrel only comes into action once the player has started moving and covered 200m
         if (!HasPlayerStartedAndCovered(200f)) return;
 

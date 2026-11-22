@@ -25,7 +25,7 @@ public class TCGameUI : MonoBehaviour
     readonly Queue<TextMeshProUGUI> popPool = new Queue<TextMeshProUGUI>();
     readonly Queue<Image> flyingCoinPool = new Queue<Image>();
     readonly Queue<RectTransform> flyingLetterPool = new Queue<RectTransform>();
-    TextMeshProUGUI resMetres, resBest, resCoins, resBonus, resTotal, reviveTimer, countDownText; Button doubleBtn, reviveGemBtn;
+    TextMeshProUGUI resMetres, resBest, resCoins, resBonus, resTotal, reviveTimer, countDownText; Button doubleBtn, reviveGemBtn, reviveAdBtn;
     RectTransform resultHomeRt, resultAgainRt, countDownRoot;
     CanvasGroup countDownGroup;
     Vector2 resultHomeRest, resultAgainRest;
@@ -1950,14 +1950,26 @@ public class TCGameUI : MonoBehaviour
         TCUI.Stretch(reviveTimer.rectTransform);
         TCUI.Outline(reviveTimer, 0.2f);
 
-        var adBtn = TCUI.Btn("Ad", card, "REVIVE (WATCH AD)", TCUI.Mint, () => { StopReviveTimer(); TCServices.Rewarded(DoRevive, "revive"); }, 50, TCUI.Icon("play"));
-        TCUI.Place((RectTransform)adBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 50), new Vector2(680, 130));
+        reviveAdBtn = TCUI.Btn("Ad", card, "REVIVE (WATCH AD)", TCUI.Mint, () =>
+        {
+            StopReviveTimer();
+            TCServices.Rewarded(DoRevive, "revive", () =>
+            {
+                // If ad not available / failed, restart countdown so user can pick gems or skip
+                if (revivePanel != null && revivePanel.gameObject.activeSelf)
+                {
+                    StopReviveTimer();
+                    reviveCo = StartCoroutine(ReviveCountdown());
+                }
+            });
+        }, 50, TCUI.Icon("play"));
+        TCUI.Place((RectTransform)reviveAdBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 60), new Vector2(680, 130));
 
         reviveGemBtn = TCUI.Btn("Gems", card, "REVIVE (" + TCConfig.I.reviveCostGems + " GEMS)", TCUI.Sky, () =>
         {
             if (TCSave.Gems >= TCConfig.I.reviveCostGems) { TCSave.Gems -= TCConfig.I.reviveCostGems; DoRevive(); }
         }, 48, TCUI.Icon("gem"));
-        TCUI.Place((RectTransform)reviveGemBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -100), new Vector2(680, 120));
+        TCUI.Place((RectTransform)reviveGemBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -115), new Vector2(680, 120));
 
         var skipBtn = TCUI.Btn("Skip", card, "NO THANKS", Color.clear, SkipRevive, 42);
         TCUI.Place((RectTransform)skipBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -385), new Vector2(440, 95));
@@ -1986,7 +1998,23 @@ public class TCGameUI : MonoBehaviour
         // A death during the first-run tutorial left its overlay up over the results
         if (tutorialCo != null) { StopCoroutine(tutorialCo); tutorialCo = null; isTutorialRun = false; TCSave.TutorialDone = true; if (gm != null) gm.EndTutorialTimeFreeze(); }
         if (startOverlay.alpha > 0) TCUI.Hide(this, startOverlay);
-        if (canRevive) { reviveGemBtn.interactable = TCSave.Gems >= TCConfig.I.reviveCostGems; TCUI.Show(this, revivePanel); reviveCo = StartCoroutine(ReviveCountdown()); }
+        if (canRevive)
+        {
+            bool adReady = TCServices.IsRewardedReady();
+            if (reviveAdBtn)
+            {
+                reviveAdBtn.gameObject.SetActive(adReady);
+            }
+            if (reviveGemBtn)
+            {
+                reviveGemBtn.interactable = TCSave.Gems >= TCConfig.I.reviveCostGems;
+                var gemRt = (RectTransform)reviveGemBtn.transform;
+                // Center the gem button nicely if the watch-ad button is hidden
+                gemRt.anchoredPosition = new Vector2(0, adReady ? -115 : -10);
+            }
+            TCUI.Show(this, revivePanel);
+            reviveCo = StartCoroutine(ReviveCountdown());
+        }
         else ShowResults();
     }
     IEnumerator ReviveCountdown()
@@ -2079,14 +2107,18 @@ public class TCGameUI : MonoBehaviour
         resCoins.text = gm.coinsCollected.ToString("N0");
         resBonus.text = gm.DistanceBonus.ToString("N0") + GemSuffix();
         resTotal.text = total.ToString("N0");
+        bool adReady = TCServices.IsRewardedReady();
+        bool canDouble = adReady && total > 0 && !gm.DoubleClaimed;
         if (doubleBtn)
         {
-            doubleBtn.gameObject.SetActive(true);
+            doubleBtn.gameObject.SetActive(canDouble);
             doubleBtn.transform.localScale = Vector3.one;
-            doubleBtn.interactable = total > 0 && !gm.DoubleClaimed;
+            doubleBtn.interactable = canDouble;
         }
-        if (resultHomeRt) resultHomeRt.anchoredPosition = resultHomeRest;
-        if (resultAgainRt) resultAgainRt.anchoredPosition = resultAgainRest;
+        var dbRt = doubleBtn ? (RectTransform)doubleBtn.transform : null;
+        float actionY = canDouble ? resultHomeRest.y : (dbRt ? dbRt.anchoredPosition.y : -165f);
+        if (resultHomeRt) resultHomeRt.anchoredPosition = new Vector2(resultHomeRest.x, actionY);
+        if (resultAgainRt) resultAgainRt.anchoredPosition = new Vector2(resultAgainRest.x, actionY);
         TCUI.Show(this, resultPanel);
 
         if (newBest)

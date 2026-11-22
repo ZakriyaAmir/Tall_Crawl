@@ -188,7 +188,11 @@ public class TCWasp : TCEnemy
 
     void Update()
     {
-        if (isSmashed) return;
+        if (isSmashed || IsGameOverOrDead())
+        {
+            if (audioSrc && audioSrc.isPlaying) audioSrc.Stop();
+            return;
+        }
         bool isTutorial = TCGameUI.Instance != null && TCGameUI.Instance.IsTutorialRun;
         if (!isTutorial)
         {

@@ -640,8 +640,24 @@ public class playerInteract : MonoBehaviour
     public void Revive()
     {
         life = 1; // revive (ad or gems) gives exactly one life
-        if (animator) { animator.SetBool("death", false); animator.SetTrigger("respawn"); }
+        if (animator)
+        {
+            animator.SetBool("death", false);
+            animator.ResetTrigger("death");
+            animator.SetTrigger("respawn");
+            animator.Play("SpiderRun", 0, 0f);
+            animator.Update(0f);
+        }
+        var spiderModel = transform.Find("Spider");
+        if (spiderModel)
+        {
+            spiderModel.localPosition = Vector3.zero;
+            spiderModel.localRotation = Quaternion.identity;
+        }
+        if (cachedCuteSpider == null) cachedCuteSpider = GetComponentInChildren<TCCuteSpider>();
+        if (cachedCuteSpider != null) cachedCuteSpider.OnRevive();
         invulnTimer = 2.5f;
+        SetVisible(true);
         Play(TCSfx.Get("revive"), 0.8f);
     }
 

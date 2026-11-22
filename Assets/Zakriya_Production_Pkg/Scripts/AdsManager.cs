@@ -198,6 +198,15 @@ public class AdsManager : MonoBehaviour
         }
     }
 
+    public bool IsRewardedAdAvailable()
+    {
+        if (admobRewarded && AdmobManager.Instance != null)
+        {
+            return AdmobManager.Instance.IsRewardedReady;
+        }
+        return false;
+    }
+
     public bool RunRewardedAd(Action rewardCallback)
     {
         bool available = false;

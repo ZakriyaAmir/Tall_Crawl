@@ -17,11 +17,23 @@ public static class TCServices
 #endif
     }
 
+    public static bool IsRewardedReady()
+    {
+        if (Application.isEditor) return true; // Editor mock: always ready
+        try
+        {
+            if (AdsManager.Instance != null)
+                return AdsManager.Instance.IsRewardedAdAvailable();
+        }
+        catch (Exception) { }
+        return false;
+    }
+
     /// Rewarded ads always play, even when NoAds is on (NoAds only hides banner + interstitial).
     /// On device this shows the official Google AdMob test rewarded unit full-screen and grants
-    /// the reward only from AdmobManager's OnUserEarnedReward callback. In the Editor there is
-    /// no visible panel: we log and grant so revive / x2 stay testable.
-    public static void Rewarded(Action onReward, string placement)
+    /// the reward only from AdmobManager's OnUserEarnedReward callback once the ad is closed. In the Editor
+    /// there is no visible panel: we log and grant so revive / x2 stay testable.
+    public static void Rewarded(Action onReward, string placement, Action onUnavailable = null)
     {
         Log("rewarded_request", "placement_" + placement, 1);
         if (Application.isEditor)
@@ -41,6 +53,15 @@ public static class TCServices
         catch (Exception e) { Debug.LogWarning("[TCServices] Rewarded show failed: " + e.Message); }
         // Do not fall back to a custom overlay, and do not grant if the ad did not play.
         Debug.LogWarning("[TCServices] Rewarded '" + placement + "' not ready — reward not granted");
+        if (onUnavailable != null)
+        {
+            onUnavailable();
+        }
+        else
+        {
+            if (TCMenuUI.Instance != null)
+                TCMenuUI.Instance.ShowToast("Ad is loading, please try again in a moment!");
+        }
     }
 
     public static void Interstitial()

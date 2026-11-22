@@ -36,8 +36,57 @@ public class AdmobManager : MonoBehaviour
     bool _isInterstitialLoading, _isRewardedLoading;
     int _bannerFails, _interstitialFails, _rewardedFails;
 
+    Action _pendingRewardedCallback;
+    bool _rewardEarned;
+
+    /// Tracks how many full-screen ads (interstitial/rewarded) are currently active.
+    static int _activeFullScreenAds = 0;
+    static float _previousTimeScale = 1f;
+
+    /// Fired on the main thread when an interstitial or rewarded ad opens.
+    public static event Action OnFullScreenAdOpened;
+
     /// Fired on the main thread when an interstitial or rewarded ad closes.
     public static event Action OnFullScreenAdClosed;
+
+    public static void HandleAdOpened()
+    {
+        _activeFullScreenAds++;
+        if (_activeFullScreenAds == 1)
+        {
+            _previousTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+            AudioListener.pause = true;
+            Debug.Log("[AdmobManager] Full screen ad opened: paused time & muted audio.");
+        }
+        OnFullScreenAdOpened?.Invoke();
+    }
+
+    public static void HandleAdClosed()
+    {
+        if (_activeFullScreenAds > 0)
+        {
+            _activeFullScreenAds--;
+            if (_activeFullScreenAds == 0)
+            {
+                AudioListener.pause = false;
+                TCSave.Apply();
+                // Restore timeScale only if game is not paused / game over
+                var gm = gameManager.Instance;
+                var pl = player.Instance;
+                if ((gm != null && gm.IsPaused) || (pl != null && pl.GameOver))
+                {
+                    // keep paused / frozen
+                }
+                else
+                {
+                    Time.timeScale = _previousTimeScale > 0f ? _previousTimeScale : 1f;
+                }
+                Debug.Log("[AdmobManager] Full screen ad closed: unpaused time & restored audio.");
+            }
+        }
+        OnFullScreenAdClosed?.Invoke();
+    }
 
     // ---------------------------------------------------------------- main-thread dispatch
     static readonly ConcurrentQueue<Action> _mainQueue = new ConcurrentQueue<Action>();
@@ -138,14 +187,18 @@ public class AdmobManager : MonoBehaviour
             _interstitialFails = 0;
             Debug.Log("[AdmobManager] Interstitial loaded.");
             _interstitialAd = ad;
-            ad.OnAdFullScreenContentOpened += () => OnMain(() => Debug.Log("[AdmobManager] Interstitial opened."));
+            ad.OnAdFullScreenContentOpened += () => OnMain(() =>
+            {
+                Debug.Log("[AdmobManager] Interstitial opened.");
+                HandleAdOpened();
+            });
             ad.OnAdFullScreenContentClosed += () => OnMain(() =>
             {
                 Debug.Log("[AdmobManager] Interstitial closed — preloading next.");
                 if (_interstitialAd == ad) _interstitialAd = null;
                 ad.Destroy();
                 LoadInterstitialAd();
-                OnFullScreenAdClosed?.Invoke();
+                HandleAdClosed();
             });
             ad.OnAdFullScreenContentFailed += err => OnMain(() =>
             {
@@ -153,6 +206,7 @@ public class AdmobManager : MonoBehaviour
                 if (_interstitialAd == ad) _interstitialAd = null;
                 ad.Destroy();
                 LoadInterstitialAd();
+                HandleAdClosed();
             });
         }));
     }
@@ -173,6 +227,8 @@ public class AdmobManager : MonoBehaviour
         LogFirebaseEvent("Admob_Interstitial_failed");
         return false;
     }
+
+    public bool IsRewardedReady => _rewardedAd != null && _rewardedAd.CanShowAd();
 
     // ---------------------------------------------------------------- rewarded
     public void LoadRewardedAd()
@@ -198,26 +254,46 @@ public class AdmobManager : MonoBehaviour
             Debug.Log("[AdmobManager] Rewarded loaded.");
             _rewardedAd = ad;
             isRewardedAdReady = true;
-            ad.OnAdFullScreenContentOpened += () => OnMain(() => Debug.Log("[AdmobManager] Rewarded opened."));
+            ad.OnAdFullScreenContentOpened += () => OnMain(() =>
+            {
+                Debug.Log("[AdmobManager] Rewarded opened.");
+                HandleAdOpened();
+            });
             ad.OnAdFullScreenContentClosed += () => OnMain(() =>
             {
                 Debug.Log("[AdmobManager] Rewarded closed — preloading next.");
                 if (_rewardedAd == ad) { _rewardedAd = null; isRewardedAdReady = false; }
                 ad.Destroy();
                 LoadRewardedAd();
-                OnFullScreenAdClosed?.Invoke();
+
+                if (_rewardEarned)
+                {
+                    _rewardEarned = false;
+                    var cb = _pendingRewardedCallback;
+                    _pendingRewardedCallback = null;
+                    cb?.Invoke();
+                }
+                else
+                {
+                    _pendingRewardedCallback = null;
+                }
+
+                HandleAdClosed();
             });
             ad.OnAdFullScreenContentFailed += err => OnMain(() =>
             {
                 Debug.LogWarning("[AdmobManager] Rewarded failed to show: " + err);
                 if (_rewardedAd == ad) { _rewardedAd = null; isRewardedAdReady = false; }
+                _pendingRewardedCallback = null;
+                _rewardEarned = false;
                 ad.Destroy();
                 LoadRewardedAd();
+                HandleAdClosed();
             });
         }));
     }
 
-    /// Rewarded ads always play (NoAds does not block them). The reward callback runs on the main thread.
+    /// Rewarded ads always play (NoAds does not block them). The reward callback runs on the main thread after ad dismiss.
     public bool ShowRewardedAd(Action rewardCallback)
     {
         if (_rewardedAd == null || !_rewardedAd.CanShowAd())
@@ -229,11 +305,13 @@ public class AdmobManager : MonoBehaviour
             return false;
         }
         isRewardedAdReady = false;
+        _pendingRewardedCallback = rewardCallback;
+        _rewardEarned = false;
         Debug.Log("[AdmobManager] Showing rewarded.");
         _rewardedAd.Show(reward => OnMain(() =>
         {
             Debug.Log("[AdmobManager] User earned reward " + reward.Type + " x" + reward.Amount);
-            rewardCallback?.Invoke();
+            _rewardEarned = true;
             LogFirebaseEvent("Admob_Rewarded_success");
         }));
         return true;

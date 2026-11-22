@@ -89,7 +89,7 @@ public class TCSnake : TCEnemy
 
     void Update()
     {
-        if (isSmashed) return;
+        if (isSmashed || IsGameOverOrDead()) return;
         bool isTutorial = TCGameUI.Instance != null && TCGameUI.Instance.IsTutorialRun;
         if (!isTutorial)
         {

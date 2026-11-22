@@ -231,7 +231,8 @@ public class TCTrack : MonoBehaviour
         }
 
         bool isTutorial = TCGameUI.Instance != null ? TCGameUI.Instance.IsTutorialRun : (!TCSave.TutorialDone || TCSave.TutorialRequested);
-        if (!isTutorial)
+        bool isGameOver = (pl && pl.GameOver) || (gameManager.Instance != null && gameManager.Instance.runEnded) || (playerInteract.Instance != null && playerInteract.Instance.IsDead);
+        if (!isTutorial && !isGameOver)
         {
             int rowIterations = 0;
             float rowAheadY = py + 12f;

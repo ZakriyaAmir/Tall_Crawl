@@ -78,6 +78,17 @@ public class TCEnemy : MonoBehaviour
         }
     }
 
+    public static bool IsGameOverOrDead()
+    {
+        var p = player.Instance != null ? player.Instance : FindObjectOfType<player>();
+        if (p != null && p.GameOver) return true;
+        var gm = gameManager.Instance;
+        if (gm != null && gm.runEnded) return true;
+        var pi = playerInteract.Instance;
+        if (pi != null && pi.IsDead) return true;
+        return false;
+    }
+
     protected static bool IsPlayerInChilliMode()
     {
         var p = player.Instance != null ? player.Instance : FindObjectOfType<player>();

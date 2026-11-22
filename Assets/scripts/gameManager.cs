@@ -744,6 +744,7 @@ public class gameManager : MonoBehaviour
         if (revivedThisRun || runEnded || !p.GameOver) return; // guard: ad callback + timer race could revive twice / after results
         revivedThisRun = true;
         IsPaused = false;
+        Time.timeScale = 1f;
         p.GameOver = false;
         p.paused = true;
         p.ResetInputState();
@@ -754,8 +755,9 @@ public class gameManager : MonoBehaviour
 
     IEnumerator ReviveRoutine()
     {
-        // Don't move the spider until the getting up animation is completed
-        yield return new WaitForSeconds(1.25f);
+        // Don't move the spider until the getting up animation is completed (use unscaled time)
+        yield return new WaitForSecondsRealtime(1.25f);
+        Time.timeScale = 1f;
         if (!runEnded) p.paused = false;
     }
 

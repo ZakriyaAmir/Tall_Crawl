@@ -9,6 +9,7 @@ using UnityEngine.EventSystems;
 /// Main menu: currencies, best score, 3D spider preview, Play, Skins, Shop, Daily reward, Settings, consent.
 public class TCMenuUI : MonoBehaviour
 {
+    public static TCMenuUI Instance;
     RectTransform safe; Canvas canvas;
     TextMeshProUGUI coinsText, gemsText, bestText; Image dailyBadge;
     CanvasGroup skinsPanel, shopPanel, settingsPanel, dailyPanel, consentPanel, toastGroup; TextMeshProUGUI toastText;
@@ -17,6 +18,11 @@ public class TCMenuUI : MonoBehaviour
     readonly TCCheatCode cheat = new TCCheatCode();
     public bool CheatActivated { get; private set; }
     TextMeshProUGUI cheatHint;
+
+    void Awake()
+    {
+        Instance = this;
+    }
 
     void Start()
     {
@@ -1096,7 +1102,7 @@ public class TCMenuUI : MonoBehaviour
         claimBtn = TCUI.Btn("Claim", card, "CLAIM", TCUI.Mint, () => ClaimDaily(false), 56);
         claimBtnText = claimBtn.GetComponentInChildren<TextMeshProUGUI>();
         TCUI.Place((RectTransform)claimBtn.transform, new Vector2(0.5f, 0), new Vector2(-160, 260), new Vector2(380, 140));
-        dblBtn = TCUI.Btn("Double", card, "x2 (AD)", TCUI.Butter, () => TCServices.Rewarded(() => ClaimDaily(true), "daily"), 48, TCUI.Icon("play"));
+        dblBtn = TCUI.Btn("Double", card, "x2 (AD)", TCUI.Butter, () => TCServices.Rewarded(() => ClaimDaily(true), "daily", () => Toast("Ad is still loading. Please try again in a moment!")), 48, TCUI.Icon("play"));
         dblBtnText = dblBtn.GetComponentInChildren<TextMeshProUGUI>();
         TCUI.Place((RectTransform)dblBtn.transform, new Vector2(0.5f, 0), new Vector2(230, 260), new Vector2(340, 140));
         TCUI.Place((RectTransform)TCUI.Btn("Close", card, "LATER", TCUI.Grey, () => TCUI.Hide(this, dailyPanel), 42).transform, new Vector2(0.5f, 0), new Vector2(0, 100), new Vector2(300, 100));
@@ -1163,6 +1169,7 @@ public class TCMenuUI : MonoBehaviour
         toastText = TCUI.Label("T", r.transform, "", 44, TCUI.Cream); TCUI.Stretch(toastText.rectTransform);
     }
     Coroutine toastCo;
+    public void ShowToast(string msg, bool flashy = false) { Toast(msg, flashy); }
     void Toast(string msg) { Toast(msg, false); }
     void Toast(string msg, bool flashy)
     {

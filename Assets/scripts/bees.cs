@@ -48,6 +48,12 @@ public class bees : MonoBehaviour
 
     void Update()
     {
+        if (TCEnemy.IsGameOverOrDead())
+        {
+            if (audioSrc && audioSrc.isPlaying) { audioSrc.volume = 0f; audioSrc.Stop(); }
+            return;
+        }
+
         // Constant circling around the tree trunk (World Y axis)
         if (spinSpeed != 0f)
         {
