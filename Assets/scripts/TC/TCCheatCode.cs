@@ -42,7 +42,6 @@ public class TCCheatCode
         // double-bound listener). Collapse those so a single Sound tap is one step.
         if (now - lastFeedTime < DuplicateWindow && kind == lastFeedKind)
         {
-            Debug.Log("[TCCheat] Feed " + kind + " ignored duplicate at progress " + Progress);
             return false;
         }
         lastFeedTime = now;
@@ -58,7 +57,6 @@ public class TCCheatCode
                 Progress = 1;
                 StartTime = now;
             }
-            Debug.Log("[TCCheat] Feed " + kind + " progress " + before + "->" + Progress);
             return false;
         }
 
@@ -66,7 +64,6 @@ public class TCCheatCode
         // During the slider half, in-between values are part of the drag, not a mistake.
         if (IsSliderStep(expect) && kind == Kind.SliderOther)
         {
-            Debug.Log("[TCCheat] Feed " + kind + " progress " + Progress + " (mid-drag ignored)");
             return false;
         }
         // When waiting for the initial slider extreme (SliderMin at progress 4), the slider
@@ -74,7 +71,6 @@ public class TCCheatCode
         // away from SliderMax. Ignore SliderMax while waiting for the first SliderMin.
         if (Progress == 4 && kind == Kind.SliderMax)
         {
-            Debug.Log("[TCCheat] Feed " + kind + " progress " + Progress + " (initial SliderMax ignored, waiting for SliderMin)");
             return false;
         }
         // Repeated events at the same extreme (Unity fires onValueChanged while the
@@ -82,13 +78,11 @@ public class TCCheatCode
         if (IsSliderStep(expect) && IsSliderStep(kind) && kind != expect
             && Progress > 0 && kind == Expected[Progress - 1])
         {
-            Debug.Log("[TCCheat] Feed " + kind + " progress " + Progress + " (repeat extreme ignored)");
             return false;
         }
 
         if (kind != expect)
         {
-            Debug.Log("[TCCheat] Feed " + kind + " progress " + before + "->0 (reset, expected " + expect + ")");
             Reset();
             // A wrong input does not also start a new sequence.
             return false;
@@ -100,7 +94,6 @@ public class TCCheatCode
             Reset();
             completed = true;
         }
-        Debug.Log("[TCCheat] Feed " + kind + " progress " + before + "->" + Progress + (completed ? " COMPLETE" : ""));
         return completed;
     }
 
@@ -129,7 +122,6 @@ public class TCCheatCode
         void Check(bool ok, string what)
         {
             if (!ok) fails++;
-            Debug.Log((ok ? "CHEAT ok   " : "CHEAT FAIL ") + what);
         }
 
         var c = new TCCheatCode();
@@ -283,7 +275,6 @@ public class TCCheatCode
         TCSave.Gems = 9_000_000;
         TCSave.NoAds = true;
         TCServices.Banner(false);
-        Debug.Log("TCCheatCode: granted all skins, max upgrades, 9e6 coins/gems, ads off");
     }
 }
 

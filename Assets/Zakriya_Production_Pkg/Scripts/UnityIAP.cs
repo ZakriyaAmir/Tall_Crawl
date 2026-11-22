@@ -9,6 +9,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
     private static IStoreController m_StoreController;
     private static IExtensionProvider m_StoreExtensionProvider;
     public Action onPurchaseComplete;
+    public static event Action OnIAPInitialized;
     public static UnityIAP Instance
     {
         get;
@@ -77,8 +78,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
         {
             if (string.IsNullOrEmpty(id) || m_StoreController == null) return null;
             var p = m_StoreController.products.WithID(id);
-            if (p == null || string.IsNullOrEmpty(p.metadata.localizedPriceString)) return null;
-            if (p.metadata.localizedPrice > 0.05m || !Application.isEditor)
+            if (p != null && !string.IsNullOrEmpty(p.metadata.localizedPriceString))
                 return p.metadata.localizedPriceString;
             return null;
         }
@@ -159,6 +159,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
 
         m_StoreController = controller;
         m_StoreExtensionProvider = extensions;
+        OnIAPInitialized?.Invoke();
     }
     public void OnInitializeFailed(InitializationFailureReason error)
     {

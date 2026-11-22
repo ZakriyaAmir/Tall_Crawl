@@ -29,6 +29,7 @@ public class TCMenuUI : MonoBehaviour
         TCServices.ApplyMaxDeviceRefreshRate(); Time.timeScale = 1; TCSave.Apply();
         BuildPreview();
         BuildUI();
+        UnityIAP.OnIAPInitialized += RefreshShopPrices;
         TCSave.Changed += Refresh; Refresh();
         StartCoroutine(Entrance());
         ApplyMenuMusic();
@@ -52,7 +53,7 @@ public class TCMenuUI : MonoBehaviour
         TCTheme.MenuBackground(canvas.transform.Find("BG"));
     }
     void Co(IEnumerator e) { if (Application.isPlaying) StartCoroutine(e); }
-    void OnDestroy() { TCSave.Changed -= Refresh; if (rt) rt.Release(); }
+    void OnDestroy() { TCSave.Changed -= Refresh; UnityIAP.OnIAPInitialized -= RefreshShopPrices; if (rt) rt.Release(); }
     // The saved Music setting was only applied when toggled, so menu music always played on launch.
     static void ApplyMenuMusic() { var m = GameObject.Find("bgm"); if (m) { var a = m.GetComponent<AudioSource>(); if (a) a.mute = !TCSave.Music; } }
 
@@ -86,6 +87,7 @@ public class TCMenuUI : MonoBehaviour
         coinsText.text = TCSave.Coins.ToString("N0"); gemsText.text = TCSave.Gems.ToString();
         bestText.text = "BEST  " + TCSave.Best + "M";
         dailyBadge.gameObject.SetActive(TCSave.DailyAvailable(out _));
+        RefreshShopPrices();
         foreach (var r in refreshers) r();
         ApplyMenuMusic(); // keep bgm in sync with the saved setting whatever changed it
     }
@@ -646,7 +648,7 @@ public class TCMenuUI : MonoBehaviour
           TCUI.Place(glow.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(820, 290)); if (TCUI.Fresh(glow)) glow.transform.SetSiblingIndex(play.transform.GetSiblingIndex() - 1); }
 
         SmallBtn("Skins", "SKINS", TCUI.Blush, "shirt", new Vector2(-330, 110), () => { RefreshSkinGrid(); TCUI.Show(this, skinsPanel, pop: true, animateContents: false); });
-        SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 110), () => TCUI.Show(this, shopPanel, pop: true, animateContents: false));
+        SmallBtn("Shop", "SHOP", TCUI.Peach, "bag", new Vector2(0, 110), () => { RefreshShopPrices(); TCUI.Show(this, shopPanel, pop: true, animateContents: false); });
         var daily = SmallBtn("Daily", "DAILY", TCUI.Sky, "gift", new Vector2(330, 110), OpenDaily);
         dailyBadge = TCUI.Img("Badge", daily.transform, TCUI.Crimson, TCUI.Circle); TCUI.Place(dailyBadge.rectTransform, new Vector2(1, 1), new Vector2(-10, -10), new Vector2(46, 46));
     }
@@ -961,7 +963,7 @@ public class TCMenuUI : MonoBehaviour
         // Coin Packs & More Section
         Pack(card, 0, () => TCSave.Coins += 1000);
         Pack(card, 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
-        Pack(card, 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
+        Pack(card, 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; TCSave.NoAds = true; TCServices.Banner(false); });
 
         var free = card.Find("FreeCoins")?.GetComponent<Button>();
         if (free)
@@ -988,6 +990,43 @@ public class TCMenuUI : MonoBehaviour
         {
             close.onClick.RemoveAllListeners();
             close.onClick.AddListener(() => { TCAudio.Click(); TCUI.Hide(this, shopPanel); });
+        }
+
+        RefreshShopPrices();
+    }
+
+    public void RefreshShopPrices()
+    {
+        if (shopPanel == null) return;
+        var card = shopPanel.transform.Find("Card");
+        if (!card) return;
+
+        // Gems 0..3
+        for (int g = 0; g < UnityIAP.GemProductIDs.Length; g++)
+        {
+            var gb = card.Find("Gems" + g);
+            if (!gb) continue;
+            var pt = gb.Find("PriceBanner/PriceText")?.GetComponent<TextMeshProUGUI>();
+            if (!pt) pt = gb.Find("PriceText")?.GetComponent<TextMeshProUGUI>();
+            if (pt && UnityIAP.Instance != null)
+            {
+                var lp = UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[g]);
+                if (!string.IsNullOrEmpty(lp)) pt.text = lp;
+            }
+        }
+
+        // Coin Packs 0..2
+        for (int p = 0; p < 3; p++)
+        {
+            var pb = card.Find("Pack" + p);
+            if (!pb) continue;
+            var pt = pb.Find("PriceBanner/PriceText")?.GetComponent<TextMeshProUGUI>();
+            if (!pt) pt = pb.Find("PriceText")?.GetComponent<TextMeshProUGUI>();
+            if (pt && UnityIAP.Instance != null && UnityIAP.Instance.kProductIDs != null && p < UnityIAP.Instance.kProductIDs.Length)
+            {
+                var lp = UnityIAP.Instance.LocalizedPrice(UnityIAP.Instance.kProductIDs[p]);
+                if (!string.IsNullOrEmpty(lp)) pt.text = lp;
+            }
         }
     }
 
