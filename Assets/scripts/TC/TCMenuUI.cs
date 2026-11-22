@@ -956,18 +956,6 @@ public class TCMenuUI : MonoBehaviour
                     TCSave.Gems += gems; TCAudio.Play(TCAssets.I.purchase); Toast("+" + gems + " gems!"); TCServices.Log("iap_gems", "gems", gems);
                 });
             });
-
-            var gt = gb.transform.Find("Text")?.GetComponent<TextMeshProUGUI>();
-            if (gt) gt.text = gems + " GEMS";
-
-            var pt = gb.transform.Find("PriceBanner/PriceText")?.GetComponent<TextMeshProUGUI>();
-            if (!pt) pt = gb.transform.Find("PriceText")?.GetComponent<TextMeshProUGUI>();
-
-            refreshers.Add(() =>
-            {
-                var lp = UnityIAP.Instance ? UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[pack]) : null;
-                if (pt && !string.IsNullOrEmpty(lp)) pt.text = lp;
-            });
         }
 
         // Coin Packs & More Section
@@ -975,7 +963,6 @@ public class TCMenuUI : MonoBehaviour
         Pack(card, 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
         Pack(card, 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
 
-        int adCoins = TCConfig.I.adCoinReward;
         var free = card.Find("FreeCoins")?.GetComponent<Button>();
         if (free)
         {
@@ -983,10 +970,9 @@ public class TCMenuUI : MonoBehaviour
             free.onClick.AddListener(() =>
             {
                 TCAudio.Click();
+                int adCoins = TCConfig.I.adCoinReward;
                 TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); }, "shop_coins");
             });
-            var ft = free.GetComponentInChildren<TextMeshProUGUI>();
-            if (ft) ft.text = "FREE " + adCoins + " (AD)";
         }
 
         // Bottom Actions (Restore & Close)
@@ -1043,17 +1029,6 @@ public class TCMenuUI : MonoBehaviour
             {
                 grant(); TCAudio.Play(TCAssets.I.purchase); Toast("Purchase complete!"); TCServices.Log("iap_purchase", "index", productIndex);
             });
-        });
-
-        var pt = b.transform.Find("PriceBanner/PriceText")?.GetComponent<TextMeshProUGUI>();
-        if (!pt) pt = b.transform.Find("PriceText")?.GetComponent<TextMeshProUGUI>();
-
-        refreshers.Add(() =>
-        {
-            string id = (UnityIAP.Instance != null && UnityIAP.Instance.kProductIDs != null && productIndex < UnityIAP.Instance.kProductIDs.Length)
-                ? UnityIAP.Instance.kProductIDs[productIndex] : null;
-            var lp = (!string.IsNullOrEmpty(id) && UnityIAP.Instance) ? UnityIAP.Instance.LocalizedPrice(id) : null;
-            if (pt && !string.IsNullOrEmpty(lp)) pt.text = lp;
         });
     }
 

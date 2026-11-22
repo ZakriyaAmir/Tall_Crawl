@@ -305,6 +305,7 @@ public static class TCTheme
         foreach (var cg in canvas.GetComponentsInChildren<CanvasGroup>(true))
         {
             if (!cg.transform.Find("Card")) continue;
+            if (cg.name == "Shop") { BleedDim(cg.transform); continue; }
             if (!Marked(cg)) StylePanel(cg.transform); else BleedDim(cg.transform);
         }
 
@@ -318,7 +319,7 @@ public static class TCTheme
 
         foreach (var img in canvas.GetComponentsInChildren<Image>(true))
         {
-            if (Marked(img)) continue;
+            if (Marked(img) || IsInPanel(img.transform, "Shop")) continue;
             string n = img.name; var par = img.transform.parent ? img.transform.parent.name : "";
             switch (n)
             {
@@ -370,7 +371,7 @@ public static class TCTheme
         }
         foreach (var t in canvas.GetComponentsInChildren<TextMeshProUGUI>(true))
         {
-            if (Marked(t) || t.GetComponentInParent<Button>(true) && t.name != "Hint") continue;
+            if (Marked(t) || IsInPanel(t.transform, "Shop") || t.GetComponentInParent<Button>(true) && t.name != "Hint") continue;
             if (t.name == "Hint") StyleText(t, TCUI.Cream, 0.28f, true);
             else if (t.name == "Boost") StyleText(t, TCUI.Cream, 0.32f, true);
             else if (Near(t.color, Legacy.Cocoa) || Near(t.color, TCUI.Hex("#4A3B40"))) StyleText(t, TCUI.Ink, 0.08f, false);
@@ -379,6 +380,15 @@ public static class TCTheme
         }
         Mark(canvas, "canvas");
     }
+    public static bool IsInPanel(Transform t, string panelName)
+    {
+        while (t != null)
+        {
+            if (t.name == panelName) return true;
+            t = t.parent;
+        }
+        return false;
+    }
     static bool SkipButton(Button b)
     {
         string n = b.name;
@@ -386,6 +396,7 @@ public static class TCTheme
         if (n.StartsWith("Skin") && n.Length > 4 && char.IsDigit(n[4])) return true; // skin colour swatches
         if (b.GetComponentInParent<ScrollRect>(true)) return true;                  // skin list items (their own prefab art)
         if (b.GetComponentInParent<SpiderSkinListObj>(true)) return true;
+        if (IsInPanel(b.transform, "Shop")) return true;
         return false;
     }
     static Color FaceFor(Button b, Color old)
