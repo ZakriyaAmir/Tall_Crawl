@@ -18,10 +18,12 @@ public class TCMenuUI : MonoBehaviour
     readonly TCCheatCode cheat = new TCCheatCode();
     public bool CheatActivated { get; private set; }
     TextMeshProUGUI cheatHint;
+    bool splashFinished;
 
     void Awake()
     {
         Instance = this;
+        StopMenuMusic();
     }
 
     void Start()
@@ -31,15 +33,40 @@ public class TCMenuUI : MonoBehaviour
         BuildUI();
         UnityIAP.OnIAPInitialized += RefreshShopPrices;
         TCSave.Changed += Refresh; Refresh();
-        StartCoroutine(Entrance());
-        ApplyMenuMusic();
+        StartCoroutine(PlaySplashAndEntrance());
         TCSkins.CheckAchievements();
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
         TCServices.Banner(true);
-        if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(3.0f, OpenDaily));
+        if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(4.2f, OpenDaily));
         // Note: Do not change text colors at runtime so baked scene text styling is preserved
         HookPreviewTap(previewImg);
         HookPreviewTap(skinPreviewImg);
+    }
+
+    IEnumerator PlaySplashAndEntrance()
+    {
+        // 1. Hide spider preview and ensure BGM is silent while splash screen is going on
+        if (previewSpider) previewSpider.SetActive(false);
+        if (previewImg) previewImg.gameObject.SetActive(false);
+        StopMenuMusic();
+
+        // 2. Play the SillyCon splash screen (brushed in -> settle -> brushed off -> fade out white BG)
+        if (canvas)
+        {
+            yield return TCSplashScreen.Play(canvas.transform);
+        }
+
+        // 3. Wait exactly 0.1s after the splash screen is completely gone
+        yield return new WaitForSecondsRealtime(0.1f);
+
+        // 4. Reveal spider preview and start menu music only then
+        splashFinished = true;
+        if (previewSpider) previewSpider.SetActive(true);
+        if (previewImg) previewImg.gameObject.SetActive(true);
+        ApplyMenuMusic();
+
+        // 5. Run spider entrance animation
+        yield return Entrance();
     }
     /// Builds (or, when baked into the scene, binds to) every menu screen. Also run in edit mode by TCUIBake.
     public void BuildUI()
@@ -54,8 +81,29 @@ public class TCMenuUI : MonoBehaviour
     }
     void Co(IEnumerator e) { if (Application.isPlaying) StartCoroutine(e); }
     void OnDestroy() { TCSave.Changed -= Refresh; UnityIAP.OnIAPInitialized -= RefreshShopPrices; if (rt) rt.Release(); }
-    // The saved Music setting was only applied when toggled, so menu music always played on launch.
-    static void ApplyMenuMusic() { var m = GameObject.Find("bgm"); if (m) { var a = m.GetComponent<AudioSource>(); if (a) a.mute = !TCSave.Music; } }
+    static void StopMenuMusic()
+    {
+        var m = GameObject.Find("bgm");
+        if (m)
+        {
+            var a = m.GetComponent<AudioSource>();
+            if (a) { a.mute = true; a.Stop(); }
+        }
+    }
+
+    static void ApplyMenuMusic()
+    {
+        var m = GameObject.Find("bgm");
+        if (m)
+        {
+            var a = m.GetComponent<AudioSource>();
+            if (a)
+            {
+                a.mute = !TCSave.Music;
+                if (TCSave.Music && !a.isPlaying) a.Play();
+            }
+        }
+    }
 
     // Android back button: close the top-most open panel (it did nothing before).
     void Update()
@@ -89,7 +137,7 @@ public class TCMenuUI : MonoBehaviour
         dailyBadge.gameObject.SetActive(TCSave.DailyAvailable(out _));
         RefreshShopPrices();
         foreach (var r in refreshers) r();
-        ApplyMenuMusic(); // keep bgm in sync with the saved setting whatever changed it
+        if (splashFinished) ApplyMenuMusic(); // keep bgm in sync with the saved setting whatever changed it
     }
 
     // ---------- Background (stylized toon spider forest) ----------
@@ -172,6 +220,7 @@ public class TCMenuUI : MonoBehaviour
         }
         ApplyPreview(TCSave.SelectedSkin);
         StripPreviewTrails();
+        if (previewSpider) previewSpider.SetActive(false);
     }
     void ApplyPreview(int i)
     {
@@ -213,6 +262,8 @@ public class TCMenuUI : MonoBehaviour
     IEnumerator Entrance()
     {
         if (!previewSpider) yield break;
+        previewSpider.SetActive(true);
+        if (previewImg) previewImg.gameObject.SetActive(true);
         entering = true;
         swayBlend = 0f;
         float S = previewSize;
@@ -638,6 +689,7 @@ public class TCMenuUI : MonoBehaviour
 
         previewImg = TCUI.Add<RawImage>(TCUI.Rect("Preview", safe).gameObject);
         previewImg.texture = rt; previewImg.raycastTarget = false; TCUI.Place(previewImg.rectTransform, new Vector2(0.5f, 0.50f), Vector2.zero, new Vector2(740, 740));
+        previewImg.gameObject.SetActive(false);
 
         var bestPill = TCUI.Img("Best", safe, new Color(1, 1, 1, 0.85f)); TCUI.Place(bestPill.rectTransform, new Vector2(0.5f, 0.28f), Vector2.zero, new Vector2(480, 84));
         bestText = TCUI.Label("Value", bestPill.transform, "", 44, TCUI.Cocoa); TCUI.Stretch(bestText.rectTransform);
