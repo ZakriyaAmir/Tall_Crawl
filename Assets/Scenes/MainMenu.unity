@@ -31142,17 +31142,17 @@ PrefabInstance:
     - target: {fileID: 1490980901053684504, guid: 896b1f9c829a0a042b52a2fc0bf4d9aa,
         type: 3}
       propertyPath: 'kProductIDs.Array.data[0]'
-      value: com.zakriya.tallcrawl.coins_1000
+      value: com.sillycon.tallcrawl.coins_1000
       objectReference: {fileID: 0}
     - target: {fileID: 1490980901053684504, guid: 896b1f9c829a0a042b52a2fc0bf4d9aa,
         type: 3}
       propertyPath: 'kProductIDs.Array.data[1]'
-      value: com.zakriya.tallcrawl.noads
+      value: com.sillycon.tallcrawl.noads
       objectReference: {fileID: 0}
     - target: {fileID: 1490980901053684504, guid: 896b1f9c829a0a042b52a2fc0bf4d9aa,
         type: 3}
       propertyPath: 'kProductIDs.Array.data[2]'
-      value: com.zakriya.tallcrawl.premium
+      value: com.sillycon.tallcrawl.premium
       objectReference: {fileID: 0}
     - target: {fileID: 3053530555111824828, guid: 896b1f9c829a0a042b52a2fc0bf4d9aa,
         type: 3}
@@ -45085,7 +45085,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: $0.99
+  m_text: $0.50
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 1f9eeb0296548ff49811028f1be676d4, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: df197cb318e431a2fa86867fa866196a, type: 2}
@@ -45332,7 +45332,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: $4.99
+  m_text: $2.49
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 1f9eeb0296548ff49811028f1be676d4, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: df197cb318e431a2fa86867fa866196a, type: 2}
@@ -45579,7 +45579,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: $9.99
+  m_text: $4.99
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 1f9eeb0296548ff49811028f1be676d4, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: df197cb318e431a2fa86867fa866196a, type: 2}
@@ -45826,7 +45826,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: $19.99
+  m_text: $8.99
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 1f9eeb0296548ff49811028f1be676d4, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: df197cb318e431a2fa86867fa866196a, type: 2}
@@ -46073,7 +46073,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: $0.99
+  m_text: $0.29
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 1f9eeb0296548ff49811028f1be676d4, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: df197cb318e431a2fa86867fa866196a, type: 2}

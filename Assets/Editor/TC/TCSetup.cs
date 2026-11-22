@@ -435,7 +435,7 @@ public static class TCSetup
         var ads = Object.FindObjectOfType<AdsManager>(true);
         if (ads) { var so = new SerializedObject(ads); var tm = so.FindProperty("testMode"); if (tm != null) tm.boolValue = true; so.ApplyModifiedProperties(); }
         var iap = Object.FindObjectOfType<UnityIAP>(true);
-        if (iap) { iap.kProductIDs = new[] { "com.zakriya.tallcrawl.coins_1000", "com.zakriya.tallcrawl.noads", "com.zakriya.tallcrawl.premium" }; EditorUtility.SetDirty(iap); }
+        if (iap) { iap.kProductIDs = new[] { "com.sillycon.tallcrawl.coins_1000", "com.sillycon.tallcrawl.noads", "com.sillycon.tallcrawl.premium" }; EditorUtility.SetDirty(iap); }
         var cam = Camera.main; if (cam) { cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = TCUI.Hex("#FFE3D3"); }
         EditorSceneManager.MarkSceneDirty(sc); EditorSceneManager.SaveScene(sc);
     }

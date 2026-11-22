@@ -893,8 +893,8 @@ public class TCMenuUI : MonoBehaviour
         rt.offsetMax = new Vector2(-r, -t);
     }
 
-    static readonly string[] packFallbackPrices = { "$0.99", "$2.99", "$4.99" };
-    static readonly string[] gemFallbackPrices = { "$0.99", "$4.99", "$9.99", "$19.99" };
+    static readonly string[] packFallbackPrices = { "$0.29", "$2.99", "$4.99" };
+    static readonly string[] gemFallbackPrices = { "$0.50", "$2.49", "$4.99", "$8.99" };
 
     void BuildShop()
     {
@@ -963,7 +963,7 @@ public class TCMenuUI : MonoBehaviour
         // Coin Packs & More Section
         Pack(card, 0, () => TCSave.Coins += 1000);
         Pack(card, 1, () => { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); });
-        Pack(card, 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; TCSave.NoAds = true; TCServices.Banner(false); });
+        Pack(card, 2, () => { TCSave.Coins += 5000; TCSave.Gems += 50; });
 
         var free = card.Find("FreeCoins")?.GetComponent<Button>();
         if (free)
@@ -1008,10 +1008,10 @@ public class TCMenuUI : MonoBehaviour
             if (!gb) continue;
             var pt = gb.Find("PriceBanner/PriceText")?.GetComponent<TextMeshProUGUI>();
             if (!pt) pt = gb.Find("PriceText")?.GetComponent<TextMeshProUGUI>();
-            if (pt && UnityIAP.Instance != null)
+            if (pt)
             {
-                var lp = UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[g]);
-                if (!string.IsNullOrEmpty(lp)) pt.text = lp;
+                var lp = UnityIAP.Instance ? UnityIAP.Instance.LocalizedPrice(UnityIAP.GemProductIDs[g]) : null;
+                pt.text = !string.IsNullOrEmpty(lp) ? lp : (g < gemFallbackPrices.Length ? gemFallbackPrices[g] : pt.text);
             }
         }
 
@@ -1022,10 +1022,11 @@ public class TCMenuUI : MonoBehaviour
             if (!pb) continue;
             var pt = pb.Find("PriceBanner/PriceText")?.GetComponent<TextMeshProUGUI>();
             if (!pt) pt = pb.Find("PriceText")?.GetComponent<TextMeshProUGUI>();
-            if (pt && UnityIAP.Instance != null && UnityIAP.Instance.kProductIDs != null && p < UnityIAP.Instance.kProductIDs.Length)
+            if (pt)
             {
-                var lp = UnityIAP.Instance.LocalizedPrice(UnityIAP.Instance.kProductIDs[p]);
-                if (!string.IsNullOrEmpty(lp)) pt.text = lp;
+                var lp = (UnityIAP.Instance != null && UnityIAP.Instance.kProductIDs != null && p < UnityIAP.Instance.kProductIDs.Length)
+                    ? UnityIAP.Instance.LocalizedPrice(UnityIAP.Instance.kProductIDs[p]) : null;
+                pt.text = !string.IsNullOrEmpty(lp) ? lp : (p < packFallbackPrices.Length ? packFallbackPrices[p] : pt.text);
             }
         }
     }

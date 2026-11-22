@@ -26,11 +26,11 @@ public class UnityIAP : MonoBehaviour, IStoreListener
         DontDestroyOnLoad(gameObject);
 
     }
-    public string[] kProductIDs = { "com.zakriya.tallcrawl.coins_1000", "com.zakriya.tallcrawl.noads", "com.zakriya.tallcrawl.premium" };
+    public string[] kProductIDs = { "com.sillycon.tallcrawl.coins_1000", "com.sillycon.tallcrawl.noads", "com.sillycon.tallcrawl.premium" };
     /// Standalone gem packs (consumable, 10 gems per USD). Dummy IDs: replace with the real Play Console IDs.
-    public static readonly string[] GemProductIDs = { "com.zakriya.tallcrawl.gems_10", "com.zakriya.tallcrawl.gems_50", "com.zakriya.tallcrawl.gems_100", "com.zakriya.tallcrawl.gems_200" };
+    public static readonly string[] GemProductIDs = { "com.sillycon.tallcrawl.gems_10", "com.sillycon.tallcrawl.gems_50", "com.sillycon.tallcrawl.gems_100", "com.sillycon.tallcrawl.gems_200" };
     public static readonly int[] GemPackAmounts = { 10, 50, 100, 200 };
-    public static readonly float[] GemPackUsd = { 1f, 5f, 10f, 20f };
+    public static readonly float[] GemPackUsd = { 0.50f, 2.49f, 4.99f, 8.99f };
     void Start()
     {
         if (m_StoreController == null)
@@ -48,7 +48,7 @@ public class UnityIAP : MonoBehaviour, IStoreListener
         var builder = ConfigurationBuilder.Instance(StandardPurchasingModule.Instance());
         builder.AddProduct(kProductIDs[0], ProductType.Consumable);                               //Ahmad
         builder.AddProduct(kProductIDs[1], ProductType.NonConsumable);
-        builder.AddProduct(kProductIDs[2], ProductType.NonConsumable);
+        builder.AddProduct(kProductIDs[2], ProductType.Consumable);
         foreach (var gemId in GemProductIDs) builder.AddProduct(gemId, ProductType.Consumable);
         /*builder.AddProduct(kProductIDs[3], ProductType.NonConsumable);
         builder.AddProduct(kProductIDs[4], ProductType.Consumable);
@@ -350,17 +350,10 @@ public class UnityIAP : MonoBehaviour, IStoreListener
     {
         onPurchaseComplete = delegate
         {
-            economyManager.Instance.addMoney(5000000);
-
-            
-            PlayerPrefs.SetInt("noAds", 1);
-            PlayerPrefs.SetInt("levelsCompleted", 10);
+            economyManager.Instance.addMoney(5000);
 
             //GA Event
             LogFirebaseEvent("IAP_PremiumBundle" + "_Bought");
-
-            AdsManager.Instance.HideBanner();
-            AdsManager.Instance.HideMRecAd();
         };
         GeneralFunctionl(inAppProductIdIndex);
     }

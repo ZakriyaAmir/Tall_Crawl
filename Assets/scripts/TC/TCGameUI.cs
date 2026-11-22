@@ -1873,13 +1873,13 @@ public class TCGameUI : MonoBehaviour
     void BuildPause()
     {
         pausePanel = TCUI.Panel("Pause", safe.parent, out var card, new Vector2(820, 1100), "PAUSED");
-        float y = 260;
+        float y = 326;
         TCUI.Place((RectTransform)TCUI.Btn("Resume", card, "RESUME", TCUI.Mint, HidePause, 60, TCUI.Icon("play")).transform, new Vector2(0.5f, 0.5f), new Vector2(0, y), new Vector2(600, 140));
         TCUI.Place((RectTransform)TCUI.Btn("Restart", card, "RESTART", TCUI.Butter, () => { gm.EndRun(false); gm.Restart(); }).transform, new Vector2(0.5f, 0.5f), new Vector2(0, y - 180), new Vector2(600, 130));
         TCUI.Place((RectTransform)TCUI.Btn("Home", card, "HOME", TCUI.Sky, () => { gm.EndRun(false); gm.Home(); }).transform, new Vector2(0.5f, 0.5f), new Vector2(0, y - 340), new Vector2(600, 130));
-        Toggle(card, "Sound", -240, () => TCSave.Sound, v => TCSave.Sound = v);
-        Toggle(card, "Music", -360, () => TCSave.Music, v => { TCSave.Music = v; gm.SetMusic(v); });
-        Toggle(card, "Vibration", -480, () => TCSave.Vibration, v => TCSave.Vibration = v);
+        Toggle(card, "Sound", -174, () => TCSave.Sound, v => TCSave.Sound = v);
+        Toggle(card, "Music", -294, () => TCSave.Music, v => { TCSave.Music = v; gm.SetMusic(v); });
+        Toggle(card, "Vibration", -414, () => TCSave.Vibration, v => TCSave.Vibration = v);
     }
     public static void Toggle(RectTransform card, string label, float y, System.Func<bool> get, System.Action<bool> set, float width = 600)
     {

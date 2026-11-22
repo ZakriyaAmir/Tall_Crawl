@@ -21,8 +21,8 @@ Goal: the cheapest upgrade/skin takes a handful of runs; buying everything with 
 | Coin skins | Mint Drop 800, Peachy 1,500, Berry 3,000, Frost 5,000 (10,300 total) |
 | Revive | 5 gems or an ad, gives **one** life |
 
-## Gem packs (IAP, dummy IDs, 10 gems per USD)
-`com.zakriya.tallcrawl.gems_10` $1 = 10, `gems_50` $5 = 50, `gems_100` $10 = 100, `gems_200` $20 = 200.
+## Gem packs (IAP, dummy IDs)
+`com.sillycon.tallcrawl.gems_10` $0.50 = 10, `gems_50` $2.49 = 50, `gems_100` $4.99 = 100, `gems_200` $8.99 = 200.
 
 ## Pacing (verified by `TCSelfTest.Run`)
 Average run ~600 m with ~30 coins = ~36 coins. First upgrade after ~7 runs.

@@ -27,7 +27,7 @@ Unity **6000.3.26f1**, built-in render pipeline. Open the project, then play `As
 
 ## Before release – replace test IDs
 - AdMob app ID (`GoogleMobileAdsSettings.asset`) and ad unit IDs in `AdsManager` (currently Google test IDs, testMode on)
-- IAP product IDs: `com.zakriya.tallcrawl.coins_1000`, `.noads`, `.premium` (MainMenu `UnityIAP`)
+- IAP product IDs: `com.sillycon.tallcrawl.coins_1000`, `.noads`, `.premium` (MainMenu `UnityIAP`)
 - Firebase `google-services.json`
 - Privacy policy URL (`TCAssets.asset`)
 - Release keystore (debug-signed now)
