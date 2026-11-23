@@ -26,7 +26,7 @@ Shader "TallCrawl/SpiderPreBaked"
             ZWrite On
             ZTest LEqual
             Offset 1, 1
-            ColorMask RGB
+            ColorMask RGBA
 
             CGPROGRAM
             #pragma vertex vert
@@ -76,7 +76,7 @@ Shader "TallCrawl/SpiderPreBaked"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                return _OutlineColor;
+                return fixed4(_OutlineColor.rgb, 1.0);
             }
             ENDCG
         }
