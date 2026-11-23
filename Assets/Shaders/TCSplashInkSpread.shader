@@ -133,29 +133,31 @@ Shader "TallCrawl/SplashInkSpread"
 
                 if (col.a <= 0.001) return fixed4(0, 0, 0, 0);
 
-                // --- BRUSH STROKE COORDINATE & TEXTURE ---
+                // --- BRUSH STROKE COORDINATE & INK SPREAD TEXTURE ---
                 // Directional sweep across the logo (angled top-left to bottom-right)
-                float brushCoord = i.texcoord.x * 0.85 + (1.0 - i.texcoord.y) * 0.20;
+                float sweep = i.texcoord.x * 0.75 + (1.0 - i.texcoord.y) * 0.25;
 
-                // Fine bristle streaks along the sweep direction
-                float bristle = sin(i.texcoord.y * 125.0) * 0.024
-                              + sin(i.texcoord.y * 250.0) * 0.012
-                              + (vnoise(float2(i.texcoord.x * 6.0, i.texcoord.y * 65.0)) - 0.5) * 0.045;
+                // Organic ink spread noise & painterly bristles
+                float inkNoise1 = vnoise(float2(i.texcoord.x * 12.0, i.texcoord.y * 16.0)) - 0.5;
+                float inkNoise2 = vnoise(float2(i.texcoord.x * 28.0, i.texcoord.y * 55.0)) - 0.5;
+                float bristle = sin(i.texcoord.y * 95.0 + i.texcoord.x * 35.0) * 0.035
+                              + sin(i.texcoord.y * 190.0) * 0.020;
 
-                float brushVal = brushCoord + bristle;
+                float brushVal = sweep + (inkNoise1 * 0.16 + inkNoise2 * 0.07 + bristle);
 
                 // Threshold bounds mapped to ensure 0 artifacts at edges
-                float startThresh = -0.10;
-                float endThresh = 1.25;
+                float startThresh = -0.20;
+                float endThresh = 1.35;
+                float softness = max(0.08, _EdgeSoftness);
 
                 // 1. BRUSH IN: Reveals the logo as _BrushIn goes from 0 -> 1
                 float threshIn = lerp(startThresh, endThresh, _BrushIn);
-                float inMask = smoothstep(threshIn - _EdgeSoftness, threshIn, brushVal);
+                float inMask = smoothstep(threshIn - softness, threshIn, brushVal);
                 inMask = 1.0 - inMask; // pixels where brushVal < threshIn are revealed
 
                 // 2. BRUSH OUT: Wipes away the logo as _BrushOut goes from 0 -> 1
                 float threshOut = lerp(startThresh, endThresh, _BrushOut);
-                float outMask = smoothstep(threshOut, threshOut + _EdgeSoftness, brushVal);
+                float outMask = smoothstep(threshOut, threshOut + softness, brushVal);
 
                 col.a *= inMask * outMask;
 

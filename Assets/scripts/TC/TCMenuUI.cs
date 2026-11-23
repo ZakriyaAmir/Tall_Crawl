@@ -36,7 +36,6 @@ public class TCMenuUI : MonoBehaviour
         StartCoroutine(PlaySplashAndEntrance());
         TCSkins.CheckAchievements();
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
-        TCServices.Banner(true);
         if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(4.2f, OpenDaily));
         // Note: Do not change text colors at runtime so baked scene text styling is preserved
         HookPreviewTap(previewImg);
@@ -59,11 +58,16 @@ public class TCMenuUI : MonoBehaviour
         // 3. Wait exactly 0.1s after the splash screen is completely gone
         yield return new WaitForSecondsRealtime(0.1f);
 
-        // 4. Reveal spider preview and start menu music only then
+        // 4. Reveal spider preview and start menu music and banner ad only then
         splashFinished = true;
-        if (previewSpider) previewSpider.SetActive(true);
+        if (previewSpider)
+        {
+            previewSpider.transform.localRotation = Quaternion.identity;
+            previewSpider.SetActive(true);
+        }
         if (previewImg) previewImg.gameObject.SetActive(true);
         ApplyMenuMusic();
+        TCServices.Banner(true);
 
         // 5. Run spider entrance animation
         yield return Entrance();
@@ -211,6 +215,7 @@ public class TCMenuUI : MonoBehaviour
         {
             previewSpider = Instantiate(a.spiderModel, root.transform);
             previewSpider.transform.localPosition = Vector3.zero;
+            previewSpider.transform.localRotation = Quaternion.identity;
             var anim = previewSpider.GetComponentInChildren<Animator>(); if (!anim) anim = previewSpider.AddComponent<Animator>();
             if (a.spiderAnimator) { anim.runtimeAnimatorController = a.spiderAnimator; anim.SetBool("started", false); }
             var smr = previewSpider.GetComponentInChildren<SkinnedMeshRenderer>();
@@ -220,7 +225,11 @@ public class TCMenuUI : MonoBehaviour
         }
         ApplyPreview(TCSave.SelectedSkin);
         StripPreviewTrails();
-        if (previewSpider) previewSpider.SetActive(false);
+        if (previewSpider)
+        {
+            previewSpider.transform.localRotation = Quaternion.identity;
+            previewSpider.SetActive(false);
+        }
     }
     void ApplyPreview(int i)
     {
@@ -245,7 +254,7 @@ public class TCMenuUI : MonoBehaviour
     float swayBlend = 0f;
     void LateUpdate()
     {
-        if (previewSpider && !entering)
+        if (splashFinished && previewSpider && !entering)
         {
             swayBlend = Mathf.MoveTowards(swayBlend, 1f, Time.unscaledDeltaTime * 1.25f);
             previewSpider.transform.localRotation = Quaternion.Euler(0, Mathf.Sin(Time.unscaledTime * 1.3f) * 28f * swayBlend, 0);
@@ -268,10 +277,17 @@ public class TCMenuUI : MonoBehaviour
         swayBlend = 0f;
         float S = previewSize;
         float h = S * 0.22f;
-        var pivot = new GameObject("DropPivot").transform;
-        pivot.SetParent(previewSpider.transform.parent, false);
-        pivot.localPosition = new Vector3(0, h, 0);
-        previewSpider.transform.SetParent(pivot, true);
+        Transform pivot = previewSpider.transform.parent;
+        if (!pivot || pivot.name != "DropPivot")
+        {
+            var pGo = new GameObject("DropPivot").transform;
+            pGo.SetParent(previewSpider.transform.parent, false);
+            pGo.localPosition = new Vector3(0, h, 0);
+            pGo.localRotation = Quaternion.identity;
+            previewSpider.transform.localRotation = Quaternion.identity;
+            previewSpider.transform.SetParent(pGo, true);
+            pivot = pGo;
+        }
         var st = pivot;
         Vector3 rest = new Vector3(0, h, 0);
         var cs = previewSpider.GetComponent<TCCuteSpider>();
@@ -305,6 +321,8 @@ public class TCMenuUI : MonoBehaviour
         st.localPosition = rest;
         st.localRotation = Quaternion.identity;
         st.localScale = Vector3.one;
+        previewSpider.transform.localRotation = Quaternion.identity;
+
         entering = false;
     }
 

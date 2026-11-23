@@ -16,15 +16,17 @@ public class TCSplashScreen : MonoBehaviour
     public static bool HasPlayedThisSession { get; private set; }
 
     [Header("Timings (seconds)")]
-    public float brushInDuration = 1.15f;
-    public float holdDuration = 0.85f;
-    public float brushOutDuration = 0.80f;
-    public float fadeOutDuration = 0.50f;
+    public float brushInDuration = 0.85f;
+    public float waitAfterBrushIn = 0.30f;
+    public float rattleDuration = 0.20f;
+    public float waitAfterRattle = 0.50f;
+    public float brushOutDuration = 0.55f;
+    public float fadeOutDuration = 0.40f;
 
     Material splashMat;
     CanvasGroup canvasGroup;
     RectTransform logoRect;
-    Image logoImage;
+    RawImage logoImage;
     bool skipped;
 
     public static IEnumerator Play(Transform parent, Action onComplete = null)
@@ -69,13 +71,11 @@ public class TCSplashScreen : MonoBehaviour
         tapBtn.transition = Selectable.Transition.None;
         tapBtn.onClick.AddListener(() => skipped = true);
 
-        // 2. Company logo
-        Sprite logoSprite = Resources.Load<Sprite>("sillycon_logo");
-        if (!logoSprite) logoSprite = Resources.Load<Sprite>("TCUI/sillycon_logo");
-        Texture2D logoTex = Resources.Load<Texture2D>("sillycon_logo");
-        if (!logoTex) logoTex = Resources.Load<Texture2D>("TCUI/sillycon_logo");
+        // 2. Company logo (RawImage ensures pixel-perfect UVs 0..1 for procedural shader)
+        Texture2D logoTex = Resources.Load<Texture2D>("TCUI/sillycon_logo");
+        if (!logoTex) logoTex = Resources.Load<Texture2D>("sillycon_logo");
 
-        var logoObj = new GameObject("SillyConLogo", typeof(RectTransform), typeof(Image));
+        var logoObj = new GameObject("SillyConLogo", typeof(RectTransform), typeof(RawImage));
         logoObj.transform.SetParent(transform, false);
         logoRect = logoObj.GetComponent<RectTransform>();
         logoRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -84,9 +84,11 @@ public class TCSplashScreen : MonoBehaviour
         logoRect.anchoredPosition = new Vector2(0, 30);
         logoRect.sizeDelta = new Vector2(530, 647); // 839x1024 aspect ratio
 
-        logoImage = logoObj.GetComponent<Image>();
-        if (logoSprite) logoImage.sprite = logoSprite;
+        logoImage = logoObj.GetComponent<RawImage>();
+        if (logoTex) logoImage.texture = logoTex;
+        logoImage.color = Color.clear; // Strictly transparent at first
         logoImage.raycastTarget = false;
+        logoObj.SetActive(false); // Strictly hidden at first
 
         // 3. Brushed in / brushed out material (guaranteed 0 artifacts at start)
         var baseMat = Resources.Load<Material>("Materials/M_SplashInkSpread");
@@ -95,20 +97,41 @@ public class TCSplashScreen : MonoBehaviour
         {
             splashMat = new Material(shader);
             if (logoTex) splashMat.mainTexture = logoTex;
-            else if (logoSprite) splashMat.mainTexture = logoSprite.texture;
             splashMat.SetFloat("_BrushIn", 0f);
             splashMat.SetFloat("_BrushOut", 0f);
-            splashMat.SetFloat("_EdgeSoftness", 0.055f);
+            splashMat.SetFloat("_EdgeSoftness", 0.14f);
             logoImage.material = splashMat;
+            logoImage.SetMaterialDirty();
         }
 
         Vector2 baseLogoPos = logoRect.anchoredPosition;
+
+        // --- Phase 0: Pure Clean White Screen (logo strictly hidden at first) ---
+        float initWait = 0.20f;
+        while (initWait > 0f && !skipped)
+        {
+            initWait -= Mathf.Clamp(Time.unscaledDeltaTime, 0f, 0.033f);
+            yield return null;
+        }
+
+        // Reveal logo object ready for brush-in sweep
+        logoObj.SetActive(true);
+        logoImage.color = Color.white;
+        if (splashMat)
+        {
+            splashMat.SetFloat("_BrushIn", 0f);
+            splashMat.SetFloat("_BrushOut", 0f);
+        }
+        logoImage.SetMaterialDirty();
+        yield return null;
 
         // --- Phase 1: Brushed In Effect ---
         float elapsed = 0f;
         while (elapsed < brushInDuration && !skipped)
         {
-            elapsed += Time.unscaledDeltaTime;
+            // Clamp dt to prevent frame hitch from skipping the sweep
+            float dt = Mathf.Clamp(Time.unscaledDeltaTime, 0f, 0.033f);
+            elapsed += dt;
             float t = Mathf.Clamp01(elapsed / brushInDuration);
             // Smooth painterly curve
             float curve = t * t * (3f - 2f * t);
@@ -118,7 +141,8 @@ public class TCSplashScreen : MonoBehaviour
                 splashMat.SetFloat("_BrushIn", curve);
                 splashMat.SetFloat("_BrushOut", 0f);
             }
-            logoRect.localScale = Vector3.one * Mathf.Lerp(0.92f, 1.0f, curve);
+            if (logoImage) logoImage.SetMaterialDirty();
+            logoRect.localScale = Vector3.one * Mathf.Lerp(0.94f, 1.0f, curve);
 
             yield return null;
         }
@@ -128,21 +152,62 @@ public class TCSplashScreen : MonoBehaviour
             splashMat.SetFloat("_BrushIn", 1f);
             splashMat.SetFloat("_BrushOut", 0f);
         }
+        if (logoImage) logoImage.SetMaterialDirty();
         logoRect.localScale = Vector3.one;
 
-        // --- Phase 2: Hold & Cute Breathing Settle ---
+        // --- Phase 2: Settle 0.3s after brushing in ---
         elapsed = 0f;
-        while (elapsed < holdDuration && !skipped)
+        while (elapsed < waitAfterBrushIn && !skipped)
         {
             elapsed += Time.unscaledDeltaTime;
-            float t = Mathf.Clamp01(elapsed / holdDuration);
-            float pulse = Mathf.Sin(t * Mathf.PI) * 0.022f;
+            yield return null;
+        }
+        logoRect.anchoredPosition = baseLogoPos;
+        logoRect.localRotation = Quaternion.identity;
+        logoRect.localScale = Vector3.one;
+
+        // --- Phase 3: Quick 2-Oscillation Logo Rattle ---
+        if (!skipped)
+        {
+            TCServices.LightHaptic();
+            // Play authentic salsa maraca rattle instrument sound
+            TCSfx.Play("salsa", 0.85f);
+        }
+        elapsed = 0f;
+        const float rattleCycles = 2f;
+        while (elapsed < rattleDuration && !skipped)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / rattleDuration);
+            float angle = t * rattleCycles * Mathf.PI * 2f;
+
+            float shakeX = Mathf.Sin(angle) * 14f;
+            float shakeRot = Mathf.Sin(angle) * 4.5f;
+            float squash = Mathf.Sin(angle * 2f) * 0.035f;
+
+            logoRect.anchoredPosition = baseLogoPos + new Vector2(shakeX, 0);
+            logoRect.localRotation = Quaternion.Euler(0, 0, shakeRot);
+            logoRect.localScale = new Vector3(1f + squash, 1f - squash, 1f);
+
+            yield return null;
+        }
+        logoRect.anchoredPosition = baseLogoPos;
+        logoRect.localRotation = Quaternion.identity;
+        logoRect.localScale = Vector3.one;
+
+        // --- Phase 4: Wait for 0.5s after rattling ---
+        elapsed = 0f;
+        while (elapsed < waitAfterRattle && !skipped)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / waitAfterRattle);
+            float pulse = Mathf.Sin(t * Mathf.PI) * 0.018f;
             logoRect.localScale = Vector3.one * (1.0f + pulse);
             yield return null;
         }
         logoRect.localScale = Vector3.one;
 
-        // --- Phase 3: Brushed Off the PNG ---
+        // --- Phase 5: Brushed Off the PNG ---
         elapsed = 0f;
         while (elapsed < brushOutDuration && !skipped)
         {
@@ -155,15 +220,16 @@ public class TCSplashScreen : MonoBehaviour
                 splashMat.SetFloat("_BrushIn", 1f);
                 splashMat.SetFloat("_BrushOut", curve);
             }
+            if (logoImage) logoImage.SetMaterialDirty();
             logoRect.anchoredPosition = baseLogoPos + new Vector2(curve * 18f, 0f);
 
             yield return null;
         }
 
         if (splashMat) splashMat.SetFloat("_BrushOut", 1f);
-        logoImage.enabled = false;
+        if (logoImage) { logoImage.SetMaterialDirty(); logoImage.enabled = false; }
 
-        // --- Phase 4: Fade Out White BG into Main Menu ---
+        // --- Phase 6: Fade Out White BG into Main Menu ---
         elapsed = 0f;
         while (elapsed < fadeOutDuration)
         {
