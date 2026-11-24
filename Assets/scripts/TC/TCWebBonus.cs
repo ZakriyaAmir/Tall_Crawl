@@ -5,16 +5,16 @@ using UnityEngine;
 
 /// WEB letter collectible + 5000 m invincible web-swing bonus.
 /// Letters W, E, B spawn sparsely along the trunk. Collecting all three fires a
-/// cinematic upward swing: the spider shoots a web, is immune to hits, and is
-/// carried 5000 m in a few seconds. Play then resumes with a short grace period
-/// and a clear stretch of trunk ahead.
+/// cinematic upward climb: the spider winds up, then slings LEFT, RIGHT, LEFT,
+/// RIGHT like Spider-Man climbing a building, immune to hits, and is carried
+/// 5000 m in a few seconds. Play then resumes with a short grace period.
 public class TCWebBonus : MonoBehaviour
 {
     public static TCWebBonus Instance { get; private set; }
 
     public const float DistanceBonusMetres = 5000f;
-    public const int SwingCount = 10;
-    public const float SwingSeconds = 9f; // 0.9 s per thwip-and-swing cycle
+    public const int SwingCount = 12;
+    public const float SwingSeconds = 5.0f; // climb time only; wind-up and landing are extra
     public const float GraceSeconds = 1.8f;
     // Letter cadence lives in TCTrack (25% every 20s, missed letters retry in 8–12s).
     // The WEB swing is earned at most once per run; after that no more letters spawn.
@@ -52,10 +52,12 @@ public class TCWebBonus : MonoBehaviour
     readonly List<float> fadingLife = new List<float>();
     readonly List<Material> fadingMat = new List<Material>();
     const float TrunkRadius = 0.603f;
-    const float OrbitPerSwing = 72f; // 10 swings * 72 deg = 720 deg (2 full swirls, lands at exact start facing)
 
     public float camRotDamping = 4.8f;
-    public float camFollowDamping = 5.5f;
+    public float camFollowDamping = 6.5f;
+    float camPull, camDutch, camFovAdd;
+    Vector3 camLookDamped;
+    bool camLookReady;
 
     Vector3 camPosRest, camWorldOffsetRest;
     Quaternion camRotRest, camWorldRotRest, camRelRotRest, camLevelRelRot;
@@ -255,11 +257,17 @@ public class TCWebBonus : MonoBehaviour
             camWorldOffsetRest = cam.transform.position - new Vector3(axis.x, y0, axis.z);
             cam.transform.SetParent(null, true);
             swingCamActive = true;
-            ApplyPendulumRadius(0f, 0f);
+            camPull = 0f;
+            camDutch = 0f;
+            camFovAdd = 0f;
+            camLookReady = false;
+            ApplyPendulumRadius(0f, 0f, 0f);
             Vector3 spInit = VisualSpiderPos();
             camDampedRelY = spInit.y - camBaselineY;
             camDampedRadius = new Vector2(spInit.x - axis.x, spInit.z - axis.z).magnitude;
             camDampedReady = true;
+            camLookDamped = spInit;
+            camLookReady = true;
             DriveSwingCam(0f);
         }
 
@@ -268,176 +276,193 @@ public class TCWebBonus : MonoBehaviour
         var trail = EnsureWind(sp);
         if (trail) { trail.Clear(); trail.Play(true); }
 
+        // Face-locked Spider-Man climb: stay on the starting side of the trunk and
+        // sling LEFT, RIGHT, LEFT, RIGHT up to the 5000 m mark. Each web sticks to a
+        // fixed anchor so the spider really swings, instead of rocketing straight up.
         const int Shots = SwingCount;
-        float cycle = SwingSeconds / Shots;
         float yPrev = y0;
         float yaw0 = yaw;
-        float totalElapsed = 0f;
-        float totalDur = SwingSeconds;
-        Vector3 startOutward = new Vector3(Mathf.Sin(yaw0 * Mathf.Deg2Rad), 0f, Mathf.Cos(yaw0 * Mathf.Deg2Rad));
-        Quaternion uprightRestRot = Quaternion.LookRotation(Vector3.up, startOutward);
+        Vector3 outward0 = new Vector3(Mathf.Sin(yaw0 * Mathf.Deg2Rad), 0f, Mathf.Cos(yaw0 * Mathf.Deg2Rad));
+        Vector3 tangent0 = Vector3.Cross(Vector3.up, outward0).normalized;
+        Quaternion uprightRestRot = Quaternion.LookRotation(Vector3.up, outward0);
 
-        // ------------------------------------------------------------------
-        // PRE-SWING HEROIC LAUNCH JUMP (Seamless spring off trunk into upside-down leap)
-        // ------------------------------------------------------------------
-        const float launchDur = 0.38f;
-        float launchElapsed = 0f;
-        TCSfx.Play("jump", 0.9f, 1.15f);
-        Vector3 launchTangent = Vector3.Cross(Vector3.up, startOutward).normalized;
-
-        while (launchElapsed < launchDur)
+        var weights = new float[Shots];
+        float weightSum = 0f;
+        for (int i = 0; i < Shots; i++)
         {
-            float ldt = Time.deltaTime;
-            launchElapsed += ldt;
-            float lu = Mathf.Clamp01(launchElapsed / launchDur);
+            float mid = (i + 0.5f) / Shots;
+            float w = (i == Shots - 1)
+                ? 1.48f
+                : (0.66f + 0.50f * (1f - Mathf.Sin(mid * Mathf.PI)));
+            weights[i] = w;
+            weightSum += w;
+        }
+        var shotDur = new float[Shots];
+        var fracAt = new float[Shots + 1];
+        fracAt[0] = 0f;
+        float accW = 0f;
+        for (int i = 0; i < Shots; i++)
+        {
+            shotDur[i] = SwingSeconds * (weights[i] / weightSum);
+            accW += weights[i];
+            fracAt[i + 1] = accW / weightSum;
+        }
 
-            // Phase A (0 - 0.25): Crouch spring compression against trunk bark
-            // Phase B (0.25 - 1.0): Spring leap upward and out from trunk, flipping into upside-down hang
-            float jumpCurve = lu < 0.25f
-                ? -0.06f * Mathf.Sin(lu / 0.25f * Mathf.PI)
-                : Mathf.Sin((lu - 0.25f) / 0.75f * Mathf.PI * 0.5f);
+        const float WindupDur = 0.46f;
+        const float LandSettleDur = 0.40f;
+        camPull = 0f;
+        camDutch = 0f;
+        camFovAdd = 0f;
 
-            float launchExtraZ = lu < 0.25f ? -0.04f * (lu / 0.25f) : 2.2f * jumpCurve;
-            float launchExtraY = lu < 0.25f ? 0f : 0.65f * jumpCurve;
-            float launchY = y0 + (lu < 0.25f ? 0f : 0.45f * jumpCurve);
+        // ------------------------------------------------------------------
+        // WIND-UP: crouch against the bark, then spring out and aim the first shot
+        // ------------------------------------------------------------------
+        const int FirstSide = -1; // first web goes LEFT
+        TCSfx.Play("jump", 0.9f, 1.15f);
+        float windElapsed = 0f;
+        Vector3 windOff = Vector3.zero;
+        while (windElapsed < WindupDur)
+        {
+            float dt = Time.deltaTime;
+            windElapsed += dt;
+            float lu = Mathf.Clamp01(windElapsed / WindupDur);
+            camPull = Smooth(lu) * 0.55f;
+            camDutch = 0f;
+            camFovAdd = 4f * Smooth(lu);
+            camCenterBlend = camPull;
 
-            TickSwing(pl, launchY, yaw0, launchExtraZ, launchExtraY, ref yPrev);
-
-            if (cute)
+            if (lu < 0.40f)
             {
-                if (lu < 0.25f)
-                {
-                    // Crouch compression
-                    cute.SetSwingWorldOrientation(uprightRestRot, -0.28f, 0.45f);
-                }
-                else
-                {
-                    // Athletic leap flip into upside-down posture
-                    float flipFrac = Smooth((lu - 0.25f) / 0.75f);
-                    Quaternion flipToInverted = Quaternion.AngleAxis(180f * flipFrac, launchTangent) * uprightRestRot;
-                    cute.SetSwingWorldOrientation(flipToInverted, 0.08f * flipFrac, Mathf.Lerp(0.45f, 0.90f, flipFrac));
-                }
+                float c = Smooth(lu / 0.40f);
+                windOff = new Vector3(0f, -0.055f * c, -0.035f * c);
+                if (cute) cute.SetSwingWorldOrientation(uprightRestRot, -0.32f * c, 0.40f * c);
+            }
+            else
+            {
+                float r = Smooth((lu - 0.40f) / 0.60f);
+                // Spring slightly out and to the RIGHT so the first LEFT web has a crossing arc.
+                windOff = Vector3.Lerp(
+                    new Vector3(0f, -0.055f, -0.035f),
+                    new Vector3(-FirstSide * 0.52f, 0.16f, 0.62f),
+                    r);
+                Vector3 aim = (outward0 * 0.25f + tangent0 * FirstSide * 0.85f + Vector3.up * 0.55f).normalized;
+                Vector3 aimUp = Vector3.Slerp(outward0, Vector3.up * 0.2f + outward0, r);
+                Quaternion reachRot = Quaternion.Slerp(uprightRestRot, SafeLook(aim, aimUp), r);
+                if (cute) cute.SetSwingWorldOrientation(reachRot, Mathf.Lerp(-0.32f, 0.06f, r), Mathf.Lerp(0.40f, -0.20f, r));
             }
 
+            TickSwing(pl, y0, yaw0, windOff.x, windOff.y, windOff.z, ref yPrev);
             yield return null;
         }
 
-        Vector3 initialOutward = new Vector3(Mathf.Sin(yaw0 * Mathf.Deg2Rad), 0f, Mathf.Cos(yaw0 * Mathf.Deg2Rad));
-        Vector3 initialTangent = Vector3.Cross(Vector3.up, initialOutward).normalized;
-        Quaternion prevEndRot = Quaternion.LookRotation(-Vector3.up, initialOutward);
+        Vector3 prevOff = windOff;
 
         for (int shot = 0; shot < Shots; shot++)
         {
             bool last = shot == Shots - 1;
             currentThwip = shot + 1;
-            float yawStart = yaw0 + shot * OrbitPerSwing;
-            float yawLand = yawStart + OrbitPerSwing;
-            float shotDur = last ? cycle * 1.15f : cycle * 0.99f;
-            float baseFrac0 = shot / (float)Shots;
-            float baseFrac1 = (shot + 1) / (float)Shots;
+            int side = (shot % 2 == 0) ? FirstSide : -FirstSide;
 
-            const float shootFrac = 0.20f;
-            const float releaseFrac = 0.78f;
-            float releaseCut = last ? 0.72f : releaseFrac;
+            float yStart = Mathf.Lerp(y0, yEnd, ClimbEnvelope(fracAt[shot]));
+            float yLand = Mathf.Lerp(y0, yEnd, ClimbEnvelope(fracAt[shot + 1]));
+
+            // Land on the anchor's side, a little out from the bark. Final swing returns flush.
+            Vector3 endOff = last
+                ? Vector3.zero
+                : new Vector3(side * 1.32f, 0.06f, 1.18f + 0.22f * Mathf.Sin((shot + 1) * 0.7f));
+
+            // Fixed trunk anchor: up and to this swing's side, above the landing so the web stays taut above the spider.
+            float climbThis = Mathf.Max(0.8f, yLand - yStart);
+            float anchorYaw = yaw0 + side * 50f;
+            float anchorY = yLand + 1.85f + climbThis * 0.12f;
+            Vector3 anchorFixed = OnTrunk(axis, anchorYaw, anchorY, TrunkRadius + 0.04f);
+
+            const float shootFrac = 0.17f;
+            float releaseCut = last ? 0.60f : 0.84f;
 
             bool splatSpawned = false;
             bool whooshPlayed = false;
             bool released = false;
             float catchAge = 0f;
-            Quaternion releaseRot = prevEndRot;
-            Vector3 releaseTangent = Vector3.right;
-            Vector3 anchorNow = OnTrunk(axis, yawStart + 28f, camBaselineY + 3.05f, TrunkRadius + 0.04f);
+            Quaternion releaseRot = uprightRestRot;
 
             silkLive = true;
             silkAge = 0f;
+            silkTaut = 0.2f;
+            silkAnchor = anchorFixed;
             shootOrbLive = true;
             PlayThwip(shot);
-            if (shot == 1 || shot == 6) TCSfx.PlayVoice(false, 0.62f, 1.04f + shot * 0.03f);
+            if (shot == 1 || shot == 5 || shot == 9) TCSfx.PlayVoice(false, 0.62f, 1.04f + shot * 0.02f);
 
             float t = 0f;
-            while (t < shotDur)
+            float dur = Mathf.Max(0.08f, shotDur[shot]);
+            Vector3 lastTravel = tangent0 * side + Vector3.up * 0.35f;
+
+            while (t < dur)
             {
                 float dt = Time.deltaTime;
                 t += dt;
-                totalElapsed += dt;
-                float u = Mathf.Clamp01(t / shotDur);
-                float masterU = Mathf.Clamp01(totalElapsed / Mathf.Max(0.01f, totalDur));
+                float u = Mathf.Clamp01(t / dur);
 
-                // Smoothly swing wide out from trunk on launch and settle flush back onto bark on final landing
-                float launchEnv = 1f;
-                float landEnv = last ? (u < releaseCut ? 1f : Mathf.Cos((u - releaseCut) / (1f - releaseCut) * Mathf.PI * 0.5f)) : 1f;
-                float radialEnv = launchEnv * landEnv;
-                camCenterBlend = radialEnv;
+                // Pendulum ease: gather at the attach, whip through the trough, ease into the apex.
+                float releaseU = Mathf.Clamp01(u / Mathf.Max(0.01f, releaseCut));
+                float pendU = 0.5f - 0.5f * Mathf.Cos(Mathf.PI * releaseU);
+                if (u >= releaseCut)
+                    pendU = 1f;
 
-                // Pendulum yaw whip: gathers momentum into the bottom, rockets through the arc.
-                float pendU = Smooth(Mathf.Clamp01(u / releaseCut));
-                float yawEase = u + 0.07f * Mathf.Sin(Mathf.PI * u) * (u < releaseCut ? 1f : -0.4f);
-                yaw = Mathf.Lerp(yawStart, yawLand, Mathf.Clamp01(yawEase));
-                if (last && u >= 0.85f) yaw = Mathf.Lerp(yaw, yawLand, Smooth((u - 0.85f) / 0.15f));
-                camCurrentYaw = yaw;
-                camDampedYaw = Mathf.Lerp(camDampedYaw, yaw, 1f - Mathf.Exp(-Mathf.Max(0.1f, camRotDamping) * dt));
-                if (last && u >= 0.70f)
-                    camDampedYaw = Mathf.Lerp(camDampedYaw, yawLand, Smooth((u - 0.70f) / 0.30f));
-                float relYaw = yaw - yaw0;
+                float y = Mathf.Lerp(yStart, yLand, pendU);
+                // Visible trough so each swing falls then rises into the next attach.
+                float dipAmp = last ? 0.18f : Mathf.Lerp(0.42f, 0.22f, Mathf.Clamp01(dur / 0.55f));
+                if (u < releaseCut)
+                    y -= dipAmp * Mathf.Sin(Mathf.PI * pendU);
 
-                // Action climb surge: slows briefly as spider drops upside down into web catch, rockets on whip!
-                float linearClimb = Mathf.Lerp(baseFrac0, baseFrac1, u);
-                float surgeFrac = Mathf.Clamp01(linearClimb - 0.012f * Mathf.Sin(2f * Mathf.PI * u));
-                camBaselineY = Mathf.Lerp(y0, yEnd, surgeFrac);
+                Vector3 off = Vector3.Lerp(prevOff, endOff, pendU);
+                // Outward bulge at mid-swing — the spider swings AWAY from the trunk and across, like a rope pendulum.
+                float bulge = (u < releaseCut) ? Mathf.Sin(Mathf.PI * pendU) : 0f;
+                off.z += (last ? 0.35f : 0.72f) * bulge;
+                // Slight overshoot past the landing side at the apex, then settle.
+                if (!last)
+                    off.x += side * 0.16f * Mathf.Sin(Mathf.PI * pendU);
 
-                // Strong vertical pendulum drop & upward release catapult visible in camera frame.
-                float hangDip = u < releaseCut
-                    ? -0.34f * Mathf.Sin(Mathf.PI * Mathf.Clamp01((u - 0.04f) / Mathf.Max(0.01f, releaseCut - 0.04f)))
-                    : 0.28f * Mathf.Sin(Mathf.PI * Mathf.Clamp01((u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut)));
-                float y = camBaselineY + hangDip * radialEnv;
                 if (last && u >= releaseCut)
                 {
-                    float landingDecel = Smooth((u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut));
-                    y = Mathf.Lerp(y, yEnd, landingDecel);
+                    float landK = Smooth((u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut));
+                    y = Mathf.Lerp(y, yEnd, landK);
+                    off = Vector3.Lerp(off, Vector3.zero, landK);
+                    camPull = Mathf.Lerp(camPull, 0f, landK);
+                    camDutch = Mathf.Lerp(camDutch, 0f, landK);
+                    camFovAdd = Mathf.Lerp(camFovAdd, 0f, landK);
+                    camCenterBlend = 1f - landK;
+                }
+                else
+                {
+                    float masterU = Mathf.Lerp(fracAt[shot], fracAt[shot + 1], pendU);
+                    float midBoost = Mathf.Sin(Mathf.PI * Mathf.Clamp01(masterU));
+                    camPull = Mathf.Lerp(0.55f, 1f, midBoost);
+                    camDutch = side * -8.5f * bulge;
+                    camFovAdd = 5f + 7f * midBoost;
+                    camCenterBlend = camPull;
                 }
 
-                float orbitExtraZ = SwingOrbitExtraZ(relYaw, u) * radialEnv;
-                float orbitExtraY = (0.34f + 0.14f * Mathf.Sin(Mathf.PI * u)) * radialEnv;
-
-                TickSwing(pl, y, yaw, orbitExtraZ, orbitExtraY, ref yPrev);
-
-                // Overhead web bark pivot sweeps naturally down across upper trunk during the hang
-                // so the taut braided web string stays pinned & clearly readable through the whole whip.
+                float yBefore = yPrev;
+                TickSwing(pl, y, yaw0, off.x, off.y, off.z, ref yPrev);
                 Vector3 spiderPos = VisualSpiderPos();
+                lastTravel = tangent0 * side * (0.55f + 0.45f * bulge)
+                    + Vector3.up * Mathf.Max(0.15f, y - yBefore)
+                    + outward0 * bulge * 0.35f;
+
                 if (!(TCCoinMagnet.Instance && TCCoinMagnet.Instance.IsActive))
                     TCTrack.Instance?.AttractCoins(spiderPos, 40f, 0f);
-                Vector3 radialVec = new Vector3(spiderPos.x - axis.x, 0f, spiderPos.z - axis.z);
-                float targetRadius = radialVec.magnitude;
-                float targetRelY = spiderPos.y - camBaselineY;
-                float posK = 1f - Mathf.Exp(-Mathf.Max(0.1f, camFollowDamping) * dt);
-                camDampedRelY = Mathf.Lerp(camDampedRelY, targetRelY, posK);
-                camDampedRadius = Mathf.Lerp(camDampedRadius, targetRadius, posK);
-                if (last && u >= 0.70f)
-                {
-                    float settle = Smooth((u - 0.70f) / 0.30f);
-                    camDampedRelY = Mathf.Lerp(camDampedRelY, targetRelY, settle);
-                    camDampedRadius = Mathf.Lerp(camDampedRadius, targetRadius, settle);
-                }
-                DriveSwingCam(0f);
-
-                Vector3 outward = radialVec;
-                if (outward.sqrMagnitude < 1e-5f) outward = new Vector3(Mathf.Sin(yaw * Mathf.Deg2Rad), 0f, Mathf.Cos(yaw * Mathf.Deg2Rad));
-                outward.Normalize();
-                Vector3 tangent = Vector3.Cross(Vector3.up, outward).normalized;
-
-                float anchorYaw = Mathf.Lerp(yawStart + 28f, yawLand + 6f, Smooth(pendU));
-                float anchorHeight = spiderPos.y + Mathf.Lerp(3.05f, 2.05f, Mathf.Pow(pendU, 0.80f));
-                anchorNow = OnTrunk(axis, anchorYaw, anchorHeight, TrunkRadius + 0.04f);
 
                 if (u >= shootFrac && !splatSpawned)
                 {
                     splatSpawned = true;
                     shootOrbLive = false;
                     catchAge = 0f;
-                    silkAnchor = anchorNow;
+                    silkAnchor = anchorFixed;
                     if (webAnchor) webAnchor.position = silkAnchor;
-                    SpawnAnchorBurst(anchorNow, axis);
-                    TCFx.Shake(0.07f);
+                    SpawnAnchorBurst(anchorFixed, axis);
+                    TCFx.Shake(last ? 0.10f : 0.07f);
                 }
                 if (u >= shootFrac && !whooshPlayed)
                 {
@@ -447,14 +472,7 @@ public class TCWebBonus : MonoBehaviour
                 if (u >= releaseCut && !released)
                 {
                     released = true;
-                    releaseRot = cute ? cute.transform.rotation : prevEndRot;
-                    Vector3 relPull = (anchorNow - spiderPos);
-                    relPull = relPull.sqrMagnitude > 1e-5f ? relPull.normalized : Vector3.up;
-                    Vector3 relDown = (-relPull + tangent * 0.22f + outward * 0.16f).normalized;
-                    Vector3 relBankUp = Quaternion.AngleAxis(-20f, relDown) * outward;
-                    releaseRot = Quaternion.LookRotation(relDown, relBankUp);
-                    releaseTangent = tangent;
-
+                    releaseRot = cute ? cute.transform.rotation : uprightRestRot;
                     LingerCurrentSilk();
                     silkLive = false;
                     shootOrbLive = false;
@@ -466,100 +484,81 @@ public class TCWebBonus : MonoBehaviour
                     }
                 }
 
-                // -------------------------------------------------------------
-                // REALISTIC UPSIDE-DOWN SPIDER SWINGING POSE & SEAMLESS FINAL LANDING
-                // -------------------------------------------------------------
                 if (cute)
                 {
-                    Vector3 pullDir = anchorNow - spiderPos;
-                    pullDir = pullDir.sqrMagnitude > 1e-5f ? pullDir.normalized : Vector3.up;
-                    float su = Mathf.Clamp01((u - shootFrac) / Mathf.Max(0.01f, releaseCut - shootFrac));
-                    float swingLag = Mathf.Cos(su * Mathf.PI) * 0.25f;
-
-                    // Real spider hanging from spinneret:
-                    // Head (forward) points DOWNWARD along travel direction (-pullDir + tangent lead)
-                    // Abdomen/spinneret points UP toward web anchor (+pullDir)
-                    // Back (up) faces outward toward the camera with natural pendulum roll banking
-                    Vector3 hangFwd = (-pullDir + tangent * (0.16f + swingLag) + outward * 0.12f).normalized;
-                    float bankDeg = -28f * Mathf.Sin(Mathf.PI * su);
-                    Vector3 bankUp = (Quaternion.AngleAxis(bankDeg, hangFwd) * outward).normalized;
-                    Quaternion hangRot = Quaternion.LookRotation(hangFwd, bankUp);
-
                     if (u < shootFrac)
                     {
-                        // Maintain consistent upside-down posture between swing cycles
                         float k = Smooth(u / shootFrac);
-                        Quaternion cur = Quaternion.Slerp(prevEndRot, hangRot, k);
-                        cute.SetSwingWorldOrientation(cur, 0.05f * k, 0.90f);
+                        Vector3 aim = (anchorFixed - spiderPos);
+                        if (aim.sqrMagnitude < 1e-5f) aim = Vector3.up + tangent0 * side;
+                        Quaternion aimRot = SafeLook((aim.normalized + lastTravel.normalized * 0.35f).normalized, outward0 + Vector3.up * 0.15f);
+                        Quaternion cur = Quaternion.Slerp(cute.transform.rotation, aimRot, k);
+                        cute.SetSwingWorldOrientation(cur, 0.04f * k, Mathf.Lerp(0.15f, -0.25f, k));
                     }
                     else if (u < releaseCut)
                     {
                         catchAge += dt;
-                        float arc = Mathf.Sin(Mathf.PI * su);
-                        // Silk-hang pose: legs splayed naturally with rear legs following silk line
-                        cute.SetSwingWorldOrientation(hangRot, 0.04f - 0.12f * arc, 0.92f);
-                        prevEndRot = hangRot;
+                        float arc = Mathf.Sin(Mathf.PI * pendU);
+                        Quaternion hangRot = SwingBodyRot(spiderPos, anchorFixed, lastTravel, outward0, side * -22f * arc);
+                        cute.SetSwingWorldOrientation(hangRot, 0.03f - 0.10f * arc, 0.70f);
+                    }
+                    else if (last)
+                    {
+                        float sf = Smooth((u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut));
+                        Quaternion landUpright = uprightRestRot;
+                        Quaternion landingRot = Quaternion.Slerp(releaseRot, landUpright, sf);
+                        float landingSquash = -0.24f * Mathf.Sin(sf * Mathf.PI);
+                        cute.SetSwingWorldOrientation(landingRot, landingSquash, Mathf.Lerp(0.55f, 0f, sf));
                     }
                     else
                     {
                         float fu = (u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut);
-                        float sf = Smooth(fu);
-                        if (last)
-                        {
-                            // FINAL LANDING APPROACH:
-                            // Smoothly flip from upside-down hang into upright landing position on the bark
-                            Quaternion landUpright = Quaternion.LookRotation(Vector3.up, outward);
-                            Quaternion landingRot = Quaternion.Slerp(releaseRot, landUpright, sf);
-                            float landingSquash = Mathf.Lerp(0.05f, -0.22f * Mathf.Sin(sf * Mathf.PI), sf);
-                            cute.SetSwingWorldOrientation(landingRot, landingSquash, Mathf.Lerp(0.85f, 0f, sf));
-                            prevEndRot = landingRot;
-                        }
-                        else
-                        {
-                            // In-between swings: keep spider upside down in aerodynamic dive!
-                            // Gently pitch with the upward release catapult momentum
-                            Vector3 catapultFwd = (-Vector3.up * 0.7f + tangent * 0.7f + outward * 0.15f).normalized;
-                            Quaternion diveRot = Quaternion.LookRotation(catapultFwd, outward);
-                            Quaternion curDive = Quaternion.Slerp(releaseRot, diveRot, sf);
-                            cute.SetSwingWorldOrientation(curDive, -0.06f * Mathf.Sin(fu * Mathf.PI), 0.88f);
-                            prevEndRot = curDive;
-                        }
+                        Vector3 coast = (tangent0 * -side * 0.2f + Vector3.up * 0.75f + outward0 * 0.12f).normalized;
+                        Quaternion diveRot = SafeLook(coast, outward0);
+                        cute.SetSwingWorldOrientation(Quaternion.Slerp(releaseRot, diveRot, Smooth(fu)), -0.05f * Mathf.Sin(fu * Mathf.PI), 0.45f);
                     }
                 }
 
-                // Draw braided spider-web string shooting out of the spider up to the bark!
                 if (silkLive && u < releaseCut)
                 {
-                    Vector3 webStart = WebShootStart(cute, sp, anchorNow);
+                    Vector3 webStart = WebShootStart(cute, sp, anchorFixed);
                     silkTip = webStart;
                     if (u < shootFrac)
                     {
-                        float ext = Mathf.Lerp(0.14f, 1f, Smooth(u / shootFrac));
-                        silkAnchor = Vector3.Lerp(silkTip, anchorNow, ext);
+                        float ext = Mathf.Lerp(0.12f, 1f, Smooth(u / shootFrac));
+                        silkAnchor = Vector3.Lerp(silkTip, anchorFixed, ext);
                         if (webAnchor) webAnchor.position = silkAnchor;
-                        DrawSilk(silkTip, silkAnchor, 0.25f + 0.40f * ext, silkAge);
+                        DrawSilk(silkTip, silkAnchor, 0.18f + 0.45f * ext, silkAge);
                     }
                     else
                     {
                         shootOrbLive = false;
-                        silkAnchor = anchorNow;
+                        silkAnchor = anchorFixed;
                         if (webAnchor) webAnchor.position = silkAnchor;
-                        // Subtle string pluck vibration right on impact, then dead taut under load!
                         float pluck = Mathf.Exp(-catchAge * 14f) * Mathf.Abs(Mathf.Sin(catchAge * 95f));
                         DrawSilk(silkTip, silkAnchor, 1f - pluck * 0.22f, silkAge);
                     }
                 }
+
+                // After-images only during the fast mid-climb swings, so the flurry reads.
+                if (!last && dur < 0.42f && u > shootFrac && u < releaseCut)
+                    TickGhostClock(cute ? cute.transform : sp);
+
                 yield return null;
             }
 
-            yaw = yawLand;
-            camCurrentYaw = yaw;
+            prevOff = endOff;
+            yaw = yaw0;
+            camCurrentYaw = yaw0;
             if (last)
             {
-                camDampedYaw = yaw;
+                camDampedYaw = yaw0;
                 camCenterBlend = 0f;
+                camPull = 0f;
+                camDutch = 0f;
+                camFovAdd = 0f;
                 camBaselineY = yEnd;
-                TickSwing(pl, yEnd, yaw, 0f, 0f, ref yPrev);
+                TickSwing(pl, yEnd, yaw0, 0f, 0f, 0f, ref yPrev);
             }
         }
 
@@ -582,13 +581,18 @@ public class TCWebBonus : MonoBehaviour
         TCSfx.Play("chime", 0.9f, 1.05f);
         TCSfx.Play("celebrate", 1f);
 
-        // Brief settle while +5000m pop appears, keeping the exact default camera untouched.
+        // Brief settle on the bark while the +5000m pop appears. Ease the camera to its exact rest pose.
         ShowcaseHold = true;
         float hold = 0f;
-        while (hold < 0.30f)
+        while (hold < LandSettleDur)
         {
             hold += Time.unscaledDeltaTime;
-            ApplyPendulumRadius(0f, 0f);
+            float hk = Smooth(Mathf.Clamp01(hold / LandSettleDur));
+            camPull = 0f;
+            camDutch = 0f;
+            camFovAdd = Mathf.Lerp(camFovAdd, 0f, hk);
+            camCenterBlend = 0f;
+            ApplyPendulumRadius(0f, 0f, 0f);
             DriveSwingCam(0f);
             yield return null;
         }
@@ -605,6 +609,12 @@ public class TCWebBonus : MonoBehaviour
 
         if (cam && swingCamActive)
         {
+            // Snap to the true rest pose first in world space so reparenting does not pop.
+            Vector3 restWorldPos = camParentRest ? camParentRest.TransformPoint(camPosRest) : cam.transform.position;
+            Quaternion restWorldRot = camParentRest ? camParentRest.rotation * camRotRest : camWorldRotRest;
+            cam.transform.position = restWorldPos;
+            cam.transform.rotation = restWorldRot;
+            cam.fieldOfView = fovRest;
             cam.transform.SetParent(camParentRest, true);
             cam.transform.localScale = camScaleRest;
             swingCamActive = false;
@@ -633,9 +643,39 @@ public class TCWebBonus : MonoBehaviour
         swingCo = null;
     }
 
-    float SwingOrbitExtraZ(float relYawDeg, float swingU)
+    static float ClimbEnvelope(float u)
     {
-        return 2.35f + 0.35f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(swingU));
+        // Blend linear travel with a smoothstep so the first and last swings climb less
+        // (readable arcs) and the middle swings cover most of the 5000 m.
+        u = Mathf.Clamp01(u);
+        return Mathf.Lerp(u, Smooth(u), 0.75f);
+    }
+
+    static Quaternion SafeLook(Vector3 fwd, Vector3 up)
+    {
+        if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.up;
+        fwd.Normalize();
+        if (up.sqrMagnitude < 1e-6f) up = Vector3.forward;
+        up.Normalize();
+        if (Mathf.Abs(Vector3.Dot(fwd, up)) > 0.97f)
+        {
+            up = Vector3.Cross(fwd, Vector3.right);
+            if (up.sqrMagnitude < 1e-6f) up = Vector3.Cross(fwd, Vector3.forward);
+            up.Normalize();
+        }
+        return Quaternion.LookRotation(fwd, up);
+    }
+
+    static Quaternion SwingBodyRot(Vector3 spiderPos, Vector3 anchor, Vector3 travel, Vector3 outward, float bankDeg)
+    {
+        Vector3 toAnchor = anchor - spiderPos;
+        if (toAnchor.sqrMagnitude < 1e-6f) toAnchor = Vector3.up;
+        toAnchor.Normalize();
+        Vector3 fwd = travel.sqrMagnitude > 1e-6f ? travel.normalized : Vector3.up;
+        Vector3 up = (toAnchor * 0.65f + outward * 0.55f).normalized;
+        if (Mathf.Abs(bankDeg) > 0.01f)
+            up = (Quaternion.AngleAxis(bankDeg, fwd) * up).normalized;
+        return SafeLook(fwd, up);
     }
 
     void BindSwingBody(Transform sp)
@@ -644,12 +684,13 @@ public class TCWebBonus : MonoBehaviour
         swingBodyRest = swingBody ? swingBody.localPosition : Vector3.zero;
     }
 
-    void ApplyPendulumRadius(float extraZ, float extraY = 0f)
+    void ApplyPendulumRadius(float extraX, float extraY, float extraZ)
     {
         if (!swingBody) return;
         var lp = swingBodyRest;
-        lp.z += extraZ;
+        lp.x += extraX;
         lp.y += extraY;
+        lp.z += extraZ;
         swingBody.localPosition = lp;
     }
 
@@ -706,7 +747,7 @@ public class TCWebBonus : MonoBehaviour
         if (shootOrb) shootOrb.SetActive(on && shootOrbLive);
     }
 
-    void TickSwing(player pl, float y, float yaw, float extraZ, float extraY, ref float yPrev)
+    void TickSwing(player pl, float y, float yaw, float extraX, float extraY, float extraZ, ref float yPrev)
     {
         if (pl && pl.p1)
         {
@@ -716,7 +757,7 @@ public class TCWebBonus : MonoBehaviour
             ClimbSpeed = (y - yPrev) / dt;
             yPrev = y;
         }
-        ApplyPendulumRadius(extraZ, extraY);
+        ApplyPendulumRadius(extraX, extraY, extraZ);
         DriveSwingCam(0f);
     }
 
@@ -737,30 +778,50 @@ public class TCWebBonus : MonoBehaviour
         var pl = player.Instance;
         Vector3 spiderPos = VisualSpiderPos();
         Vector3 axis = pl && pl.p1 ? pl.p1.position : spiderPos;
+        axis.y = spiderPos.y;
 
-        // Orbit the camera around the tree with smooth rotational and relative-follow delay,
-        // upward pitch angle framing the spider and oncoming trunk, cutting off bottom chunk recycling.
-        Vector3 trackedSpiderPos = camDampedReady
-            ? new Vector3(
-                axis.x + Mathf.Sin(camDampedYaw * Mathf.Deg2Rad) * camDampedRadius,
-                camBaselineY + camDampedRelY,
-                axis.z + Mathf.Cos(camDampedYaw * Mathf.Deg2Rad) * camDampedRadius)
-            : spiderPos;
-        float cBlend = Smooth(camCenterBlend);
-        Quaternion tiltedRot = Quaternion.Euler(0f, camDampedYaw, 0f) * camRelRotRest;
-        Quaternion levelRot = Quaternion.Euler(0f, camDampedYaw, 0f) * camLevelRelRot;
-        Quaternion orbitedRot = Quaternion.Slerp(tiltedRot, levelRot, cBlend);
-        Quaternion yawDeltaRot = Quaternion.Euler(0f, camDampedYaw - camYaw0, 0f);
-        Vector3 restPos = new Vector3(axis.x, camBaselineY, axis.z) + (yawDeltaRot * camWorldOffsetRest);
-        Vector3 camFwd = orbitedRot * Vector3.forward;
-        Vector3 camUp = orbitedRot * Vector3.up;
-        const float FollowDistance = 1.120f;
-        float halfViewH = FollowDistance * Mathf.Tan(fovRest * 0.5f * Mathf.Deg2Rad);
-        Vector3 centeredPos = trackedSpiderPos - camFwd * FollowDistance + camUp * (halfViewH * 0.15f);
+        // Stay on the starting face of the trunk. Pull back so the left/right
+        // pendulum and the web line stay in frame, and ease back to the exact
+        // gameplay camera on landing.
+        Vector3 restPos = camParentRest
+            ? camParentRest.TransformPoint(camPosRest)
+            : new Vector3(axis.x, spiderPos.y, axis.z) + camWorldOffsetRest;
+        Quaternion restRot = camParentRest
+            ? camParentRest.rotation * camRotRest
+            : Quaternion.Euler(0f, camYaw0, 0f) * camRelRotRest;
 
-        cam.transform.position = Vector3.Lerp(restPos, centeredPos, cBlend);
-        cam.transform.rotation = orbitedRot;
-        cam.fieldOfView = fovRest;
+        Vector3 outward = new Vector3(Mathf.Sin(camYaw0 * Mathf.Deg2Rad), 0f, Mathf.Cos(camYaw0 * Mathf.Deg2Rad));
+        Vector3 tangent = Vector3.Cross(Vector3.up, outward).normalized;
+
+        float dt = Time.deltaTime;
+        if (!camLookReady)
+        {
+            camLookDamped = spiderPos;
+            camLookReady = true;
+        }
+        float lookK = 1f - Mathf.Exp(-Mathf.Max(0.1f, camFollowDamping) * dt);
+        camLookDamped = Vector3.Lerp(camLookDamped, spiderPos, lookK);
+
+        float pull = Mathf.Clamp01(camPull);
+        // Look a little above the spider so the rising web stays in frame, and
+        // pull back in the middle so the left/right pendulum reads clearly.
+        Vector3 lookAt = camLookDamped + Vector3.up * Mathf.Lerp(0.15f, 0.95f, pull) + outward * 0.08f;
+        float dist = Mathf.Lerp(2.15f, 5.60f, pull);
+        float heightBias = Mathf.Lerp(0.18f, -0.20f, pull);
+        // Slight lag on the lateral follow so swings feel like they whip past the camera.
+        Vector3 lateral = Vector3.Project(camLookDamped - new Vector3(axis.x, camLookDamped.y, axis.z), tangent);
+        Vector3 camPos = lookAt - outward * dist + Vector3.up * heightBias - lateral * 0.28f;
+
+        Vector3 fwd = lookAt - camPos;
+        if (fwd.sqrMagnitude < 1e-6f) fwd = -outward;
+        float useDutch = dutch + camDutch;
+        Vector3 up = Quaternion.AngleAxis(useDutch, fwd.normalized) * Vector3.up;
+        Quaternion cineRot = SafeLook(fwd, up);
+
+        float k = Smooth(Mathf.Clamp01(pull));
+        cam.transform.position = Vector3.Lerp(restPos, camPos, k);
+        cam.transform.rotation = Quaternion.Slerp(restRot, cineRot, k);
+        cam.fieldOfView = fovRest + camFovAdd * k;
     }
 
 
@@ -788,30 +849,33 @@ public class TCWebBonus : MonoBehaviour
     void LingerCurrentSilk()
     {
         if (!webLine || !webLine.enabled) return;
-        Vector3 dir = lingerAnchor - lingerTip;
-        if (dir.sqrMagnitude < 0.005f) return;
+        int n = webLine.positionCount;
+        if (n < 2) return;
+        var pts = new Vector3[n];
+        webLine.GetPositions(pts);
+        if ((pts[n - 1] - pts[0]).sqrMagnitude < 0.005f) return;
 
         var go = new GameObject("TCSilkLinger");
         go.transform.SetParent(transform, false);
         var lr = go.AddComponent<LineRenderer>();
-        lr.positionCount = 2;
-        lr.SetPosition(0, lingerTip);
-        lr.SetPosition(1, lingerAnchor);
-        lr.startWidth = 0.062f;
-        lr.endWidth = 0.036f;
+        lr.positionCount = n;
+        lr.SetPositions(pts);
+        lr.startWidth = webLine.startWidth * 0.88f;
+        lr.endWidth = webLine.endWidth * 0.88f;
         lr.useWorldSpace = true;
         lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         lr.receiveShadows = false;
         lr.numCapVertices = 3;
+        lr.numCornerVertices = 2;
         var mat = MakeSilkMat(new Color(0.92f, 0.97f, 1f, 0.65f), true, true);
         if (silkShimmerTex) mat.mainTexture = silkShimmerTex;
         lr.sharedMaterial = mat;
-        lr.startColor = new Color(0.94f, 0.98f, 1f, 0.65f);
+        lr.startColor = new Color(0.94f, 0.98f, 1f, 0.70f);
         lr.endColor = new Color(0.75f, 0.92f, 1f, 0.35f);
 
         fadingSilk.Add(lr);
         fadingAge.Add(0f);
-        fadingLife.Add(0.26f);
+        fadingLife.Add(0.48f);
         fadingMat.Add(mat);
     }
 
@@ -911,13 +975,22 @@ public class TCWebBonus : MonoBehaviour
         lingerAnchor = anchor;
         silkTaut = taut;
 
-        // Subtle whip-wave while shooting out; snaps dead taut under swing tension.
+        // Slight catenary sag, plus a whip-wave while the line is shooting out.
+        // Under load it snaps almost taut but keeps a readable curve.
         var cam = swingCam ? swingCam : Camera.main;
         Vector3 camFwd = cam ? cam.transform.forward : Vector3.forward;
         Vector3 side = Vector3.Cross(dir / len, camFwd);
         if (side.sqrMagnitude < 1e-4f) side = Vector3.right;
         side.Normalize();
-        float whipAmp = (1f - Mathf.Clamp01(taut)) * Mathf.Min(0.45f, len * 0.08f);
+        float taut01 = Mathf.Clamp01(taut);
+        float whipAmp = (1f - taut01) * Mathf.Min(0.45f, len * 0.08f);
+        float sagAmp = (0.028f + (1f - taut01) * 0.14f) * Mathf.Min(1.15f, len * 0.32f);
+
+        float thick = 0.82f + 0.18f * taut01;
+        webLine.startWidth = 0.092f * thick;
+        webLine.endWidth = 0.022f * thick; // thins toward the anchor
+        webGlow.startWidth = 0.22f * thick;
+        webGlow.endWidth = 0.050f * thick;
 
         const int Segs = 28;
         if (webLine.positionCount != Segs) webLine.positionCount = Segs;
@@ -926,8 +999,10 @@ public class TCWebBonus : MonoBehaviour
         {
             float s = i / (float)(Segs - 1);
             Vector3 p = Vector3.Lerp(tip, anchor, s);
+            float bell = Mathf.Sin(Mathf.PI * s);
+            p += Vector3.down * (sagAmp * bell);
             if (whipAmp > 1e-4f)
-                p += side * (Mathf.Sin(Mathf.PI * s) * Mathf.Sin(s * Mathf.PI * 2.5f - age * 46f) * whipAmp);
+                p += side * (bell * Mathf.Sin(s * Mathf.PI * 2.5f - age * 46f) * whipAmp);
             webLine.SetPosition(i, p);
             webGlow.SetPosition(i, p);
         }

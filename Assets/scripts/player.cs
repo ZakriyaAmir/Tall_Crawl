@@ -195,7 +195,7 @@ public class player : MonoBehaviour
         }
         currentTurnAngle = Mathf.Lerp(currentTurnAngle, targetTurnAngle, 1f - Mathf.Exp(-15f * effectiveDt));
 
-        if (spider && hasSpiderBaseRot)
+        if (spider && hasSpiderBaseRot && !(TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging))
         {
             spider.transform.localRotation = spiderBaseRot * Quaternion.Euler(0f, currentTurnAngle, 0f);
         }
