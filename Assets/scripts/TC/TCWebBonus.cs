@@ -793,7 +793,7 @@ public class TCWebBonus : MonoBehaviour
                 Mathf.Lerp(camPosRest.x, spiderLocal.x, 0.80f),
                 camPosRest.y - 0.28f * pull + (spiderLocal.y - swingBodyRest.y) * 0.45f,
                 targetZ);
-            targetRot = camRotRest * Quaternion.Euler(0f, 0f, useDutch);
+            targetRot = camRotRest;
             targetFov = fovRest + camFovAdd * pull;
         }
 
@@ -810,7 +810,7 @@ public class TCWebBonus : MonoBehaviour
         float k = 1f - Mathf.Exp(-damp * Mathf.Max(1e-4f, step));
         camLocalDamped = Vector3.Lerp(camLocalDamped, targetLocal, k);
         cam.transform.localPosition = camLocalDamped;
-        cam.transform.localRotation = Quaternion.Slerp(cam.transform.localRotation, targetRot, k);
+        cam.transform.localRotation = camRotRest;
         cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFov, k);
     }
 
