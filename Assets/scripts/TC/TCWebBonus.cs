@@ -57,6 +57,7 @@ public class TCWebBonus : MonoBehaviour
     public float camFollowDamping = 6.5f;
     float camPull, camDutch, camFovAdd;
     Vector3 camLookDamped;
+    Vector3 camLocalDamped;
     bool camLookReady;
 
     Vector3 camPosRest, camWorldOffsetRest;
@@ -232,8 +233,10 @@ public class TCWebBonus : MonoBehaviour
         float yEnd = y0 + worldUnits;
         float yaw = pl ? pl.CurrentYaw : (sp ? sp.eulerAngles.y : 0f);
 
-        // Unparent Main Camera during the swing so we can smoothly orbit it around the tree
-        // with the spider centered in frame while preserving the exact pitch angle and FOV.
+        // Keep the camera parented to the player (p1), the same way gameplay follows the
+        // climb. Unparenting and placing it with world-space "outward" math put it on the
+        // FAR side of the trunk (local -Z), so the tree hid the spider. Stay on local +Z,
+        // looking inward, and follow the visible spider in p1 space.
         if (cam)
         {
             camAnimRest = cam.GetComponent<Animator>();
@@ -244,30 +247,18 @@ public class TCWebBonus : MonoBehaviour
             camCurrentYaw = yaw;
             camDampedYaw = yaw;
             camCenterBlend = 0f;
-            camDampedReady = false;
+            camDampedReady = true;
             camRelRotRest = Quaternion.Inverse(Quaternion.Euler(0f, yaw, 0f)) * camWorldRotRest;
-            Vector3 flatFwd = Vector3.ProjectOnPlane(camRelRotRest * Vector3.forward, Vector3.up);
-            Quaternion baseFwd = flatFwd.sqrMagnitude > 1e-4f
-                ? Quaternion.LookRotation(flatFwd.normalized, Vector3.up)
-                : Quaternion.Euler(0f, 180f, 0f);
-            // Maintain heroic upward pitch (+22 deg) along the trunk during swings,
-            // preventing the camera from looking down at tree chunks being removed from the bottom.
-            camLevelRelRot = baseFwd * Quaternion.Euler(-22f, 0f, 0f);
             camBaselineY = y0;
             camWorldOffsetRest = cam.transform.position - new Vector3(axis.x, y0, axis.z);
-            cam.transform.SetParent(null, true);
             swingCamActive = true;
             camPull = 0f;
             camDutch = 0f;
             camFovAdd = 0f;
-            camLookReady = false;
-            ApplyPendulumRadius(0f, 0f, 0f);
-            Vector3 spInit = VisualSpiderPos();
-            camDampedRelY = spInit.y - camBaselineY;
-            camDampedRadius = new Vector2(spInit.x - axis.x, spInit.z - axis.z).magnitude;
-            camDampedReady = true;
-            camLookDamped = spInit;
+            camLocalDamped = camPosRest;
+            camLookDamped = VisualSpiderPos();
             camLookReady = true;
+            ApplyPendulumRadius(0f, 0f, 0f);
             DriveSwingCam(0f);
         }
 
@@ -609,20 +600,13 @@ public class TCWebBonus : MonoBehaviour
 
         if (cam && swingCamActive)
         {
-            // Snap to the true rest pose first in world space so reparenting does not pop.
-            Vector3 restWorldPos = camParentRest ? camParentRest.TransformPoint(camPosRest) : cam.transform.position;
-            Quaternion restWorldRot = camParentRest ? camParentRest.rotation * camRotRest : camWorldRotRest;
-            cam.transform.position = restWorldPos;
-            cam.transform.rotation = restWorldRot;
-            cam.fieldOfView = fovRest;
-            cam.transform.SetParent(camParentRest, true);
-            cam.transform.localScale = camScaleRest;
-            swingCamActive = false;
-            if (camAnimRest) camAnimRest.enabled = camAnimWasEnabled;
+            // Still parented to the player; just restore the exact gameplay local pose.
             cam.transform.localPosition = camPosRest;
             cam.transform.localRotation = camRotRest;
-            cam.fieldOfView = fovRest;
             cam.transform.localScale = camScaleRest;
+            cam.fieldOfView = fovRest;
+            swingCamActive = false;
+            if (camAnimRest) camAnimRest.enabled = camAnimWasEnabled;
         }
 
         HideSwingHud();
@@ -775,53 +759,59 @@ public class TCWebBonus : MonoBehaviour
         var cam = swingCam ? swingCam : Camera.main;
         if (!cam || !swingCamActive) return;
 
-        var pl = player.Instance;
-        Vector3 spiderPos = VisualSpiderPos();
-        Vector3 axis = pl && pl.p1 ? pl.p1.position : spiderPos;
-        axis.y = spiderPos.y;
-
-        // Stay on the starting face of the trunk. Pull back so the left/right
-        // pendulum and the web line stay in frame, and ease back to the exact
-        // gameplay camera on landing.
-        Vector3 restPos = camParentRest
-            ? camParentRest.TransformPoint(camPosRest)
-            : new Vector3(axis.x, spiderPos.y, axis.z) + camWorldOffsetRest;
-        Quaternion restRot = camParentRest
-            ? camParentRest.rotation * camRotRest
-            : Quaternion.Euler(0f, camYaw0, 0f) * camRelRotRest;
-
-        Vector3 outward = new Vector3(Mathf.Sin(camYaw0 * Mathf.Deg2Rad), 0f, Mathf.Cos(camYaw0 * Mathf.Deg2Rad));
-        Vector3 tangent = Vector3.Cross(Vector3.up, outward).normalized;
-
+        // Gameplay camera lives on p1 at local (0, -1.15, 3.25), looking inward
+        // (toward local -Z) and slightly up at the spider on the trunk (z ≈ 0.49).
+        // Follow in that same local space so the spider stays in front of the lens.
         float dt = Time.deltaTime;
-        if (!camLookReady)
-        {
-            camLookDamped = spiderPos;
-            camLookReady = true;
-        }
-        float lookK = 1f - Mathf.Exp(-Mathf.Max(0.1f, camFollowDamping) * dt);
-        camLookDamped = Vector3.Lerp(camLookDamped, spiderPos, lookK);
+        Vector3 spiderWorld = VisualSpiderPos();
+        Transform parent = cam.transform.parent;
+        Vector3 spiderLocal = parent
+            ? parent.InverseTransformPoint(spiderWorld)
+            : spiderWorld;
 
         float pull = Mathf.Clamp01(camPull);
-        // Look a little above the spider so the rising web stays in frame, and
-        // pull back in the middle so the left/right pendulum reads clearly.
-        Vector3 lookAt = camLookDamped + Vector3.up * Mathf.Lerp(0.15f, 0.95f, pull) + outward * 0.08f;
-        float dist = Mathf.Lerp(2.15f, 5.60f, pull);
-        float heightBias = Mathf.Lerp(0.18f, -0.20f, pull);
-        // Slight lag on the lateral follow so swings feel like they whip past the camera.
-        Vector3 lateral = Vector3.Project(camLookDamped - new Vector3(axis.x, camLookDamped.y, axis.z), tangent);
-        Vector3 camPos = lookAt - outward * dist + Vector3.up * heightBias - lateral * 0.28f;
-
-        Vector3 fwd = lookAt - camPos;
-        if (fwd.sqrMagnitude < 1e-6f) fwd = -outward;
         float useDutch = dutch + camDutch;
-        Vector3 up = Quaternion.AngleAxis(useDutch, fwd.normalized) * Vector3.up;
-        Quaternion cineRot = SafeLook(fwd, up);
 
-        float k = Smooth(Mathf.Clamp01(pull));
-        cam.transform.position = Vector3.Lerp(restPos, camPos, k);
-        cam.transform.rotation = Quaternion.Slerp(restRot, cineRot, k);
-        cam.fieldOfView = fovRest + camFovAdd * k;
+        Vector3 targetLocal;
+        Quaternion targetRot;
+        float targetFov;
+        if (ShowcaseHold || pull <= 0.001f)
+        {
+            targetLocal = camPosRest;
+            targetRot = camRotRest;
+            targetFov = fovRest;
+        }
+        else
+        {
+            // Track the spider's left/right so the pendulum stays centred-ish,
+            // sit a little lower so more of the rising web is in frame, and pull
+            // back along local +Z (the camera-facing / outside side of the trunk).
+            float extraBack = Mathf.Lerp(0.20f, 1.85f, pull);
+            const float MinClearance = 2.45f;
+            float targetZ = Mathf.Max(camPosRest.z + extraBack, spiderLocal.z + MinClearance);
+            targetLocal = new Vector3(
+                Mathf.Lerp(camPosRest.x, spiderLocal.x, 0.80f),
+                camPosRest.y - 0.28f * pull + (spiderLocal.y - swingBodyRest.y) * 0.45f,
+                targetZ);
+            targetRot = camRotRest * Quaternion.Euler(0f, 0f, useDutch);
+            targetFov = fovRest + camFovAdd * pull;
+        }
+
+        if (!camLookReady)
+        {
+            camLocalDamped = cam.transform.localPosition;
+            camLookReady = true;
+        }
+
+        // Stronger return on landing so we ease all the way to the rest pose
+        // without a snap when the animator is re-enabled.
+        float damp = ShowcaseHold ? 16f : Mathf.Lerp(10f, Mathf.Max(0.1f, camFollowDamping), pull);
+        float step = ShowcaseHold ? Mathf.Max(dt, Time.unscaledDeltaTime) : dt;
+        float k = 1f - Mathf.Exp(-damp * Mathf.Max(1e-4f, step));
+        camLocalDamped = Vector3.Lerp(camLocalDamped, targetLocal, k);
+        cam.transform.localPosition = camLocalDamped;
+        cam.transform.localRotation = Quaternion.Slerp(cam.transform.localRotation, targetRot, k);
+        cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFov, k);
     }
 
 
