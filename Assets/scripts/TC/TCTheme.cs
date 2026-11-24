@@ -196,6 +196,18 @@ public static class TCTheme
         band.anchorMin = band.anchorMax = new Vector2(0.5f, 0.5f); band.pivot = new Vector2(0.5f, 0.5f);
         band.sizeDelta = new Vector2(Mathf.Max(60, rt.rect.height * 0.5f), Mathf.Max(rt.rect.height, 100) * 1.9f); band.localRotation = Quaternion.Euler(0, 0, -18);
         var s = Ensure<TCShine>(b.gameObject); s.band = band;
+        s.clip = clip;
+    }
+
+    public static void SetShine(Button b, bool on)
+    {
+        if (!b) return;
+        var s = b.GetComponent<TCShine>();
+        if (s) s.SetShine(on);
+        var clip = b.transform.Find("ShineClip");
+        if (clip) clip.gameObject.SetActive(on);
+        var directShine = b.transform.Find("Shine");
+        if (directShine) directShine.gameObject.SetActive(on);
     }
 
     // ---------- panels ----------

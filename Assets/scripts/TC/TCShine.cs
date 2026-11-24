@@ -5,12 +5,33 @@ using UnityEngine;
 public class TCShine : MonoBehaviour
 {
     public RectTransform band;
+    public Component clip;
     public float interval = 2.6f, sweep = 0.55f, delay = 0.8f;
     [Tooltip("polish3: keep the band ~1.9x the button height so the tilted sweep always covers the face.")] public bool autoSize = true;
     float t;
+
+    public void SetShine(bool on)
+    {
+        enabled = on;
+        if (!band) FindBand();
+        if (band) band.gameObject.SetActive(on);
+        if (clip) clip.gameObject.SetActive(on);
+        var clipT = transform.Find("ShineClip");
+        if (clipT) clipT.gameObject.SetActive(on);
+    }
+
+    void FindBand()
+    {
+        if (band) return;
+        var b = transform.Find("ShineClip/Shine") ?? transform.Find("Shine");
+        if (b) band = b as RectTransform;
+    }
+
+    void Awake() { FindBand(); }
     void OnEnable() { t = -delay; Place(-1); }
     void OnDisable()
     {
+        FindBand();
         if (band) band.gameObject.SetActive(false);
     }
     void Place(float k)

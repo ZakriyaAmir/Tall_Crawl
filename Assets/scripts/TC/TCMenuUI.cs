@@ -36,7 +36,16 @@ public class TCMenuUI : MonoBehaviour
         StartCoroutine(PlaySplashAndEntrance());
         TCSkins.CheckAchievements();
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
-        if (TCSave.DailyAvailable(out _)) StartCoroutine(Delay(4.2f, OpenDaily));
+        bool isFirstBootEver = PlayerPrefs.GetInt("tc_booted_before", 0) == 0;
+        if (isFirstBootEver)
+        {
+            PlayerPrefs.SetInt("tc_booted_before", 1);
+            PlayerPrefs.Save();
+        }
+        else if (TCSave.DailyAvailable(out _))
+        {
+            StartCoroutine(Delay(4.2f, OpenDaily));
+        }
         // Note: Do not change text colors at runtime so baked scene text styling is preserved
         HookPreviewTap(previewImg);
         HookPreviewTap(skinPreviewImg);
@@ -44,21 +53,26 @@ public class TCMenuUI : MonoBehaviour
 
     IEnumerator PlaySplashAndEntrance()
     {
-        // 1. Hide spider preview and ensure BGM is silent while splash screen is going on
-        if (previewSpider) previewSpider.SetActive(false);
-        if (previewImg) previewImg.gameObject.SetActive(false);
-        StopMenuMusic();
-
-        // 2. Play the SillyCon splash screen (brushed in -> settle -> brushed off -> fade out white BG)
-        if (canvas)
+        // Only play the splash screen when player starts the game (first time in the session),
+        // not when returning to the main menu from the gameplay scene.
+        if (!TCSplashScreen.HasPlayedThisSession)
         {
-            yield return TCSplashScreen.Play(canvas.transform);
+            // 1. Hide spider preview and ensure BGM is silent while splash screen is going on
+            if (previewSpider) previewSpider.SetActive(false);
+            if (previewImg) previewImg.gameObject.SetActive(false);
+            StopMenuMusic();
+
+            // 2. Play the SillyCon splash screen (brushed in -> settle -> brushed off -> fade out white BG)
+            if (canvas)
+            {
+                yield return TCSplashScreen.Play(canvas.transform);
+            }
+
+            // 3. Wait exactly 0.1s after the splash screen is completely gone
+            yield return new WaitForSecondsRealtime(0.1f);
         }
 
-        // 3. Wait exactly 0.1s after the splash screen is completely gone
-        yield return new WaitForSecondsRealtime(0.1f);
-
-        // 4. Reveal spider preview and start menu music and banner ad only then
+        // Reveal spider preview and start menu music and banner ad only then
         splashFinished = true;
         if (previewSpider)
         {
@@ -69,7 +83,7 @@ public class TCMenuUI : MonoBehaviour
         ApplyMenuMusic();
         TCServices.Banner(true);
 
-        // 5. Run spider entrance animation
+        // Run spider entrance animation
         yield return Entrance();
     }
     /// Builds (or, when baked into the scene, binds to) every menu screen. Also run in edit mode by TCUIBake.
@@ -941,7 +955,7 @@ public class TCMenuUI : MonoBehaviour
 
     // ---------- Shop ----------
     static readonly int[] activeUpgradeIds = { 1, 2, 5, 6 };
-    static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Climb Bonus", "Head Start", "Slow-Mo Time", "Coin Magnet" };
+    static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Climb Bonus", "Head Start", "Freeze Powerup", "Coin Magnet" };
     static readonly int[] upgMax = { 0, 5, 2, 0, 0, 5, 5 };
     public CanvasGroup GetPanel(string n) => n == "Skins" ? skinsPanel : n == "Shop" ? shopPanel : n == "Settings" ? settingsPanel : n == "Daily" ? dailyPanel : consentPanel;
 
@@ -1227,16 +1241,16 @@ public class TCMenuUI : MonoBehaviour
                 foreach (var o in dailyCells[i].GetComponents<UnityEngine.UI.Outline>()) o.effectColor = i == day && avail ? TCUI.CrimsonDark : TCUI.Tan;
             }
             var crt = (RectTransform)claimBtn.transform;
-            var s = claimBtn.GetComponent<TCShine>();
             if (avail)
             {
-                dblBtn.gameObject.SetActive(true);
-                dblBtn.interactable = true;
-                crt.anchoredPosition = new Vector2(-160, 260);
+                bool canDouble = TCServices.IsRewardedReady();
+                dblBtn.gameObject.SetActive(canDouble);
+                dblBtn.interactable = canDouble;
+                crt.anchoredPosition = new Vector2(canDouble ? -160 : 0, 260);
                 claimBtn.interactable = true;
                 if (claimBtnText) claimBtnText.text = "CLAIM";
                 if (dblBtnText) dblBtnText.text = "x2 (AD)";
-                if (s) s.enabled = true;
+                TCTheme.SetShine(claimBtn, true);
             }
             else
             {
@@ -1244,7 +1258,7 @@ public class TCMenuUI : MonoBehaviour
                 crt.anchoredPosition = new Vector2(0, 260);
                 claimBtn.interactable = false;
                 if (claimBtnText) claimBtnText.text = "CLAIMED";
-                if (s) s.enabled = false;
+                TCTheme.SetShine(claimBtn, false);
             }
         });
     }
@@ -1254,6 +1268,7 @@ public class TCMenuUI : MonoBehaviour
         if (!TCSave.DailyAvailable(out int day)) return;
         claimBtn.interactable = false;
         if (dblBtn) dblBtn.interactable = false;
+        TCTheme.SetShine(claimBtn, false);
         int amt = TCConfig.I.dailyRewards[day] * (doubled ? 2 : 1);
         if (day == 6) TCSave.Gems += amt; else TCSave.Coins += amt;
         TCSave.ClaimDaily(day); TCAudio.Play(TCAssets.I.purchase);
@@ -1267,7 +1282,7 @@ public class TCMenuUI : MonoBehaviour
         consentPanel = TCUI.Panel("Consent", safe, out var card, new Vector2(920, 900), "WELCOME!");
         var t = TCUI.Label("Body", card, "We use ads and analytics to keep Tall Crawl free. By tapping Accept you agree to our privacy policy. You can change ad choices in Settings.", 40, TCUI.Cocoa);
         TCUI.Place(t.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 120), new Vector2(800, 400));
-        TCUI.Place((RectTransform)TCUI.Btn("Accept", card, "ACCEPT", TCUI.Mint, () => { PlayerPrefs.SetInt("consent", 1); TCUI.Hide(this, consentPanel); TCServices.Banner(true); StartCoroutine(Delay(0.4f, OpenDaily)); }, 56).transform, new Vector2(0.5f, 0), new Vector2(0, 250), new Vector2(560, 140));
+        TCUI.Place((RectTransform)TCUI.Btn("Accept", card, "ACCEPT", TCUI.Mint, () => { PlayerPrefs.SetInt("consent", 1); TCUI.Hide(this, consentPanel); TCServices.Banner(true); }, 56).transform, new Vector2(0.5f, 0), new Vector2(0, 250), new Vector2(560, 140));
         TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => Application.OpenURL(TCAssets.I.privacyUrl), 40).transform, new Vector2(0.5f, 0), new Vector2(0, 100), new Vector2(560, 110));
     }
 

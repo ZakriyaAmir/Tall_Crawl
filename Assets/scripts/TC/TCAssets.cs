@@ -10,7 +10,7 @@ public class TCAssets : ScriptableObject
     public GameObject spiderModel;
     public RuntimeAnimatorController spiderAnimator;
     public AudioClip click, coin, purchase, whoosh;
-    public string privacyUrl = "https://sites.google.com/view/zakriya-production-privacy";
+    public string privacyUrl = "https://zakriyaamir.github.io/sillycon/privacy-policy.html";
     public SpiderSkinDatabase skinDatabase;
     public GameObject spiderSkinListObj;
 

@@ -17,9 +17,15 @@ public static class TCServices
 #endif
     }
 
+    public static bool HasInternet()
+    {
+        return Application.internetReachability != NetworkReachability.NotReachable;
+    }
+
     public static bool IsRewardedReady()
     {
-        if (Application.isEditor) return true; // Editor mock: always ready
+        if (!HasInternet()) return false;
+        if (Application.isEditor) return true; // Editor mock: always ready when internet is reachable
         try
         {
             if (AdsManager.Instance != null)

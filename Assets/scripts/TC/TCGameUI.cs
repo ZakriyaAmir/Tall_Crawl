@@ -582,7 +582,7 @@ public class TCGameUI : MonoBehaviour
                 break;
             case "heart": Pop("+1 HEART", pos, TCUI.Blush); StartCoroutine(TCUI.Punch(heartsRow, 0.25f)); break;
             case "boost": Pop("BOOST", pos, TCUI.Peach); break;
-            case "cooldown": Pop("SLOW-MO +1", pos, TCUI.Tan); if (slowmoStockRect) StartCoroutine(TCUI.Punch(slowmoStockRect, 0.25f)); break;
+            case "cooldown": Pop("FREEZE +1", pos, TCUI.Tan); if (slowmoStockRect) StartCoroutine(TCUI.Punch(slowmoStockRect, 0.25f)); break;
             case "smash": Pop("SMASH!", pos, TCUI.Cream); break;
             case "hit": flash.alpha = 1; StartCoroutine(TCUI.Punch(heartsRow, 0.3f)); break;
         }
@@ -1708,7 +1708,7 @@ public class TCGameUI : MonoBehaviour
         float cdAngle = pl.CurrentYaw;
         float cdY = SpiderY + 4.2f;
         var cdPickup = TCTrack.Instance != null ? TCTrack.Instance.SpawnTutorialCooldown(cdY, cdAngle) : null;
-        hintText.text = "COLLECT SLOW-MO ITEM!";
+        hintText.text = "COLLECT FREEZE POWERUP!";
         handMode = HandAnimMode.Hidden;
 
         // Approach cooldown pickup until collected or passed

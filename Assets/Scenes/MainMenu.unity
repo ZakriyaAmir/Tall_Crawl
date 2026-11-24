@@ -34248,7 +34248,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Slow-Mo Time
+  m_text: Freeze Powerup
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 1f9eeb0296548ff49811028f1be676d4, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: 2e51bdfac0ef52662acd6e5a35b06a88, type: 2}
