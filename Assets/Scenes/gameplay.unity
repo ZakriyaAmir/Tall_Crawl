@@ -3343,6 +3343,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TCShine
   band: {fileID: 1078997069}
+  clip: {fileID: 0}
   interval: 2.6
   sweep: 0.55
   delay: 0.8
@@ -4757,6 +4758,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TCShine
   band: {fileID: 1646138164}
+  clip: {fileID: 0}
   interval: 2.6
   sweep: 0.55
   delay: 0.8
@@ -8666,6 +8668,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TCShine
   band: {fileID: 2129797236}
+  clip: {fileID: 0}
   interval: 2.6
   sweep: 0.55
   delay: 0.8
@@ -12845,6 +12848,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TCShine
   band: {fileID: 1681420742}
+  clip: {fileID: 0}
   interval: 2.6
   sweep: 0.55
   delay: 0.8
@@ -14174,7 +14178,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -62.38, y: -253.70001}
+  m_AnchoredPosition: {x: -62.379883, y: -253.70001}
   m_SizeDelta: {x: 96, y: 96}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1223660846
@@ -23234,9 +23238,9 @@ SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 920000002}
-  - {fileID: 705507995}
   - {fileID: 252471933}
   - {fileID: 556147599}
+  - {fileID: 705507995}
   - {fileID: 1927637549}
   - {fileID: 462329490}
   - {fileID: 1115164652}

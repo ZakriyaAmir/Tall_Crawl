@@ -1,0 +1,8 @@
+Product ID,Product Type,Title,Description,Google Price (USD),Apple Price Tier,Google Locale,Catalog Payouts,Runtime Grant (TCMenuUI),Code Reference,UI Slot,Store IDs
+com.sillycon.tallcrawl.coins_1000,Consumable,"1,000 Coins","A pouch of 1,000 coins.",0.29,0,21,Currency:Coins x1000,"1,000 Coins",UnityIAP.kProductIDs[0],Pack0,Default (same as Product ID)
+com.sillycon.tallcrawl.noads,NonConsumable,No Ads,Permanently remove banner and interstitial ads.,2.99,0,21,None,Remove banner & interstitial ads + 20 Gems,UnityIAP.kProductIDs[1],Pack1,Default (same as Product ID)
+com.sillycon.tallcrawl.premium,Consumable,Premium Bundle,"5,000 Coins and 50 Gems.",4.99,0,21,Currency:Coins x5000; Currency:Gems x50,"5,000 Coins + 50 Gems",UnityIAP.kProductIDs[2],Pack2,Default (same as Product ID)
+com.sillycon.tallcrawl.gems_10,Consumable,10 Gems,Handful of 10 shiny gems.,0.50,0,21,Currency:Gems x10,10 Gems,UnityIAP.GemProductIDs[0],Gems0,Default (same as Product ID)
+com.sillycon.tallcrawl.gems_50,Consumable,50 Gems,Pouch of 50 gems.,2.49,0,21,Currency:Gems x50,50 Gems,UnityIAP.GemProductIDs[1],Gems1,Default (same as Product ID)
+com.sillycon.tallcrawl.gems_100,Consumable,100 Gems,Sack of 100 gems.,4.99,0,21,Currency:Gems x100,100 Gems,UnityIAP.GemProductIDs[2],Gems2,Default (same as Product ID)
+com.sillycon.tallcrawl.gems_200,Consumable,200 Gems,Chest of 200 gems.,8.99,0,21,Currency:Gems x200,200 Gems,UnityIAP.GemProductIDs[3],Gems3,Default (same as Product ID)
