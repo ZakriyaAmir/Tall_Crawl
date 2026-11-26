@@ -337,6 +337,7 @@ public class playerInteract : MonoBehaviour
             other.gameObject.SetActive(false);
             Play(TCSfx.Get("heart") ?? healthSound, 0.8f);
             if (life < MaxLife) life++;
+            TCTrack.OnHeartCollected();
             OnEvent?.Invoke("heart", transform.position);
             return true;
         }
@@ -365,6 +366,7 @@ public class playerInteract : MonoBehaviour
                 TCCoinMagnet.Instance.Activate();
             else
                 TCSfx.Play("magnet_activate", 0.85f);
+            TCServices.Log("magnet_activated", "metres", p != null ? (long)p.currentScore : 0L);
             OnEvent?.Invoke("magnet", transform.position);
             TCFx.Shake(0.08f);
             return true;
@@ -684,6 +686,7 @@ public class playerInteract : MonoBehaviour
         }
         boostDuration = 0;
         SetVisible(true);
+        TCServices.Log("player_death", "metres", p != null ? (long)p.currentScore : 0L);
         OnEvent?.Invoke("death", transform.position);
         gameManager.Instance?.OnPlayerDied();
     }
@@ -698,6 +701,7 @@ public class playerInteract : MonoBehaviour
             ChilliComboCount = 0;
             ChilliCoinsEarned = 0;
             TCGameUI.Instance?.OnChilliBoostStarted();
+            TCServices.Log("chilli_boost_start", "metres", p != null ? (long)p.currentScore : 0L);
         }
         boostDuration = Mathf.Max(boostDuration, secs);
         OnEvent?.Invoke("boost", transform.position);

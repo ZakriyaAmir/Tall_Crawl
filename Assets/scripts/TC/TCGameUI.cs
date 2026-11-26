@@ -1086,6 +1086,7 @@ public class TCGameUI : MonoBehaviour
 
     IEnumerator Tutorial()
     {
+        TCServices.Log("tutorial_start");
         // -------------------------------------------------------------
         // STEP 1: DODGE THE BRANCH
         // (Skipped initial free-roam left/right rotation to prevent spider climbing infinitely)
@@ -1839,6 +1840,7 @@ public class TCGameUI : MonoBehaviour
         // Complete the tutorial!
         isTutorialRun = false;
         TCSave.TutorialDone = true;
+        TCServices.Log("tutorial_complete");
         if (gm != null)
         {
             gm.EndTutorialTimeFreeze();
@@ -2055,6 +2057,7 @@ public class TCGameUI : MonoBehaviour
         doubleBtn = TCUI.Btn("Double", card, "x2 BONUS (WATCH AD)", TCUI.Crimson, () => TCServices.Rewarded(() =>
         {
             if (!gm.ClaimDouble()) return; // reward callbacks can fire twice; never double-pay
+            TCServices.Log("double_reward_claimed", "coins", gm.RunReward);
             resCoins.text = (gm.coinsCollected * 2).ToString("N0");
             resBonus.text = (gm.DistanceBonus * 2).ToString("N0") + GemSuffix();
             resTotal.text = gm.RunReward.ToString("N0");

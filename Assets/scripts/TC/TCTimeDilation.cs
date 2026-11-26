@@ -64,6 +64,7 @@ public class TCTimeDilation : MonoBehaviour
         if (Instance != null && Instance.IsActive) return false;
         if (playerInteract.CooldownInventory <= 0) return false;
         playerInteract.CooldownInventory--;
+        TCServices.Log("slowmo_activated", "metres", player.Instance != null ? (long)player.Instance.currentScore : 0L);
 
         if (Instance != null)
         {

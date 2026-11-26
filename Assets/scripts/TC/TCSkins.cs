@@ -130,7 +130,14 @@ public static class TCSkins
     }
     public static void CheckAchievements()
     {
-        for (int i = 0; i < All.Length; i++) if (!TCSave.SkinOwned(i) && CanAutoUnlock(i)) TCSave.UnlockSkin(i);
+        for (int i = 0; i < All.Length; i++)
+        {
+            if (!TCSave.SkinOwned(i) && CanAutoUnlock(i))
+            {
+                TCSave.UnlockSkin(i);
+                TCServices.Log("skin_unlocked_auto", ("skin_id", i), ("skin_name", All[i].name));
+            }
+        }
     }
 
     /// Applies skin i to a spider (the "newSpider" object or the menu preview copy):

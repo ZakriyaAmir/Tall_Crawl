@@ -775,10 +775,13 @@ public class gameManager : MonoBehaviour
         TCSave.Coins += RunReward;
         TCSave.LifetimeCoins += RunReward;
         TCSave.Runs++;
-        if (metres > TCSave.Best) TCSave.Best = metres;
+        int prevBest = TCSave.Best;
+        bool isNewBest = metres > prevBest;
+        if (isNewBest) TCSave.Best = metres;
         TCSkins.CheckAchievements();
         TCSave.Flush();
-        TCServices.Log("run_end", "metres", metres);
+        TCServices.Log("run_end", ("metres", metres), ("coins", RunReward), ("gems", RunGems), ("is_new_best", isNewBest), ("total_runs", TCSave.Runs));
+        if (isNewBest) TCServices.Log("new_high_score", ("metres", metres), ("previous_best", prevBest));
         return RunReward;
     }
 

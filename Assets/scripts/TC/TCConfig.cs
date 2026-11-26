@@ -29,7 +29,7 @@ public class TCConfig : ScriptableObject
     [Range(0, 1)] public float beeChance = 0.09f;
     public float beeMinMetres = 200f;
     [Range(0, 1)] public float coinTrailChance = 0.55f;
-    [Range(0, 1)] public float heartChance = 0.06f;
+    [Range(0, 1)] public float heartChance = 0.12f;
     [Range(0, 1)] [Tooltip("Probability of spawning chilli boost pickup in safe gap")] public float boostChance = 0.0624f; // Reduced by 20% (from 0.078f)
     [Range(0, 1)] [Tooltip("Probability of spawning cooldown slow-mo pickup in safe gap")] public float cooldownChance = 0.042f; // Reduced by 70% (from 0.14f)
     [Tooltip("Minimum metres climbed before slow-mo cooldown power ups can spawn")] public float cooldownMinMetres = 200f;

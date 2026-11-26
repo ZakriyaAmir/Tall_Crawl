@@ -27,10 +27,14 @@ public class TCTrack : MonoBehaviour
     float lastSnakeY = -999f;
     TCPool letterPool;
 
-    // Actual health-pickup cadence in GenerateRow (TCConfig.heartChance is unused).
-    // Every 10 s a 20% roll may place a heart on the next bonus slot (expected 1 / 50 s).
+    // Actual health-pickup cadence in GenerateRow.
+    // Every 10 s a 40% roll may place a heart on the next bonus slot (2x previous 20% rate),
+    // capped at 3 collected hearts per run (missed hearts do not consume the count).
     public const float HeartCheckInterval = 10f;
-    public const float HeartCheckChance = 0.20f;
+    public const float HeartCheckChance = 0.40f;
+    public const int MaxHeartsPerRun = 3;
+    int heartsCollectedThisRun;
+    bool heartCurrentlyLive;
     // WEB letters: 25% chance every 20 s (1.25x the previous 20%/20s rate, expected 1 / 80 s)
     // until the single WEB swing of the run is earned. A letter that scrolls past uncollected
     // is guaranteed to respawn at another spot after 8–12 s (no extra roll).
@@ -182,6 +186,8 @@ public class TCTrack : MonoBehaviour
         lastBonusY = -999f;
         runActiveTimer = 0f;
         nextHeartEligibleTime = Time.time + HeartCheckInterval;
+        heartsCollectedThisRun = 0;
+        heartCurrentlyLive = false;
         nextLetterEligibleTime = Time.time + LetterCheckInterval;
         letterEligible = false;
         letterMissRetry = false;
@@ -251,10 +257,11 @@ public class TCTrack : MonoBehaviour
             var p = live[i];
             if (!p) { live.RemoveAt(i); continue; }
             // collected / smashed items are hidden by gameplay: return them to their pool (was leaking)
-            if (!p.gameObject.activeSelf) { p.Release(); live.RemoveAt(i); continue; }
+            if (!p.gameObject.activeSelf) { if (p.kind == "heart") heartCurrentlyLive = false; p.Release(); live.RemoveAt(i); continue; }
             if (p.y < cut)
             {
                 if (p.kind == "webletter") NoteMissedLetter(p);
+                if (p.kind == "heart") heartCurrentlyLive = false;
                 p.Release();
                 live.RemoveAt(i);
             }
@@ -281,9 +288,13 @@ public class TCTrack : MonoBehaviour
         bool gameStarted = pl != null && !pl.paused && (TCGameUI.Instance == null || TCGameUI.Instance.Started);
         bool enemiesUnlocked = gameStarted && playerCoveredMetres >= 200f;
 
-        // Heart check: every HeartCheckInterval seconds, HeartCheckChance probability.
+        // Heart check: every HeartCheckInterval seconds, HeartCheckChance probability,
+        // only when player is below MaxLife and under MaxHeartsPerRun (3) collected per run.
+        var pi = playerInteract.Instance;
+        bool needsHealth = pi != null && pi.life < pi.MaxLife;
+        bool canSpawnHeart = needsHealth && heartsCollectedThisRun < MaxHeartsPerRun && !heartCurrentlyLive;
         bool heartEligible = false;
-        if (Time.time >= nextHeartEligibleTime)
+        if (canSpawnHeart && Time.time >= nextHeartEligibleTime)
         {
             nextHeartEligibleTime = Time.time + HeartCheckInterval;
             heartEligible = (Random.value < HeartCheckChance);
@@ -341,6 +352,7 @@ public class TCTrack : MonoBehaviour
                             Spawn(heartPool, "heart", bonusY, safeAngle);
                             lastBonusY = bonusY;
                             heartEligible = false;
+                            heartCurrentlyLive = true;
                         }
                         else if (wChilli > 0f && (roll -= wChilli) <= 0f)
                         {
@@ -525,6 +537,7 @@ public class TCTrack : MonoBehaviour
                         Spawn(heartPool, "heart", bonusYPos, newSafe);
                         lastBonusY = bonusYPos;
                         heartEligible = false;
+                        heartCurrentlyLive = true;
                         spawnedPowerup = true;
                     }
                     else if (wChilli > 0f && (roll -= wChilli) <= 0f)
@@ -1188,6 +1201,14 @@ public class TCTrack : MonoBehaviour
         return list;
     }
 
+    /// Called when the player collects a heart pickup (caps at MaxHeartsPerRun = 3 per run; missed hearts do not count).
+    public static void OnHeartCollected()
+    {
+        if (Instance == null) return;
+        Instance.heartsCollectedThisRun++;
+        Instance.heartCurrentlyLive = false;
+    }
+
     /// Capture helper: place a health pickup at a world Y / yaw so it can sit next to a letter.
     public TCPooled SpawnHeartNow(float y, float angle)
     {
@@ -1303,6 +1324,7 @@ public class TCTrack : MonoBehaviour
             {
                 if (item.kind == "webletter" && player && item.y < player.position.y)
                     NoteMissedLetter(item);
+                if (item.kind == "heart") heartCurrentlyLive = false;
                 item.Release();
                 live.RemoveAt(i);
             }

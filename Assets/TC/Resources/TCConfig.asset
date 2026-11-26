@@ -32,7 +32,7 @@ MonoBehaviour:
   beeChance: 0.09
   beeMinMetres: 200
   coinTrailChance: 0.55
-  heartChance: 0.06
+  heartChance: 0.12
   boostChance: 0.078
   cooldownChance: 0.042
   cooldownMinMetres: 200

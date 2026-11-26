@@ -20621,7 +20621,7 @@ MonoBehaviour:
   chilliSpawnProbability: 0.0416
   coinMagnetSpawnProbability: 0.021
   slowMoSpawnProbability: 0.028
-  webPickupSpawnProbability: 0.32
+  webPickupSpawnProbability: 1
   coinsCollected: 0
   revivedThisRun: 0
   runEnded: 0

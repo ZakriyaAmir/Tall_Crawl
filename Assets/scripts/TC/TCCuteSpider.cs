@@ -13,7 +13,7 @@ public partial class TCCuteSpider : MonoBehaviour
     Transform body; readonly List<Transform> legs = new List<Transform>(); readonly List<Quaternion> legRest = new List<Quaternion>();
     Vector3 bodyRest, bodyScale; float flip, t, blink = 2.5f;
     float rollTimer, rollDuration, rollSpinAngle;
-    Transform head; Vector3 headRest; readonly List<Transform> eyes = new List<Transform>(); readonly List<Vector3> eyeRest = new List<Vector3>();
+    Transform head; Vector3 headRest; Quaternion headRestRot = Quaternion.identity; [HideInInspector] public Quaternion headExtraRot = Quaternion.identity; [HideInInspector] public Vector3 headExtraPos = Vector3.zero; readonly List<Transform> eyes = new List<Transform>(); readonly List<Vector3> eyeRest = new List<Vector3>(); readonly List<Vector3> eyeRestPos = new List<Vector3>(); readonly List<Quaternion> eyeRestRot = new List<Quaternion>();
     Transform abdomen; readonly List<Transform> spinnerets = new List<Transform>();
     Transform wingPivotL, wingPivotR;
     Quaternion wingRestL = Quaternion.identity, wingRestR = Quaternion.identity;
@@ -152,7 +152,7 @@ public partial class TCCuteSpider : MonoBehaviour
         // 2. Head / Ocular Region: sleek front snout with cute rounded silhouette
         float hr = 0.65f * Mathf.Lerp(1f, s.x, 0.35f);
         var headT = Part(PrimitiveType.Sphere, bodyT, P(0, 0.66f, 0.52f), new Vector3(1.35f, 1.15f, 1.00f) * hr * R, plain).transform; headT.name = "head";
-        cs.head = headT; cs.headRest = headT.localPosition;
+        cs.head = headT; cs.headRest = headT.localPosition; cs.headRestRot = headT.localRotation;
 
         // 3. Waist (pedicel): slender anatomical junction connecting thorax to abdomen
         Part(PrimitiveType.Cylinder, bodyT, P(0, 0.60f, -0.30f), new Vector3(0.52f, 0.13f, 0.52f) * R, plain, Quaternion.Euler(90, 0, 0)).name = "pedicel";
@@ -191,6 +191,9 @@ public partial class TCCuteSpider : MonoBehaviour
         // Eyes: stylish, expressive, beautiful arachnid gaze with distinct skin-colored pupils
         Vector3 HS(Vector3 dir, float lift) { dir.Normalize(); return headT.localPosition + Vector3.Scale(dir, new Vector3(0.68f, 0.58f, 0.62f) * hr * R) + dir * lift * R; }
         cs.eyes.Clear();
+        cs.eyeRest.Clear();
+        cs.eyeRestPos.Clear();
+        cs.eyeRestRot.Clear();
 
         // Outer eyeball base: sleek dark glossy sclera so colored pupils pop beautifully
         var eyeballBaseMat = Flat(new Color(0.08f, 0.07f, 0.09f, 1f), null, 0f, 0.1f, 0.95f);
@@ -223,14 +226,14 @@ public partial class TCCuteSpider : MonoBehaviour
             var shineObj = Part(PrimitiveType.Sphere, e, new Vector3(0.18f, 0.20f, 0.46f), new Vector3(0.24f, 0.24f, 0.28f), shine).transform;
             shineObj.name = "shine";
 
-            cs.eyes.Add(e); cs.eyeRest.Add(e.localScale);
+            cs.eyes.Add(e); cs.eyeRest.Add(e.localScale); cs.eyeRestPos.Add(e.localPosition); cs.eyeRestRot.Add(e.localRotation);
 
             // Secondary lateral eyes
             var sd = new Vector3(0.82f * sgn, 0.24f, 0.52f).normalized;
             var se = Part(PrimitiveType.Sphere, bodyT, HS(sd, -0.02f), new Vector3(0.14f, 0.14f, 0.07f) * R, eyeballBaseMat).transform;
             se.localRotation = Quaternion.LookRotation(sd, Vector3.up);
             Part(PrimitiveType.Sphere, se, new Vector3(0f, 0f, 0.28f), new Vector3(0.65f, 0.65f, 0.45f), pupilMat);
-            cs.eyes.Add(se); cs.eyeRest.Add(se.localScale);
+            cs.eyes.Add(se); cs.eyeRest.Add(se.localScale); cs.eyeRestPos.Add(se.localPosition); cs.eyeRestRot.Add(se.localRotation);
 
             // Cute chelicerae / fangs seamlessly attached to the front-lower snout of the head
             // In local head space: snout extends forward along +Z, lower half around Y ~ -0.25 to -0.40
@@ -937,7 +940,8 @@ public partial class TCCuteSpider : MonoBehaviour
     public void TriggerLandBounce()
     {
         landingTimer = LandingDuration;
-        TCSfx.Play("land", 0.5f);
+        if (gaitOmega < 14f) gaitOmega = 18f;
+        TCSfx.Play("land", 0.55f);
     }
 
     void LateUpdate()
@@ -961,7 +965,8 @@ public partial class TCCuteSpider : MonoBehaviour
         bool isIntroWalking = anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("spiderIntro");
         bool isJumping = (pi && pi.IsJumping) || (anim && anim.isActiveAndEnabled && anim.GetCurrentAnimatorStateInfo(0).IsName("SpiderJump")) || backflipTimer > 0;
         bool swingingNow = TCWebBonus.Instance && TCWebBonus.Instance.IsSwinging;
-        bool isMoving = ((playerComp != null && !playerComp.paused && !playerComp.GameOver && !isJumping) || isIntroWalking) && !swingingNow;
+        bool landingWalkNow = TCWebBonus.Instance && TCWebBonus.Instance.IsLandingWalk;
+        bool isMoving = ((playerComp != null && !playerComp.paused && !playerComp.GameOver && !isJumping) || isIntroWalking) && (!swingingNow || landingWalkNow);
 
         // Smooth jump/landing blend transition with Hermite curve for zero-hitch motion
         float targetJumpBlend = isJumping ? 1f : 0f;
@@ -1041,7 +1046,7 @@ public partial class TCCuteSpider : MonoBehaviour
         // Stride × cadence ≈ climb speed so feet don't slide, including 2.5x cap and chilli boost.
         // Maintain cadence even during in-air flight so landing connects seamlessly with running stride.
         const float StrideLength = 0.36f; // world units per step cycle
-        bool isActivelyRunning = (playerComp != null && !playerComp.paused && !playerComp.GameOver && !swingingNow);
+        bool isActivelyRunning = (playerComp != null && !playerComp.paused && !playerComp.GameOver && (!swingingNow || landingWalkNow));
         float climb = (isActivelyRunning && (isMoving || isJumping)) ? Mathf.Max(0f, playerComp.calcSpeed) : (isIntroWalking ? 1.5f : 0f);
         float yawNow = playerComp ? playerComp.CurrentYaw : lastYaw;
         float yawRate = Mathf.Abs(Mathf.DeltaAngle(lastYaw, yawNow)) / Mathf.Max(dt, 1e-4f);
@@ -1070,10 +1075,22 @@ public partial class TCCuteSpider : MonoBehaviour
         float scaleZ = (1f + bob - hop * 0.08f) * (1f + landSpread);
         body.localScale = new Vector3(scaleX, scaleY, scaleZ);
 
-        if (head) head.localPosition = headRest + new Vector3(
-            Mathf.Sin(isMoving ? phWalk : t * 2.2f) * (isMoving ? 0.020f : 0.012f),
-            Mathf.Abs(Mathf.Sin(isMoving ? phWalk : t * 2.2f)) * (isMoving ? 0.020f : 0.014f), 0)
-            * head.localScale.y;
+        if (head)
+        {
+            Vector3 headBob = new Vector3(
+                Mathf.Sin(isMoving ? phWalk : t * 2.2f) * (isMoving ? 0.020f : 0.012f),
+                Mathf.Abs(Mathf.Sin(isMoving ? phWalk : t * 2.2f)) * (isMoving ? 0.020f : 0.014f), 0)
+                * head.localScale.y;
+            head.localPosition = headRest + headBob + headExtraPos;
+            head.localRotation = headRestRot * headExtraRot;
+            for (int ei = 0; ei < eyes.Count && ei < eyeRestPos.Count; ei++)
+            {
+                if (!eyes[ei]) continue;
+                Vector3 rel = eyeRestPos[ei] - headRest;
+                eyes[ei].localPosition = headRest + headBob + headExtraPos + (headExtraRot * rel);
+                eyes[ei].localRotation = headExtraRot * eyeRestRot[ei];
+            }
+        }
         float sway = isMoving ? Mathf.Sin(phWalk) * 7.5f * amp : 0f;
         float nod = (isMoving ? Mathf.Cos(phWalk) * 4.5f * amp : 0f) + landNod;
         float yawSway = isMoving ? Mathf.Sin(phWalk) * 5f * amp : 0f;

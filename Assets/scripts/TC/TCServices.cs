@@ -17,6 +17,46 @@ public static class TCServices
 #endif
     }
 
+    public static void Log(string evt, string param, string value)
+    {
+#if !UNITY_EDITOR
+        try
+        {
+            if (string.IsNullOrEmpty(param)) Firebase.Analytics.FirebaseAnalytics.LogEvent(evt);
+            else Firebase.Analytics.FirebaseAnalytics.LogEvent(evt, param, value ?? "");
+        }
+        catch (Exception) { }
+#endif
+    }
+
+    public static void Log(string evt, params (string key, object value)[] parameters)
+    {
+#if !UNITY_EDITOR
+        try
+        {
+            if (parameters == null || parameters.Length == 0)
+            {
+                Firebase.Analytics.FirebaseAnalytics.LogEvent(evt);
+                return;
+            }
+            var list = new Firebase.Analytics.Parameter[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                string k = parameters[i].key;
+                object v = parameters[i].value;
+                if (v is long l) list[i] = new Firebase.Analytics.Parameter(k, l);
+                else if (v is int iv) list[i] = new Firebase.Analytics.Parameter(k, (long)iv);
+                else if (v is double d) list[i] = new Firebase.Analytics.Parameter(k, d);
+                else if (v is float f) list[i] = new Firebase.Analytics.Parameter(k, (double)f);
+                else if (v is bool b) list[i] = new Firebase.Analytics.Parameter(k, b ? 1L : 0L);
+                else list[i] = new Firebase.Analytics.Parameter(k, v != null ? v.ToString() : "");
+            }
+            Firebase.Analytics.FirebaseAnalytics.LogEvent(evt, list);
+        }
+        catch (Exception) { }
+#endif
+    }
+
     public static bool HasInternet()
     {
         return Application.internetReachability != NetworkReachability.NotReachable;

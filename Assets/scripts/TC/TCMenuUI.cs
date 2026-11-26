@@ -330,6 +330,8 @@ public class TCMenuUI : MonoBehaviour
         if (cs)
         {
             cs.wave = 0;
+            cs.headExtraRot = Quaternion.identity;
+            cs.headExtraPos = Vector3.zero;
             cs.ClearEyeOverride();
         }
         st.localPosition = rest;
@@ -453,41 +455,18 @@ public class TCMenuUI : MonoBehaviour
 
         yield return new WaitForSecondsRealtime(0.15f);
 
-        // Step 3: Play wink sound + chatter voice, wink comfortably and happily without tilting body
-        TCSfx.PlayAction("wink", 0.85f, 1.30f);
-        int winkEyeIndex = 0; // main eye
+        // Step 3: Friendly wave + happy perky breath (no wink)
+        TCSfx.PlayAction("chime", 0.75f, 1.15f);
         st.localRotation = Quaternion.identity;
-        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.70f)
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.85f)
         {
-            float lid;
-            if (x < 0.18f)
-            {
-                float k = Mathf.SmoothStep(0f, 1f, x / 0.18f);
-                lid = Mathf.Lerp(1.0f, 0.06f, k);
-            }
-            else if (x < 0.52f)
-            {
-                lid = 0.06f; // comfortable happy wink hold
-            }
-            else if (x < 0.78f)
-            {
-                float k = Mathf.SmoothStep(0f, 1f, (x - 0.52f) / 0.26f);
-                lid = Mathf.Lerp(0.06f, 1.0f, k);
-            }
-            else
-            {
-                lid = 1.0f;
-            }
-
-            if (cs) cs.SetEyeOverride(lid, winkEyeIndex);
-
-            // Subtle happy perky breath, upright without any body tilting
-            float happyPulse = (x >= 0.15f && x <= 0.60f) ? Mathf.Sin((x - 0.15f) / 0.45f * Mathf.PI) * 0.05f : 0f;
+            if (cs) cs.wave = Mathf.Clamp01(Mathf.Min(x * 5f, (1f - x) * 5f));
+            float happyPulse = Mathf.Sin(x * Mathf.PI) * 0.05f;
             st.localScale = new Vector3(1f - happyPulse * 0.4f, 1f + happyPulse, 1f - happyPulse * 0.4f);
             st.localRotation = Quaternion.identity;
             yield return null;
         }
-        if (cs) cs.ClearEyeOverride();
+        if (cs) { cs.wave = 0; cs.ClearEyeOverride(); }
         st.localScale = Vector3.one;
         st.localRotation = Quaternion.identity;
 
@@ -547,13 +526,13 @@ public class TCMenuUI : MonoBehaviour
         st.localRotation = Quaternion.identity;
         if (cs) cs.ClearEyeOverride();
 
-        // Shake head / blink cute recovery
-        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.4f)
+        // Shake head only to recover balance (keep body planted)
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.45f)
         {
-            st.localRotation = Quaternion.Euler(0, Mathf.Sin(x * Mathf.PI * 6f) * 12f * (1 - x), 0);
+            if (cs) cs.headExtraRot = Quaternion.Euler(0, Mathf.Sin(x * Mathf.PI * 8f) * 28f * (1 - x), Mathf.Sin(x * Mathf.PI * 6f) * 14f * (1 - x));
             yield return null;
         }
-        st.localRotation = Quaternion.identity;
+        if (cs) cs.headExtraRot = Quaternion.identity;
 
         // Friendly wave at camera with happy chatter voice
         TCSfx.PlayAction("chime", 0.75f, 1.05f);
@@ -602,44 +581,127 @@ public class TCMenuUI : MonoBehaviour
         }
         st.localScale = Vector3.one;
 
-        // Comical dizzy state: spinning head/body wobble with dizzy voice
-        TCSfx.PlayAction("spin_whoosh", 0.65f, 1.15f, dizzy: true, voiceVol: 0.6f);
-
-        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 1.15f)
-        {
-            // Dizzy wobble
-            float sway = Mathf.Sin(x * Mathf.PI * 8f) * (1f - x * 0.5f);
-            st.localRotation = Quaternion.Euler(Mathf.Sin(x * Mathf.PI * 6f) * 12f, sway * 16f, sway * 14f);
-            if (cs) cs.SetEyeOverride(0.25f + 0.15f * Mathf.Sin(x * 20f)); // dizzy flickering squint
-            yield return null;
-        }
-
-        // Regain consciousness: clear dizzy eyes and shake head clear
-        if (cs) cs.ClearEyeOverride();
-        TCSfx.Play("wiggle", 0.7f, 1.2f);
-        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.45f)
-        {
-            st.localRotation = Quaternion.Euler(0, Mathf.Sin(x * Mathf.PI * 8f) * 16f * (1 - x), 0);
-            yield return null;
-        }
+        // Shake head violently to regain balance with a bold spinning spiral dizzy VFX over its head
+        TCSfx.Play("wiggle", 0.85f, 1.25f);
         st.localRotation = Quaternion.identity;
-
-        // Big cheerful smile to camera (eyes normal/open, cute head bob & happy chatter voice)
-        TCSfx.PlayAction("chime", 0.85f, 1.25f);
-        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / 0.85f)
+        var dizzyVfx = CreateDizzySpiralVFX(st, S, cs);
+        const float shakeDur = 1.55f;
+        for (float x = 0; x < 1f; x += Time.unscaledDeltaTime / shakeDur)
         {
-            float p = Mathf.Sin(x * Mathf.PI);
-            // Happy head bob & tilt smile with eyes normal
-            st.localRotation = Quaternion.Euler(-10f * p, 0, 0);
-            st.localScale = new Vector3(1f + 0.12f * p, 1f + 0.14f * p, 1f);
+            float endFade = Mathf.Clamp01((1f - x) / 0.16f);
+            float damp = (1f - x * 0.40f) * endFade;
+            float yawShake = Mathf.Sin(x * Mathf.PI * 20f) * 48f * damp;
+            float rollShake = Mathf.Sin(x * Mathf.PI * 14f) * 28f * damp;
+            float pitchShake = Mathf.Sin(x * Mathf.PI * 10f) * 16f * damp;
+            if (cs)
+            {
+                cs.headExtraRot = Quaternion.Euler(pitchShake, yawShake, rollShake);
+                cs.headExtraPos = new Vector3(Mathf.Sin(x * Mathf.PI * 20f) * 0.09f * damp, 0f, 0f);
+            }
+            if (dizzyVfx)
+            {
+                dizzyVfx.transform.localRotation = Quaternion.Euler(34f, -x * 1260f, 0f);
+                float pop = Mathf.Clamp01(x / 0.10f) * endFade;
+                dizzyVfx.transform.localScale = Vector3.one * pop;
+            }
             yield return null;
         }
-
-        if (cs) cs.ClearEyeOverride();
+        if (dizzyVfx) Destroy(dizzyVfx);
+        if (cs)
+        {
+            cs.headExtraRot = Quaternion.identity;
+            cs.headExtraPos = Vector3.zero;
+            cs.ClearEyeOverride();
+        }
         st.localRotation = Quaternion.identity;
         st.localScale = Vector3.one;
 
         yield return new WaitForSecondsRealtime(0.2f);
+    }
+
+    GameObject CreateDizzySpiralVFX(Transform st, float S, TCCuteSpider cs)
+    {
+        int layer = (cs && cs.gameObject) ? cs.gameObject.layer : st.gameObject.layer;
+        var root = new GameObject("DizzySpiralVFX") { layer = layer };
+        root.transform.SetParent(st.parent, false);
+        root.transform.localPosition = st.localPosition + new Vector3(0f, S * 0.88f, -S * 0.05f);
+        root.transform.localRotation = Quaternion.Euler(34f, 0f, 0f);
+
+        var sh = Shader.Find("Universal Render Pipeline/Unlit")
+              ?? Shader.Find("Unlit/Color")
+              ?? Shader.Find("Sprites/Default");
+
+        var goldMat = new Material(sh);
+        Color goldCol = new Color(1f, 0.88f, 0.18f, 1f);
+        if (goldMat.HasProperty("_BaseColor")) goldMat.SetColor("_BaseColor", goldCol);
+        goldMat.color = goldCol;
+
+        var whiteMat = new Material(sh);
+        Color whiteCol = new Color(1f, 0.99f, 0.85f, 1f);
+        if (whiteMat.HasProperty("_BaseColor")) whiteMat.SetColor("_BaseColor", whiteCol);
+        whiteMat.color = whiteCol;
+
+        // Bold outer 2.2-turn golden spiral
+        var lr = root.AddComponent<LineRenderer>();
+        lr.useWorldSpace = false;
+        lr.material = goldMat;
+        lr.numCapVertices = 4;
+        lr.numCornerVertices = 4;
+        lr.startWidth = S * 0.11f;
+        lr.endWidth = S * 0.045f;
+        lr.startColor = goldCol;
+        lr.endColor = new Color(1f, 0.72f, 0.08f, 1f);
+        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        lr.receiveShadows = false;
+
+        const int pts = 48;
+        lr.positionCount = pts;
+        for (int i = 0; i < pts; i++)
+        {
+            float u = i / (float)(pts - 1);
+            float ang = u * Mathf.PI * 4.4f; // ~2.2 spiral turns
+            float rad = Mathf.Lerp(S * 0.10f, S * 0.56f, u);
+            float y = u * S * 0.16f;
+            lr.SetPosition(i, new Vector3(Mathf.Cos(ang) * rad, y, Mathf.Sin(ang) * rad));
+        }
+
+        // Crisp inner highlight spiral (counter-offset for bold cartoon readability)
+        var innerGo = new GameObject("InnerSpiral") { layer = layer };
+        innerGo.transform.SetParent(root.transform, false);
+        var lr2 = innerGo.AddComponent<LineRenderer>();
+        lr2.useWorldSpace = false;
+        lr2.material = whiteMat;
+        lr2.numCapVertices = 4;
+        lr2.startWidth = S * 0.055f;
+        lr2.endWidth = S * 0.025f;
+        lr2.startColor = whiteCol;
+        lr2.endColor = goldCol;
+        lr2.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        lr2.receiveShadows = false;
+        lr2.positionCount = pts;
+        for (int i = 0; i < pts; i++)
+        {
+            float u = i / (float)(pts - 1);
+            float ang = u * Mathf.PI * 4.4f + Mathf.PI;
+            float rad = Mathf.Lerp(S * 0.08f, S * 0.46f, u);
+            float y = u * S * 0.16f + S * 0.03f;
+            lr2.SetPosition(i, new Vector3(Mathf.Cos(ang) * rad, y, Mathf.Sin(ang) * rad));
+        }
+
+        // 4 bold orbiting dizzy spheres around the spiral rim
+        for (int i = 0; i < 4; i++)
+        {
+            var dot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            dot.layer = layer;
+            Destroy(dot.GetComponent<Collider>());
+            dot.transform.SetParent(root.transform, false);
+            float a = i * (Mathf.PI * 2f / 4f);
+            dot.transform.localPosition = new Vector3(Mathf.Cos(a) * S * 0.54f, S * 0.12f, Mathf.Sin(a) * S * 0.54f);
+            dot.transform.localScale = Vector3.one * S * 0.15f;
+            var r = dot.GetComponent<Renderer>();
+            r.sharedMaterial = (i % 2 == 0) ? goldMat : whiteMat;
+        }
+        return root;
     }
     void Silk(Transform st, float S) { if (!silk) return; silk.SetPosition(0, st.localPosition + new Vector3(0, S * 0.5f, 0)); silk.SetPosition(1, new Vector3(0, S * 4f, 0)); }
     void Dust(Transform parent, float S)
@@ -935,7 +997,7 @@ public class TCMenuUI : MonoBehaviour
         var skins = db != null && db.skins != null && db.skins.Length > 0 ? db.skins : TCSkins.All;
         if (selectedCard < 0 || selectedCard >= skins.Length) return;
         int i = selectedCard; var d = skins[i];
-        if (TCSave.SkinOwned(i)) { TCSave.SelectedSkin = i; Toast(d.name + " equipped!"); }
+        if (TCSave.SkinOwned(i)) { TCSave.SelectedSkin = i; Toast(d.name + " equipped!"); TCServices.Log("skin_equip", ("skin_id", i), ("skin_name", d.name)); }
         else if (d.unlock == SkinUnlock.Coins)
         {
             if (TCSave.Coins >= d.amount)
@@ -949,7 +1011,7 @@ public class TCMenuUI : MonoBehaviour
                 if (skinAction) StartCoroutine(TCUI.Punch(skinAction.transform, 0.3f, 0.22f));
             }
         }
-        else if (d.unlock == SkinUnlock.Ads) TCServices.Rewarded(() => { TCSave.AddSkinAd(i); TCSkins.CheckAchievements(); if (TCSave.SkinOwned(i)) { TCSave.SelectedSkin = i; Toast("Unlocked " + d.name + "!"); } RefreshSkinGrid(); }, "skin");
+        else if (d.unlock == SkinUnlock.Ads) TCServices.Rewarded(() => { TCSave.AddSkinAd(i); TCSkins.CheckAchievements(); if (TCSave.SkinOwned(i)) { TCSave.SelectedSkin = i; Toast("Unlocked " + d.name + "!"); TCServices.Log("skin_ad_unlock", ("skin_id", i), ("skin_name", d.name)); } RefreshSkinGrid(); }, "skin");
         RefreshSkinGrid();
     }
 

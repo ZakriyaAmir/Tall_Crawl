@@ -86,7 +86,7 @@ public class player : MonoBehaviour
     bool camBoost; [HideInInspector] public float camHoldUntil;
     float targetYaw, yaw, startY, jumpCooldown;
     bool canDoubleJump;
-    Vector2 touchStart, lastPos, lastTapPos, rawTouchDownPos; float touchStartTime, rawTouchDownTime, lastTapTime = -1f; bool dragging, swipeDownConsumed;
+    Vector2 touchStart, lastPos, lastTapPos, rawTouchDownPos; float touchStartTime, rawTouchDownTime, lastTapTime = -1f; bool dragging, swipeUpConsumed, swipeDownConsumed;
     enum GestureAxis { None, Horizontal, Vertical }
     GestureAxis axisLock;
     float gestureStartYaw;
@@ -265,6 +265,7 @@ public class player : MonoBehaviour
                 }
             }
             dragging = true;
+            swipeUpConsumed = false;
             swipeDownConsumed = false;
             axisLock = GestureAxis.None;
             gestureStartYaw = targetYaw;
@@ -273,35 +274,36 @@ public class player : MonoBehaviour
         }
         else if (dragging && (held || up))
         {
+            bool isMouse = Input.touchCount == 0;
             float dx = p.x - lastPos.x;
             float upwardDist = p.y - rawTouchDownPos.y;
             float sideDist = Mathf.Abs(p.x - rawTouchDownPos.x);
-            float lockDist = Screen.height * 0.025f;
+            float lockDist = Mathf.Max(28f, Screen.height * 0.03f);
             float touchAge = Time.unscaledTime - rawTouchDownTime;
 
-            // If the gesture has been held/dragged for more than 0.5s without completing a jump swipe,
-            // cancel vertical axis lock and revert to horizontal steering so dragging moves the spider.
-            if (axisLock == GestureAxis.Vertical && touchAge >= 0.5f)
+            // Once dragging duration passes 0.5s, permanently lock to horizontal steering and forbid jump for this gesture.
+            if (touchAge >= 0.5f)
             {
-                axisLock = GestureAxis.Horizontal;
+                swipeUpConsumed = true;
+                lastTapTime = -1f;
+                if (axisLock != GestureAxis.Horizontal)
+                    axisLock = GestureAxis.Horizontal;
             }
 
             // Dominant-axis lock: only lock to vertical if vertical movement STRONGLY dominates horizontal movement.
             // If the user drags left/right with even a slight upward slant, immediately favor horizontal steering
-            // so accidental upward thumb curvature never halts player movement.
+            // so accidental upward thumb/mouse curvature never halts player movement or triggers a jump.
             if (axisLock == GestureAxis.None)
             {
-                if (sideDist > lockDist * 0.6f && sideDist >= Mathf.Abs(upwardDist) * 0.7f)
+                float horizThreshold = isMouse ? 4f : lockDist * 0.6f;
+                if (sideDist > horizThreshold && sideDist >= Mathf.Abs(upwardDist) * (isMouse ? 0.35f : 0.6f))
                 {
                     axisLock = GestureAxis.Horizontal;
+                    if (isMouse) swipeUpConsumed = true;
                 }
-                else if (touchAge < 0.5f && Mathf.Abs(upwardDist) > lockDist && Mathf.Abs(upwardDist) > sideDist * 1.8f)
+                else if (touchAge < 0.5f && Mathf.Abs(upwardDist) > lockDist && Mathf.Abs(upwardDist) > sideDist * (isMouse ? 2.5f : 1.8f))
                 {
                     axisLock = GestureAxis.Vertical;
-                }
-                else if (touchAge >= 0.5f)
-                {
-                    axisLock = GestureAxis.Horizontal;
                 }
             }
 
@@ -312,22 +314,24 @@ public class player : MonoBehaviour
                 OnTurned?.Invoke();
             }
 
-            float minSwipeDist = Screen.height * 0.055f;
-            bool isGenuineSwipeUp = jumpAllowed
+            float minSwipeDist = Mathf.Max(75f, Screen.height * (isMouse ? 0.11f : 0.065f));
+            bool isGenuineSwipeUp = !swipeUpConsumed
+                && jumpAllowed
                 && axisLock != GestureAxis.Horizontal
                 && upwardDist > minSwipeDist
-                && upwardDist > sideDist * 1.5f
+                && upwardDist > sideDist * (isMouse ? 2.5f : 1.5f)
                 && touchAge < 0.5f;
 
             if (isGenuineSwipeUp)
             {
                 // Discard any accidental yaw applied before the swipe was classified as vertical
+                swipeUpConsumed = true;
                 targetYaw = gestureStartYaw;
                 axisLock = GestureAxis.Vertical;
                 touchStart = p;
                 touchStartTime = Time.unscaledTime;
                 lastTapTime = -1f;
-                jump();
+                TriggerJump(true);
             }
 
             // Swipe down to trigger slow motion if available (one use per swipe gesture, cannot trigger if already slow)
@@ -335,8 +339,8 @@ public class player : MonoBehaviour
                 && slowmoAllowed
                 && axisLock != GestureAxis.Horizontal
                 && (-upwardDist) > minSwipeDist
-                && (-upwardDist) > sideDist * 1.5f
-                && touchAge < 0.5f
+                && (-upwardDist) > sideDist * (isMouse ? 2.2f : 1.5f)
+                && touchAge < 0.45f
                 && playerInteract.CooldownInventory > 0
                 && (TCTimeDilation.Instance == null || !TCTimeDilation.Instance.IsActive);
 
@@ -355,15 +359,16 @@ public class player : MonoBehaviour
 
             if (up)
             {
-                // Double tap = jump (two quick taps close together; single tap does NOT jump)
+                // Double tap = jump (two quick taps close together; single tap or short drag does NOT jump)
                 float totalDist = Vector2.Distance(p, rawTouchDownPos);
                 float touchDur = Time.unscaledTime - rawTouchDownTime;
 
                 float maxTapHold = C != null ? C.doubleTapMaxHold : 0.25f;
                 float doubleTapWindow = C != null ? Mathf.Max(0.35f, C.doubleTapWindow) : 0.35f;
-                float maxTapDist = (C != null ? C.doubleTapMaxDistance : 0.12f) * Screen.height;
+                float tapMoveLimit = isMouse ? 6f : Screen.height * 0.03f;
+                float maxTapDist = isMouse ? 16f : (C != null ? C.doubleTapMaxDistance : 0.12f) * Screen.height;
 
-                bool isTap = totalDist < Screen.height * 0.04f && touchDur < maxTapHold;
+                bool isTap = !swipeUpConsumed && axisLock == GestureAxis.None && totalDist < tapMoveLimit && touchDur < Mathf.Min(maxTapHold, 0.5f);
                 if (isTap)
                 {
                     bool isDoubleTap = lastTapTime > 0 && (Time.unscaledTime - lastTapTime) < doubleTapWindow
@@ -390,7 +395,9 @@ public class player : MonoBehaviour
         }
     }
 
-    public void jump()
+    public void jump() => TriggerJump(false);
+
+    void TriggerJump(bool somersault)
     {
         if (IsInputBlocked) return;
 
@@ -399,13 +406,14 @@ public class player : MonoBehaviour
         float jumpDur = 0.95f / speedRatio;
         float dblJumpDur = 1.35f / speedRatio;
 
-        // In jump mode: a second jump trigger executes a backflip double jump
-        if (spider && spider.IsJumping && canDoubleJump)
+        // Execute somersault (backflip + higher arc) on swipe-up or when double-jumping in air
+        if (somersault || (spider && spider.IsJumping && canDoubleJump))
         {
+            if (somersault && jumpCooldown > 0) return;
             canDoubleJump = false;
             jumpCooldown = 0.5f / speedRatio;
-            // Trigger double jump without resetting the underlying base jump state
-            spider.doubleJump(dblJumpDur);
+            if (anim) anim.SetTrigger("jump");
+            if (spider) spider.doubleJump(dblJumpDur);
             OnJumped?.Invoke();
             return;
         }

@@ -24,6 +24,7 @@ public class TCWebBonus : MonoBehaviour
     public bool HasB { get; private set; }
     public bool AllCollected => HasW && HasE && HasB;
     public bool IsSwinging { get; private set; }
+    public bool IsLandingWalk { get; private set; }
     public bool OwnsMotion { get; private set; }
     /// True once this run has started (or finished) its one WEB swing. No further letters spawn.
     public bool SpentThisRun { get; private set; }
@@ -171,6 +172,8 @@ public class TCWebBonus : MonoBehaviour
         TCPickupFX.Burst(TCPickupKind.Letter, pos);
         TCGameUI.Instance?.FlyWebLetter(c, pos);
         OnLettersChanged?.Invoke();
+        int count = (HasW ? 1 : 0) + (HasE ? 1 : 0) + (HasB ? 1 : 0);
+        TCServices.Log("web_letter_collected", ("letter", c.ToString()), ("count", count));
         if (AllCollected && !IsSwinging) BeginSwing();
     }
 
@@ -185,12 +188,14 @@ public class TCWebBonus : MonoBehaviour
     {
         if (IsSwinging) return;
         if (swingCo != null) StopCoroutine(swingCo);
+        TCServices.Log("web_boost_start", "metres", player.Instance != null ? (long)player.Instance.currentScore : 0L);
         swingCo = StartCoroutine(SwingRoutine());
     }
 
     IEnumerator SwingRoutine()
     {
         IsSwinging = true;
+        IsLandingWalk = false;
         SpentThisRun = true;
         currentThwip = 0;
         ShowcaseHold = false;
@@ -320,7 +325,7 @@ public class TCWebBonus : MonoBehaviour
         {
             float mid = (i + 0.5f) / Shots;
             float w = (i == Shots - 1)
-                ? 1.48f
+                ? 2.15f
                 : (0.66f + 0.50f * (1f - Mathf.Sin(mid * Mathf.PI)));
             weights[i] = w;
             weightSum += w;
@@ -337,7 +342,7 @@ public class TCWebBonus : MonoBehaviour
         }
 
         const float WindupDur = 0.68f;
-        const float LandSettleDur = 0.40f;
+        const float LandSettleDur = 0.72f;
         float jumpClimb = Mathf.Min(1.35f, worldUnits * 0.08f);
         float ySwingStart = y0 + jumpClimb;
         camPull = 0f;
@@ -410,9 +415,10 @@ public class TCWebBonus : MonoBehaviour
             float yStart = Mathf.Lerp(ySwingStart, yEnd, ClimbEnvelope(fracAt[shot]));
             float yLand = Mathf.Lerp(ySwingStart, yEnd, ClimbEnvelope(fracAt[shot + 1]));
 
-            // Land on the anchor's side, a little out from the bark. Final swing returns flush.
+            // Land on the anchor's side, a little out from the bark. Final swing hovers in the air ready to touch down.
+            Vector3 finalHoverOff = new Vector3(0f, 0.06f, 0.78f);
             Vector3 endOff = last
-                ? Vector3.zero
+                ? finalHoverOff
                 : new Vector3(side * 1.32f, 0.06f, 1.18f + 0.22f * Mathf.Sin((shot + 1) * 0.7f));
 
             // Fixed trunk anchor: up and to this swing's side, above the landing so the web stays taut above the spider.
@@ -422,7 +428,7 @@ public class TCWebBonus : MonoBehaviour
             Vector3 anchorFixed = OnTrunk(axis, anchorYaw, anchorY, TrunkRadius + 0.04f);
 
             const float shootFrac = 0.17f;
-            float releaseCut = last ? 0.60f : 0.84f;
+            float releaseCut = last ? 0.52f : 0.84f;
 
             bool splatSpawned = false;
             bool whooshPlayed = false;
@@ -454,7 +460,7 @@ public class TCWebBonus : MonoBehaviour
                 if (u >= releaseCut)
                     pendU = 1f;
 
-                float y = Mathf.Lerp(yStart, yLand, pendU);
+                float y = last ? Mathf.Lerp(yStart, yLand, Smooth(u)) : Mathf.Lerp(yStart, yLand, pendU);
                 // Visible trough so each swing falls then rises into the next attach.
                 float dipAmp = last ? 0.18f : Mathf.Lerp(0.42f, 0.22f, Mathf.Clamp01(dur / 0.55f));
                 if (u < releaseCut)
@@ -471,12 +477,13 @@ public class TCWebBonus : MonoBehaviour
                 if (last && u >= releaseCut)
                 {
                     float landK = Smooth((u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut));
-                    y = Mathf.Lerp(y, yEnd, landK);
-                    off = Vector3.Lerp(off, Vector3.zero, landK);
-                    camPull = Mathf.Lerp(camPull, 0f, landK);
+                    off = Vector3.Lerp(off, finalHoverOff, landK);
+                    // Gentle outward arc as the spider poises in mid-air before touching down
+                    off.z += 0.14f * Mathf.Sin(landK * Mathf.PI);
+                    camPull = Mathf.Lerp(camPull, 0.25f, landK * 0.65f);
                     camDutch = Mathf.Lerp(camDutch, 0f, landK);
-                    camFovAdd = Mathf.Lerp(camFovAdd, 0f, landK);
-                    camCenterBlend = 1f - landK;
+                    camFovAdd = Mathf.Lerp(camFovAdd, 2f, landK * 0.65f);
+                    camCenterBlend = 1f - landK * 0.75f;
                 }
                 else
                 {
@@ -552,8 +559,7 @@ public class TCWebBonus : MonoBehaviour
                         float sf = Smooth((u - releaseCut) / Mathf.Max(0.01f, 1f - releaseCut));
                         Quaternion landUpright = uprightRestRot;
                         Quaternion landingRot = Quaternion.Slerp(releaseRot, landUpright, sf);
-                        float landingSquash = -0.24f * Mathf.Sin(sf * Mathf.PI);
-                        cute.SetSwingWorldOrientation(landingRot, landingSquash, Mathf.Lerp(0.55f, 0f, sf));
+                        cute.SetSwingWorldOrientation(landingRot, Mathf.Lerp(0.04f, 0.08f, sf), Mathf.Lerp(0.55f, -0.15f, sf));
                     }
                     else
                     {
@@ -598,12 +604,7 @@ public class TCWebBonus : MonoBehaviour
             if (last)
             {
                 camDampedYaw = yaw0;
-                camCenterBlend = 0f;
-                camPull = 0f;
-                camDutch = 0f;
-                camFovAdd = 0f;
                 camBaselineY = yEnd;
-                TickSwing(pl, yEnd, yaw0, 0f, 0f, 0f, ref yPrev);
             }
         }
 
@@ -620,27 +621,81 @@ public class TCWebBonus : MonoBehaviour
             Destroy(bodyTrail.gameObject);
             bodyTrail = null;
         }
-        if (cute) { cute.ClearSwingPose(); cute.TriggerLandBounce(); }
-        SpawnLandingBurst(sp ? sp.position : Vector3.zero);
+
         ShowFiveThousandPop();
         TCSfx.Play("chime", 0.9f, 1.05f);
         TCSfx.Play("celebrate", 1f);
 
-        // Brief settle on the bark while the +5000m pop appears. Ease the camera to its exact rest pose.
+        // Two-phase landing transition while +5000m pop appears:
+        // Phase A (0 -> 0.50): spider descends smoothly from mid-air hover onto the bark surface.
+        // Touchdown (at 0.50): ClearSwingPose + TriggerLandBounce + landing burst.
+        // Phase B (0.50 -> 1.0): springy cushion transitions directly into smooth walking stride while camera settles.
         ShowcaseHold = true;
+        float normalSpeed = (pl && TCConfig.I != null) ? TCConfig.I.ClimbSpeedAtDistance(pl.currentScore) : 8f;
         float hold = 0f;
+        float settleY = yEnd;
+        bool hasTouchedDown = false;
+        Vector3 hoverStartOff = prevOff;
         while (hold < LandSettleDur)
         {
-            hold += Time.unscaledDeltaTime;
+            float dt = Time.deltaTime;
+            hold += dt > 0f ? dt : Time.unscaledDeltaTime;
             float hk = Smooth(Mathf.Clamp01(hold / LandSettleDur));
-            camPull = 0f;
             camDutch = 0f;
             camFovAdd = Mathf.Lerp(camFovAdd, 0f, hk);
             camCenterBlend = 0f;
-            ApplyPendulumRadius(0f, 0f, 0f);
+
+            float curSpeed;
+            if (hk < 0.50f)
+            {
+                float airU = Smooth(hk / 0.50f);
+                Vector3 airOff = Vector3.Lerp(hoverStartOff, Vector3.zero, airU);
+                airOff.y += 0.12f * Mathf.Sin(airU * Mathf.PI);
+                ApplyPendulumRadius(airOff.x, airOff.y, airOff.z);
+                if (cute) cute.SetSwingWorldOrientation(uprightRestRot, Mathf.Lerp(0.08f, -0.06f, airU), Mathf.Lerp(-0.15f, -0.32f, airU));
+                camPull = Mathf.Lerp(0.25f, 0f, airU);
+                curSpeed = normalSpeed * Mathf.Lerp(0.35f, 0.70f, airU);
+            }
+            else
+            {
+                if (!hasTouchedDown)
+                {
+                    hasTouchedDown = true;
+                    IsLandingWalk = true;
+                    ApplyPendulumRadius(0f, 0f, 0f);
+                    if (cute) { cute.ClearSwingPose(); cute.TriggerLandBounce(); }
+                    SpawnLandingBurst(sp ? sp.position : Vector3.zero);
+                    TCFx.Shake(0.08f);
+                }
+                float walkU = Smooth((hk - 0.50f) / 0.50f);
+                camPull = 0f;
+                curSpeed = normalSpeed * Mathf.Lerp(0.70f, 1.0f, walkU);
+            }
+
+            settleY += curSpeed * dt;
+            if (pl && pl.p1)
+            {
+                var pos = pl.p1.position;
+                pos.y = settleY;
+                pl.ApplySwingTransform(pos, yaw0);
+            }
+            ClimbSpeed = curSpeed;
+
             DriveSwingCam(0f);
+
+            // Converge any remaining residual cleanly to exact rest pose by the end of settle
+            if (cam && hk > 0.55f)
+            {
+                float snapK = Smooth((hk - 0.55f) / 0.45f);
+                camLocalDamped = Vector3.Lerp(camLocalDamped, camPosRest, snapK);
+                camRotDamped = Quaternion.Slerp(camRotDamped, camRotRest, snapK);
+                cam.transform.localPosition = camLocalDamped;
+                cam.transform.localRotation = camRotDamped;
+                cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, fovRest, snapK);
+            }
             yield return null;
         }
+        IsLandingWalk = false;
         ShowcaseHold = false;
         LingerCurrentSilk();
         silkLive = false;
@@ -872,10 +927,10 @@ public class TCWebBonus : MonoBehaviour
             camLookReady = true;
         }
 
-        // Stronger return on landing so we ease all the way to the rest pose
+        // Stronger return on landing so we ease smoothly to the rest pose
         // without a snap when the animator is re-enabled.
-        float damp = ShowcaseHold ? 16f : Mathf.Lerp(10f, Mathf.Max(0.1f, camFollowDamping), pull);
-        float rotDamp = ShowcaseHold ? 16f : Mathf.Max(2f, camRotDamping);
+        float damp = ShowcaseHold ? 8.5f : Mathf.Lerp(10f, Mathf.Max(0.1f, camFollowDamping), pull);
+        float rotDamp = ShowcaseHold ? 8.5f : Mathf.Max(2f, camRotDamping);
         float step = ShowcaseHold ? Mathf.Max(dt, Time.unscaledDeltaTime) : dt;
         float k = 1f - Mathf.Exp(-damp * Mathf.Max(1e-4f, step));
         float rotK = 1f - Mathf.Exp(-rotDamp * Mathf.Max(1e-4f, step));
