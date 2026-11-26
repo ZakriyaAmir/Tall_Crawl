@@ -52,12 +52,16 @@ public class TCWebBonus : MonoBehaviour
     readonly List<float> fadingLife = new List<float>();
     readonly List<Material> fadingMat = new List<Material>();
     const float TrunkRadius = 0.603f;
+    static readonly Vector3 NormalCamLocalPos = new Vector3(0f, -1.15f, 3.25f);
+    static readonly Quaternion NormalCamLocalRot = Quaternion.Euler(206.64f, 0f, 180f);
+    const float ChilliCamResetDur = 0.32f;
 
     public float camRotDamping = 4.8f;
     public float camFollowDamping = 6.5f;
     float camPull, camDutch, camFovAdd;
     Vector3 camLookDamped;
     Vector3 camLocalDamped;
+    Quaternion camRotDamped;
     bool camLookReady;
 
     Vector3 camPosRest, camWorldOffsetRest;
@@ -187,7 +191,6 @@ public class TCWebBonus : MonoBehaviour
     IEnumerator SwingRoutine()
     {
         IsSwinging = true;
-        OwnsMotion = true;
         SpentThisRun = true;
         currentThwip = 0;
         ShowcaseHold = false;
@@ -195,19 +198,56 @@ public class TCWebBonus : MonoBehaviour
         var pl = player.Instance;
         var sp = ResolveSpider();
         var cute = ResolveCute(sp);
+        var pi = sp ? sp.GetComponent<playerInteract>() : null;
+        if (!pi && pl) pi = pl.GetComponentInChildren<playerInteract>();
+        if (!pi) pi = FindFirstObjectByType<playerInteract>();
+
+        var cam = Camera.main;
+        bool wasInChilli = (pl && pl.boost) || (pi && pi.boostDuration > 0f);
+        if (!wasInChilli && cam && Vector3.Distance(cam.transform.localPosition, NormalCamLocalPos) > 0.08f)
+            wasInChilli = true;
+
         if (pl)
         {
             pl.ResetInputState();
             pl.boost = false;
         }
-        var pi = sp ? sp.GetComponent<playerInteract>() : null;
-        if (!pi && pl) pi = pl.GetComponentInChildren<playerInteract>();
-        if (!pi) pi = FindFirstObjectByType<playerInteract>();
         pi?.EndBoost();
         TCTimeDilation.Instance?.Cancel();
 
-        metresAtSwingStart = pl ? pl.currentScore : 0f;
         TCTrack.Instance?.ClearEnemiesAhead(30f);
+
+        camAnimRest = cam ? cam.GetComponent<Animator>() : null;
+        camAnimWasEnabled = camAnimRest && camAnimRest.enabled;
+        if (camAnimRest)
+        {
+            camAnimRest.SetBool("boost", false);
+            camAnimRest.enabled = false;
+        }
+
+        // If collected during Chilli mode, smoothly lerp camera position & tilt back to normal
+        // before starting the WEB boost wind-up and swing.
+        if (wasInChilli && cam)
+        {
+            OwnsMotion = false;
+            ClimbSpeed = (pl && TCConfig.I != null) ? TCConfig.I.ClimbSpeedAtDistance(pl.currentScore) : (pl ? pl.calcSpeed : 10f);
+            Vector3 startPos = cam.transform.localPosition;
+            Quaternion startRot = cam.transform.localRotation;
+            float elapsed = 0f;
+            while (elapsed < ChilliCamResetDur)
+            {
+                elapsed += Time.deltaTime;
+                float u = Smooth(Mathf.Clamp01(elapsed / ChilliCamResetDur));
+                cam.transform.localPosition = Vector3.Lerp(startPos, NormalCamLocalPos, u);
+                cam.transform.localRotation = Quaternion.Slerp(startRot, NormalCamLocalRot, u);
+                yield return null;
+            }
+            cam.transform.localPosition = NormalCamLocalPos;
+            cam.transform.localRotation = NormalCamLocalRot;
+        }
+
+        OwnsMotion = true;
+        metresAtSwingStart = pl ? pl.currentScore : 0f;
 
         EnsureWeb();
         EnsureSwingHud();
@@ -217,7 +257,6 @@ public class TCWebBonus : MonoBehaviour
         BindSwingBody(sp);
         PauseExistingTrails(sp);
 
-        var cam = Camera.main;
         swingCam = cam;
         camParentRest = cam ? cam.transform.parent : null;
         camPosRest = cam ? cam.transform.localPosition : Vector3.zero;
@@ -239,9 +278,6 @@ public class TCWebBonus : MonoBehaviour
         // looking inward, and follow the visible spider in p1 space.
         if (cam)
         {
-            camAnimRest = cam.GetComponent<Animator>();
-            camAnimWasEnabled = camAnimRest && camAnimRest.enabled;
-            if (camAnimRest) camAnimRest.enabled = false;
             camWorldRotRest = cam.transform.rotation;
             camYaw0 = yaw;
             camCurrentYaw = yaw;
@@ -256,6 +292,7 @@ public class TCWebBonus : MonoBehaviour
             camDutch = 0f;
             camFovAdd = 0f;
             camLocalDamped = camPosRest;
+            camRotDamped = camRotRest;
             camLookDamped = VisualSpiderPos();
             camLookReady = true;
             ApplyPendulumRadius(0f, 0f, 0f);
@@ -299,14 +336,17 @@ public class TCWebBonus : MonoBehaviour
             fracAt[i + 1] = accW / weightSum;
         }
 
-        const float WindupDur = 0.46f;
+        const float WindupDur = 0.68f;
         const float LandSettleDur = 0.40f;
+        float jumpClimb = Mathf.Min(1.35f, worldUnits * 0.08f);
+        float ySwingStart = y0 + jumpClimb;
         camPull = 0f;
         camDutch = 0f;
         camFovAdd = 0f;
 
         // ------------------------------------------------------------------
-        // WIND-UP: crouch against the bark, then spring out and aim the first shot
+        // WIND-UP: crouch against the bark, then jump upward with a 360° barrel roll
+        // before launching into the first web swing.
         // ------------------------------------------------------------------
         const int FirstSide = -1; // first web goes LEFT
         TCSfx.Play("jump", 0.9f, 1.15f);
@@ -319,30 +359,43 @@ public class TCWebBonus : MonoBehaviour
             float lu = Mathf.Clamp01(windElapsed / WindupDur);
             camPull = Smooth(lu) * 0.55f;
             camDutch = 0f;
-            camFovAdd = 4f * Smooth(lu);
+            camFovAdd = 4.5f * Smooth(lu);
             camCenterBlend = camPull;
 
-            if (lu < 0.40f)
+            float windY = y0;
+            if (lu < 0.24f)
             {
-                float c = Smooth(lu / 0.40f);
-                windOff = new Vector3(0f, -0.055f * c, -0.035f * c);
-                if (cute) cute.SetSwingWorldOrientation(uprightRestRot, -0.32f * c, 0.40f * c);
+                float c = Smooth(lu / 0.24f);
+                windOff = new Vector3(0f, -0.06f * c, -0.04f * c);
+                if (cute) cute.SetSwingWorldOrientation(uprightRestRot, -0.34f * c, 0.42f * c);
             }
             else
             {
-                float r = Smooth((lu - 0.40f) / 0.60f);
-                // Spring slightly out and to the RIGHT so the first LEFT web has a crossing arc.
+                float r = Mathf.Clamp01((lu - 0.24f) / 0.76f);
+                float sr = Smooth(r);
+                // Jump upward along the trunk while arcing out into a barrel roll
+                windY = Mathf.Lerp(y0, ySwingStart, sr);
+                float jumpArc = Mathf.Sin(r * Mathf.PI);
                 windOff = Vector3.Lerp(
-                    new Vector3(0f, -0.055f, -0.035f),
+                    new Vector3(0f, -0.06f, -0.04f),
                     new Vector3(-FirstSide * 0.52f, 0.16f, 0.62f),
-                    r);
+                    sr);
+                windOff.z += 0.65f * jumpArc;
+
+                // 360° barrel roll around the upward climb axis, blending into the first web aim at the end
+                float rollAngle = sr * 360f;
+                Quaternion rollRot = Quaternion.AngleAxis(rollAngle, Vector3.up) * uprightRestRot;
                 Vector3 aim = (outward0 * 0.25f + tangent0 * FirstSide * 0.85f + Vector3.up * 0.55f).normalized;
-                Vector3 aimUp = Vector3.Slerp(outward0, Vector3.up * 0.2f + outward0, r);
-                Quaternion reachRot = Quaternion.Slerp(uprightRestRot, SafeLook(aim, aimUp), r);
-                if (cute) cute.SetSwingWorldOrientation(reachRot, Mathf.Lerp(-0.32f, 0.06f, r), Mathf.Lerp(0.40f, -0.20f, r));
+                Vector3 aimUp = Vector3.Slerp(outward0, Vector3.up * 0.2f + outward0, sr);
+                Quaternion aimRot = SafeLook(aim, aimUp);
+                float aimBlend = Smooth(Mathf.Clamp01((r - 0.72f) / 0.28f));
+                Quaternion finalRot = Quaternion.Slerp(rollRot, aimRot, aimBlend);
+                float stretch = Mathf.Lerp(0.18f, 0.06f, sr);
+                float tuck = Mathf.Lerp(0.55f, -0.20f, aimBlend);
+                if (cute) cute.SetSwingWorldOrientation(finalRot, stretch, tuck);
             }
 
-            TickSwing(pl, y0, yaw0, windOff.x, windOff.y, windOff.z, ref yPrev);
+            TickSwing(pl, windY, yaw0, windOff.x, windOff.y, windOff.z, ref yPrev);
             yield return null;
         }
 
@@ -354,8 +407,8 @@ public class TCWebBonus : MonoBehaviour
             currentThwip = shot + 1;
             int side = (shot % 2 == 0) ? FirstSide : -FirstSide;
 
-            float yStart = Mathf.Lerp(y0, yEnd, ClimbEnvelope(fracAt[shot]));
-            float yLand = Mathf.Lerp(y0, yEnd, ClimbEnvelope(fracAt[shot + 1]));
+            float yStart = Mathf.Lerp(ySwingStart, yEnd, ClimbEnvelope(fracAt[shot]));
+            float yLand = Mathf.Lerp(ySwingStart, yEnd, ClimbEnvelope(fracAt[shot + 1]));
 
             // Land on the anchor's side, a little out from the bark. Final swing returns flush.
             Vector3 endOff = last
@@ -430,7 +483,8 @@ public class TCWebBonus : MonoBehaviour
                     float masterU = Mathf.Lerp(fracAt[shot], fracAt[shot + 1], pendU);
                     float midBoost = Mathf.Sin(Mathf.PI * Mathf.Clamp01(masterU));
                     camPull = Mathf.Lerp(0.55f, 1f, midBoost);
-                    camDutch = side * -8.5f * bulge;
+                    float targetDutch = side * -7.5f * bulge;
+                    camDutch = Mathf.Lerp(camDutch, targetDutch, 1f - Mathf.Exp(-9f * Mathf.Max(1e-4f, dt)));
                     camFovAdd = 5f + 7f * midBoost;
                     camCenterBlend = camPull;
                 }
@@ -606,7 +660,12 @@ public class TCWebBonus : MonoBehaviour
             cam.transform.localScale = camScaleRest;
             cam.fieldOfView = fovRest;
             swingCamActive = false;
-            if (camAnimRest) camAnimRest.enabled = camAnimWasEnabled;
+            if (camAnimRest)
+            {
+                camAnimRest.SetBool("boost", false);
+                camAnimRest.Play("mainCamIdle", 0, 0f);
+                camAnimRest.enabled = camAnimWasEnabled;
+            }
         }
 
         HideSwingHud();
@@ -793,24 +852,37 @@ public class TCWebBonus : MonoBehaviour
                 Mathf.Lerp(camPosRest.x, spiderLocal.x, 0.80f),
                 camPosRest.y - 0.28f * pull + (spiderLocal.y - swingBodyRest.y) * 0.45f,
                 targetZ);
-            targetRot = camRotRest;
+
+            // Smooth, sleek pan toward the spider + Dutch roll tilt during left/right swings
+            Vector3 restDir = camRotRest * Vector3.forward;
+            Vector3 restUp = camRotRest * Vector3.up;
+            Vector3 toSpider = spiderLocal - camLocalDamped;
+            Vector3 lookDir = toSpider.sqrMagnitude > 1e-4f
+                ? Vector3.Slerp(restDir, toSpider.normalized, 0.28f * pull).normalized
+                : restDir;
+            Vector3 tiltedUp = Quaternion.AngleAxis(useDutch, lookDir) * restUp;
+            targetRot = Quaternion.LookRotation(lookDir, tiltedUp);
             targetFov = fovRest + camFovAdd * pull;
         }
 
         if (!camLookReady)
         {
             camLocalDamped = cam.transform.localPosition;
+            camRotDamped = cam.transform.localRotation;
             camLookReady = true;
         }
 
         // Stronger return on landing so we ease all the way to the rest pose
         // without a snap when the animator is re-enabled.
         float damp = ShowcaseHold ? 16f : Mathf.Lerp(10f, Mathf.Max(0.1f, camFollowDamping), pull);
+        float rotDamp = ShowcaseHold ? 16f : Mathf.Max(2f, camRotDamping);
         float step = ShowcaseHold ? Mathf.Max(dt, Time.unscaledDeltaTime) : dt;
         float k = 1f - Mathf.Exp(-damp * Mathf.Max(1e-4f, step));
+        float rotK = 1f - Mathf.Exp(-rotDamp * Mathf.Max(1e-4f, step));
         camLocalDamped = Vector3.Lerp(camLocalDamped, targetLocal, k);
+        camRotDamped = Quaternion.Slerp(camRotDamped, targetRot, rotK);
         cam.transform.localPosition = camLocalDamped;
-        cam.transform.localRotation = camRotRest;
+        cam.transform.localRotation = camRotDamped;
         cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFov, k);
     }
 

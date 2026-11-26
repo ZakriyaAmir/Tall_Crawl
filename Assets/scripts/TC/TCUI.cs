@@ -401,7 +401,7 @@ public static class TCUI
                     UnityEngine.Object.Destroy(cg.gameObject);
                 });
             }, 40);
-            Place((RectTransform)cancelBtn.transform, new Vector2(0.5f, 0), new Vector2(-190, 85), new Vector2(340, 105));
+            Place((RectTransform)cancelBtn.transform, new Vector2(0.5f, 0), new Vector2(-190, 115), new Vector2(340, 105));
 
             var okBtn = Btn("ConfirmBtn", card, confirmText, Mint, () =>
             {
@@ -411,7 +411,7 @@ public static class TCUI
                     UnityEngine.Object.Destroy(cg.gameObject);
                 });
             }, 40);
-            Place((RectTransform)okBtn.transform, new Vector2(0.5f, 0), new Vector2(190, 85), new Vector2(340, 105));
+            Place((RectTransform)okBtn.transform, new Vector2(0.5f, 0), new Vector2(190, 115), new Vector2(340, 105));
         }
         else
         {
@@ -423,7 +423,7 @@ public static class TCUI
                     UnityEngine.Object.Destroy(cg.gameObject);
                 });
             }, 44);
-            Place((RectTransform)okBtn.transform, new Vector2(0.5f, 0), new Vector2(0, 85), new Vector2(460, 110));
+            Place((RectTransform)okBtn.transform, new Vector2(0.5f, 0), new Vector2(0, 115), new Vector2(460, 110));
         }
 
         Show(host, cg, true);
