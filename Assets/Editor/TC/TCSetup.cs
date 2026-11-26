@@ -433,7 +433,7 @@ public static class TCSetup
         foreach (var t in Object.FindObjectsOfType<Transform>(true)) GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);
         if (!mgr.GetComponent<TCMenuUI>()) mgr.AddComponent<TCMenuUI>();
         var ads = Object.FindObjectOfType<AdsManager>(true);
-        if (ads) { var so = new SerializedObject(ads); var tm = so.FindProperty("testMode"); if (tm != null) tm.boolValue = true; so.ApplyModifiedProperties(); }
+        if (ads) { var so = new SerializedObject(ads); var tm = so.FindProperty("testMode"); if (tm != null) tm.boolValue = false; so.ApplyModifiedProperties(); }
         var iap = Object.FindObjectOfType<UnityIAP>(true);
         if (iap) { iap.kProductIDs = new[] { "com.sillycon.tallcrawl.coins_1000", "com.sillycon.tallcrawl.noads", "com.sillycon.tallcrawl.premium" }; EditorUtility.SetDirty(iap); }
         var cam = Camera.main; if (cam) { cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = TCUI.Hex("#FFE3D3"); }

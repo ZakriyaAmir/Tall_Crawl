@@ -8,7 +8,7 @@ public class AdsManager : MonoBehaviour
 {
     [Header("Note: Admob ads are first priority,\nApplovinMax ads will load after checking Admob availability")]
 
-    public bool testMode = true;
+    public bool testMode = false;
 
     [Header("Admob Keys")]
     //public string AndroidGoogleAppID;
@@ -108,11 +108,17 @@ public class AdsManager : MonoBehaviour
         _instance = this;
         DontDestroyOnLoad(gameObject);
 
-        testMode = true;
         admobInterstitial = true;
         admobBanner = true;
         admobRewarded = true;
-        ApplyOfficialTestIds();
+        if (testMode)
+        {
+            ApplyOfficialTestIds();
+        }
+        else
+        {
+            ApplyProductionIds();
+        }
 
         if (GetComponent<AdmobManager>() == null)
         {
@@ -316,6 +322,20 @@ public class AdsManager : MonoBehaviour
         Debug.Log("Reward granted");
         money += 10;
         moneytext.text = "Total Reward: " + money.ToString();
+    }
+
+    /// Applies platform-specific production ad unit IDs for Android and iOS.
+    public void ApplyProductionIds()
+    {
+#if UNITY_IOS || UNITY_IPHONE
+        AdmobBannerUnitId = "ca-app-pub-5636251467539590/6082748418";
+        AdmobInterstitialUnitId = "ca-app-pub-5636251467539590/6442548902";
+        AdmobRewardedUnitId = "ca-app-pub-5636251467539590/8469946446";
+#else
+        AdmobBannerUnitId = "ca-app-pub-5636251467539590/9786897549";
+        AdmobInterstitialUnitId = "ca-app-pub-5636251467539590/6446418338";
+        AdmobRewardedUnitId = "ca-app-pub-5636251467539590/9123397615";
+#endif
     }
 
     /// Google's documented test units for Android & iOS: https://developers.google.com/admob/unity/test-ads

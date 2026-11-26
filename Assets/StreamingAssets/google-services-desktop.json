@@ -1,26 +1,28 @@
 {
   "project_info": {
-    "project_number": "953033522255",
-    "project_id": "tallcrawl-5360a",
-    "storage_bucket": "tallcrawl-5360a.appspot.com"
+    "project_number": "694161387232",
+    "project_id": "tall-crawl",
+    "storage_bucket": "tall-crawl.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:953033522255:android:cf6c5e7c1da731932efe3a",
+        "mobilesdk_app_id": "1:694161387232:ios:217378e09cd87270466a85",
         "android_client_info": {
           "package_name": "com.sillycon.tallcrawl"
         }
       },
-      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAmPxf7Die1Y9yIFZ7EioClwC13itXpSGY"
+          "current_key": "AIzaSyAd4v5fgdq-vrGMyveRFiRrqkjYUmsMOlg"
         }
       ],
       "services": {
+        "analytics_service": {
+          "status": 0
+        },
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "status": 1
         }
       }
     }

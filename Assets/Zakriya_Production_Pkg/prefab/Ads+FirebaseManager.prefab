@@ -45,10 +45,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 62311547766638d47ad8492672f3632c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  testMode: 1
-  AdmobBannerUnitId: ca-app-pub-4987175712306793/3348628581
-  AdmobInterstitialUnitId: ca-app-pub-4987175712306793/9597523925
-  AdmobRewardedUnitId: ca-app-pub-4987175712306793/6984020172
+  testMode: 0
+  AdmobBannerUnitId: ca-app-pub-5636251467539590/9786897549
+  AdmobInterstitialUnitId: ca-app-pub-5636251467539590/6446418338
+  AdmobRewardedUnitId: ca-app-pub-5636251467539590/9123397615
   AdmobRewardedInterstitialUnitId: 
   AdmobAppOpenAdUnitId: 
   admobInterstitial: 1

@@ -6,7 +6,7 @@ using UnityEngine;
 using GoogleMobileAds.Api;
 
 /// Google Mobile Ads (AdMob) wrapper for Tall Crawl.
-/// - Official Google TEST ad units only (see AdsManager.ApplyOfficialTestIds).
+/// - Uses configured production IDs on Android when AdsManager.testMode is false, or Google test IDs when testMode is true.
 /// - Every SDK callback is marshalled onto the Unity main thread before touching Unity APIs
 ///   (Android raises GMA callbacks on a Java thread; StartCoroutine / gameObject / UI calls
 ///   from there throw and silently kill the ad flow).
@@ -14,6 +14,14 @@ using GoogleMobileAds.Api;
 public class AdmobManager : MonoBehaviour
 {
     public static AdmobManager Instance;
+
+    public const string ANDROID_BANNER_ID = "ca-app-pub-5636251467539590/9786897549";
+    public const string ANDROID_INTERSTITIAL_ID = "ca-app-pub-5636251467539590/6446418338";
+    public const string ANDROID_REWARDED_ID = "ca-app-pub-5636251467539590/9123397615";
+
+    public const string IOS_BANNER_ID = "ca-app-pub-5636251467539590/6082748418";
+    public const string IOS_INTERSTITIAL_ID = "ca-app-pub-5636251467539590/6442548902";
+    public const string IOS_REWARDED_ID = "ca-app-pub-5636251467539590/8469946446";
 
     public const string OFFICIAL_BANNER_TEST_ID = "ca-app-pub-3940256099942544/6300978111";
     public const string OFFICIAL_INTERSTITIAL_TEST_ID = "ca-app-pub-3940256099942544/1033173712";
@@ -108,7 +116,11 @@ public class AdmobManager : MonoBehaviour
         if (!forceReset && !string.IsNullOrEmpty(_adRewardedUnitId)) return;
         if (_AdsManager != null)
         {
-            _AdsManager.ApplyOfficialTestIds();
+            if (_AdsManager.testMode)
+                _AdsManager.ApplyOfficialTestIds();
+            else
+                _AdsManager.ApplyProductionIds();
+
             _adBannerUnitId = _AdsManager.AdmobBannerUnitId;
             _adInterstitialUnitId = _AdsManager.AdmobInterstitialUnitId;
             _adRewardedUnitId = _AdsManager.AdmobRewardedUnitId;
@@ -117,9 +129,15 @@ public class AdmobManager : MonoBehaviour
         }
         else
         {
-            _adBannerUnitId = OFFICIAL_BANNER_TEST_ID;
-            _adInterstitialUnitId = OFFICIAL_INTERSTITIAL_TEST_ID;
-            _adRewardedUnitId = OFFICIAL_REWARDED_TEST_ID;
+#if UNITY_IOS || UNITY_IPHONE
+            _adBannerUnitId = IOS_BANNER_ID;
+            _adInterstitialUnitId = IOS_INTERSTITIAL_ID;
+            _adRewardedUnitId = IOS_REWARDED_ID;
+#else
+            _adBannerUnitId = ANDROID_BANNER_ID;
+            _adInterstitialUnitId = ANDROID_INTERSTITIAL_ID;
+            _adRewardedUnitId = ANDROID_REWARDED_ID;
+#endif
         }
     }
 
