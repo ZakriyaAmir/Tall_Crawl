@@ -476,10 +476,16 @@ public class TCMenuUI : MonoBehaviour
     // --- Style 3: Come from far away, bonk / hit camera, bounce back & wave ---
     IEnumerator EntranceHitCameraWave(Transform st, Vector3 rest, float S, TCCuteSpider cs)
     {
-        // PreviewCam is at z ~ -4.25, looking at (0, -500, 0).
-        // Rest is z = 0. Far is z = +8.0. Camera close hit is z = -3.2 (right in front of lens).
+        // Compute bonk position directly in front of PreviewCam's lens (centered on the spider's face/eyes)
         Vector3 farPos = rest + new Vector3(0, 0.4f * S, 7.5f * S);
         Vector3 camBonkPos = rest + new Vector3(0, 0.05f * S, -2.55f * S);
+        if (previewCam && st.parent)
+        {
+            Vector3 lensWorld = previewCam.transform.position
+                + previewCam.transform.forward * Mathf.Max(1.05f, 1.35f * S)
+                - previewCam.transform.up * (0.28f * S);
+            camBonkPos = st.parent.InverseTransformPoint(lensWorld);
+        }
         st.localPosition = farPos;
         st.localRotation = Quaternion.identity;
         st.localScale = Vector3.one * 0.25f;
