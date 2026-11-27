@@ -1125,7 +1125,7 @@ public class TCMenuUI : MonoBehaviour
             {
                 TCAudio.Click();
                 int adCoins = TCConfig.I.adCoinReward;
-                TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); }, "shop_coins");
+                TCServices.Rewarded(() => { TCSave.Coins += adCoins; Toast("+" + adCoins + " coins"); TCServices.Log("free_coins_claimed", "coins", adCoins); }, "shop_coins");
             });
         }
 
@@ -1340,6 +1340,7 @@ public class TCMenuUI : MonoBehaviour
         int amt = TCConfig.I.dailyRewards[day] * (doubled ? 2 : 1);
         if (day == 6) TCSave.Gems += amt; else TCSave.Coins += amt;
         TCSave.ClaimDaily(day); TCAudio.Play(TCAssets.I.purchase);
+        TCServices.Log("daily_reward_claimed", ("day", day + 1), ("amount", amt), ("currency", day == 6 ? "gems" : "coins"), ("doubled", doubled));
         Toast("+" + amt + (day == 6 ? " gems" : " coins"));
         StartCoroutine(Delay(0.4f, () => TCUI.Hide(this, dailyPanel)));
     }

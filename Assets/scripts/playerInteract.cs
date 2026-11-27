@@ -338,6 +338,7 @@ public class playerInteract : MonoBehaviour
             Play(TCSfx.Get("heart") ?? healthSound, 0.8f);
             if (life < MaxLife) life++;
             TCTrack.OnHeartCollected();
+            TCServices.Log("heart_collected", ("metres", p != null ? (long)p.currentScore : 0L), ("lives", life));
             OnEvent?.Invoke("heart", transform.position);
             return true;
         }
@@ -355,6 +356,7 @@ public class playerInteract : MonoBehaviour
             other.gameObject.SetActive(false);
             Play(TCSfx.Get("cooldown_collect") ?? TCSfx.Get("coin"), 0.85f);
             CooldownInventory++;
+            TCServices.Log("cooldown_collected", ("metres", p != null ? (long)p.currentScore : 0L), ("stock", CooldownInventory));
             OnEvent?.Invoke("cooldown", transform.position);
             TCFx.Shake(0.08f);
             return true;
@@ -628,6 +630,7 @@ public class playerInteract : MonoBehaviour
         TCServices.Haptic();
         TCFx.Shake(0.25f);
         life--;
+        TCServices.Log("player_hit", ("metres", p != null ? (long)p.currentScore : 0L), ("lives_left", Mathf.Max(0, life)));
         OnEvent?.Invoke("hit", transform.position);
         if (life > 0) invulnTimer = 1.4f; else death();
     }

@@ -121,7 +121,10 @@ public static class TCServices
         try
         {
             if (AdsManager.Instance != null)
+            {
                 AdsManager.Instance.RunInterstitialAd();
+                Log("interstitial_shown");
+            }
         }
         catch (Exception e) { Debug.LogWarning("[TCServices] Interstitial failed: " + e.Message); }
     }

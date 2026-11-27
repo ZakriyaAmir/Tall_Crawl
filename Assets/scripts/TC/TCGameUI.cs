@@ -1955,7 +1955,11 @@ public class TCGameUI : MonoBehaviour
         reviveAdBtn = TCUI.Btn("Ad", card, "REVIVE (WATCH AD)", TCUI.Mint, () =>
         {
             StopReviveTimer();
-            TCServices.Rewarded(DoRevive, "revive", () =>
+            TCServices.Rewarded(() =>
+            {
+                TCServices.Log("revive_used", ("method", "ad"), ("metres", player.Instance != null ? (long)player.Instance.currentScore : 0L));
+                DoRevive();
+            }, "revive", () =>
             {
                 // If ad not available / failed, restart countdown so user can pick gems or skip
                 if (revivePanel != null && revivePanel.gameObject.activeSelf)
@@ -1969,7 +1973,12 @@ public class TCGameUI : MonoBehaviour
 
         reviveGemBtn = TCUI.Btn("Gems", card, "REVIVE (" + TCConfig.I.reviveCostGems + " GEMS)", TCUI.Sky, () =>
         {
-            if (TCSave.Gems >= TCConfig.I.reviveCostGems) { TCSave.Gems -= TCConfig.I.reviveCostGems; DoRevive(); }
+            if (TCSave.Gems >= TCConfig.I.reviveCostGems)
+            {
+                TCSave.Gems -= TCConfig.I.reviveCostGems;
+                TCServices.Log("revive_used", ("method", "gems"), ("metres", player.Instance != null ? (long)player.Instance.currentScore : 0L));
+                DoRevive();
+            }
         }, 48, TCUI.Icon("gem"));
         TCUI.Place((RectTransform)reviveGemBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -225), new Vector2(680, 120));
 

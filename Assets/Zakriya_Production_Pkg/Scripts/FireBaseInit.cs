@@ -16,6 +16,7 @@ public class FireBaseInit : MonoBehaviour
             if (dependencyStatus == Firebase.DependencyStatus.Available)
             {
                 Firebase.FirebaseApp app = Firebase.FirebaseApp.DefaultInstance;
+                FirebaseAnalytics.SetAnalyticsCollectionEnabled(true);
                 Debug.Log("FirebaseInitialized");
             }
             else
