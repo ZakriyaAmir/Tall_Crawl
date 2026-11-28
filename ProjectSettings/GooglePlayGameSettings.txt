@@ -1,4 +1,8 @@
 lastUpgrade=20100
 proj.pluginVersion=2.1.0
-proj.AppId=369593450776
+proj.AppId=98077034227
+proj.classDir=Assets
+proj.ConstantsClassName=GPGSIds
+and.BundleId=com.sillycon.tallcrawl
+and.ResourceData=%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22utf-8%22%3F%3E%0A%3C%21--Google%20Play%20game%20services%20IDs.%20Save%20this%20file%20as%20res%2Fvalues%2Fgames-ids.xml%20in%20your%20project.--%3E%0A%3Cresources%3E%0A%20%20%3C%21--app_id--%3E%0A%20%20%3Cstring%20name%3D%22app_id%22%20translatable%3D%22false%22%3E98077034227%3C%2Fstring%3E%0A%20%20%3C%21--package_name--%3E%0A%20%20%3Cstring%20name%3D%22package_name%22%20translatable%3D%22false%22%3Ecom.sillycon.tallcrawl%3C%2Fstring%3E%0A%20%20%3C%21--leaderboard%20Distance--%3E%0A%20%20%3Cstring%20name%3D%22leaderboard_distance%22%20translatable%3D%22false%22%3ECgkI843jru0CEAIQAg%3C%2Fstring%3E%0A%3C%2Fresources%3E%0A
 android.SetupDone=true

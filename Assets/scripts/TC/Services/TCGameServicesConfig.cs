@@ -1,25 +1,22 @@
 /// <summary>
 /// Google Play Games Services IDs for Tall Crawl (package com.sillycon.tallcrawl).
 ///
-/// TODO(Play Console): VERIFY / REPLACE these values. They are copied from the old 2024 GPGS setup
-/// (Assets/GPGSIds.cs: leaderboard_highscore = CgkImILy6-AKEAIQAA, which encodes app id 369593450776).
-/// If Play Console > Grow users > Play Games Services shows a different project/leaderboard for
-/// Tall Crawl, replace them here AND in:
+/// Play Games project 98077034227 (same number as Firebase project tall-crawl-8ea97).
+/// The APP_ID is also stored in:
 ///   - Assets/Plugins/Android/GooglePlayGamesManifest.androidlib/AndroidManifest.xml (APP_ID meta-data)
-///   - Assets/Plugins/Android/GooglePlayGamesManifest.androidlib/project.properties (proj.AppId)
 ///   - Assets/GooglePlayGames/Resources/PlayGamesSettings.asset (mAppId)
-///   - ProjectSettings/GooglePlayGameSettings.txt (proj.AppId)
-/// The easiest way is Window > Google Play Games > Setup > Android setup in the Unity editor, pasting
-/// the resources XML from Play Console; it rewrites all of the files above.
+///   - ProjectSettings/GooglePlayGameSettings.txt (proj.AppId + and.ResourceData)
+///   - Assets/GPGSIds.cs (generated constants)
+/// To change them, use Window > Google Play Games > Setup > Android setup with the resources XML
+/// from Play Console, then update this file.
 /// </summary>
 public static class TCGameServicesConfig
 {
     /// Play Games Services project / application id (numeric, the "APP_ID").
-    public const string PlayGamesAppId = "369593450776"; // TODO(Play Console): VERIFY
+    public const string PlayGamesAppId = "98077034227";
 
-    /// Leaderboard that ranks players by their best distance climbed, in whole metres.
-    /// Create it in Play Console as: score format Numeric, ordering "Larger is better", unit "m".
-    public const string DistanceLeaderboardId = "CgkImILy6-AKEAIQAA"; // TODO(Play Console): VERIFY (old "highscore" leaderboard)
+    /// "Distance" leaderboard: best distance climbed in whole metres (Numeric, larger is better).
+    public const string DistanceLeaderboardId = GPGSIds.leaderboard_distance; // CgkI843jru0CEAIQAg
 
     /// Saved Games snapshot that holds all progress + purchase state. Saved Games must be ON in Play Console.
     public const string SnapshotName = "tall_crawl_save_v1";

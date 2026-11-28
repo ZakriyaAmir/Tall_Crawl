@@ -16,16 +16,26 @@ Ported from Wordwise Solitaire (`playableAdsWordsSolitaire`, branch `unity-full-
 
 UI: a star button right of the BEST pill opens the LEADERBOARD panel; Settings has SIGN IN WITH GOOGLE PLAY.
 
-## Console values to confirm
-- **Play Games APP_ID** `369593450776` and **leaderboard id** `CgkImILy6-AKEAIQAA` come from the old 2024 `Assets/GPGSIds.cs`.
-  Confirm them in Play Console (Play Games Services > Configuration). If different, run
-  *Window > Google Play Games > Setup > Android setup* with the new resources XML, and update
-  `Services/TCGameServicesConfig.cs`.
-- The leaderboard must be **Numeric, Larger is better** (unit metres). Turn **Saved Games ON** in the Play Games configuration.
-- Add a Play Games Android credential for `com.sillycon.tallcrawl` with the SHA-1 of `extras/user.keystore.keystore`
-  (alias `sillycon`) for local builds, and the Play App Signing SHA-1 for store installs. The `[PGS] installed APK signing SHA-1=` log line prints the one in use.
-- OAuth consent screen in testing mode needs your tester accounts listed as test users.
-- `Assets/google-services.json` (project `tall-crawl-8ea97`) is already present and is enough for FCM.
+## IDs (configured Nov 28, 2026)
+| Item | Value |
+|---|---|
+| Package | `com.sillycon.tallcrawl` |
+| Play Games APP_ID / Firebase project number | `98077034227` |
+| Firebase project | `tall-crawl-8ea97` (`Assets/google-services.json`, regenerated `FirebaseApp.androidlib/res/values/google-services.xml`) |
+| Distance leaderboard (`GPGSIds.leaderboard_distance`) | `CgkI843jru0CEAIQAg` (Numeric, larger is better, metres) |
+| Saved Games snapshot | `tall_crawl_save_v1` (Saved Games ON) |
+| Android OAuth clients (Play Games credentials) | `98077034227-bkros7l53296nnaldov7o7o9oskrdelp`, `98077034227-7vi5uve4p11sgnb5q0d7dvpc5kkmivod` |
+
+The APP_ID lives in `Services/TCGameServicesConfig.cs`, `Assets/GPGSIds.cs`,
+`Assets/Plugins/Android/GooglePlayGamesManifest.androidlib/AndroidManifest.xml`,
+`Assets/GooglePlayGames/Resources/PlayGamesSettings.asset` and `ProjectSettings/GooglePlayGameSettings.txt`
+(which also holds the resources XML). To change them, run *Window > Google Play Games > Setup > Android setup*
+with the resources XML from Play Console.
+
+Sign-in only works for builds whose signing SHA-1 matches one of the Android credentials above
+(the `sillycon` upload key for local builds, the Play App Signing key for store installs), and, while the
+OAuth consent screen is in testing, only for listed test users. The `[PGS] installed APK signing SHA-1=` log line
+prints the key in use.
 
 ## Device checks
 ```

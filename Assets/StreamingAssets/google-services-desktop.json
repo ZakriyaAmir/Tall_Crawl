@@ -12,7 +12,24 @@
           "package_name": "com.sillycon.tallcrawl"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "98077034227-7vi5uve4p11sgnb5q0d7dvpc5kkmivod.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sillycon.tallcrawl",
+            "certificate_hash": "954d88397234ca7d8475b66f1e23a5b4f7789d10"
+          }
+        },
+        {
+          "client_id": "98077034227-bkros7l53296nnaldov7o7o9oskrdelp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sillycon.tallcrawl",
+            "certificate_hash": "b2493f6f290aded8d9e0b1753b029a64eb4d34f5"
+          }
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBwZKJo68ab8j6XAr60xo5YAPkhO3TnLmo"
