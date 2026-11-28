@@ -1,0 +1,22 @@
+<linker>
+  <!-- Ported from Wordwise Solitaire. IL2CPP managed stripping removed the Play Games sign-in path there
+       (sign-in "failed" instantly with no Google UI) and Messaging delivers the FCM token through generated
+       callbacks the linker cannot see. Keep these assemblies whole. -->
+  <assembly fullname="Firebase.App" preserve="all"/>
+  <assembly fullname="Firebase.Messaging" preserve="all"/>
+  <assembly fullname="Firebase.Platform" preserve="all"/>
+  <assembly fullname="Firebase.TaskExtension" preserve="all"/>
+  <assembly fullname="Google.Play.Games" preserve="all"/>
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="PushNotificationService" preserve="all"/>
+    <type fullname="FirebaseBootstrap" preserve="all"/>
+    <type fullname="TCPlayGames" preserve="all"/>
+    <type fullname="TCCloudSave" preserve="all"/>
+    <type fullname="TCCloudSave/Data" preserve="all"/>
+    <type fullname="TCCloudSave/IntKV" preserve="all"/>
+    <type fullname="TCCloudSave/FloatKV" preserve="all"/>
+    <type fullname="TCCloudSave/StrKV" preserve="all"/>
+    <type fullname="TCIapLedger/Tx" preserve="all"/>
+    <type fullname="TCIapLedger/State" preserve="all"/>
+  </assembly>
+</linker>

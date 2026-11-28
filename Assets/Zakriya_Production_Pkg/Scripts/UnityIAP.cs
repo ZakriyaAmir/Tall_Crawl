@@ -159,13 +159,59 @@ public class UnityIAP : MonoBehaviour, IStoreListener
 
         m_StoreController = controller;
         m_StoreExtensionProvider = extensions;
+        // Remove-ads is a non-consumable: if the store still has its receipt, make sure it is applied and recorded.
+        try
+        {
+            var noAds = controller.products.WithID(kProductIDs[1]);
+            if (noAds != null && noAds.hasReceipt && !TCSave.NoAds)
+            {
+                TCSave.NoAds = true;
+                TCServices.Banner(false);
+                TCIapLedger.Record(noAds.definition.id, noAds.transactionID, true, 0, 0);
+            }
+        }
+        catch (Exception e) { Debug.LogWarning("[IAP] receipt check failed: " + e.Message); }
         OnIAPInitialized?.Invoke();
     }
     public void OnInitializeFailed(InitializationFailureReason error)
     {
         Debug.Log("OnInitializeFailed InitializationFailureReason:" + error);
     }
+    /// Wraps the grant so every purchase is written to TCIapLedger (product, transaction id, coins/gems granted)
+    /// and pushed to the Google Play Saved Games snapshot (TCCloudSave).
     public PurchaseProcessingResult ProcessPurchase(PurchaseEventArgs args)
+    {
+        var product = args.purchasedProduct;
+        string pid = product != null ? product.definition.id : null;
+        int coinsBefore = TCSave.Coins, gemsBefore = TCSave.Gems;
+        bool hadCallback = onPurchaseComplete != null;
+        bool alreadyRecorded = product != null && TCIapLedger.HasTx(TCIapLedger.Current, product.transactionID);
+
+        PurchaseProcessingResult result = ProcessPurchaseGrant(args);
+
+        // No pending UI callback = store replay (restore of remove-ads, or a purchase that finished while the app was closed).
+        if (!hadCallback && !alreadyRecorded && pid != null) GrantWithoutCallback(pid);
+        try
+        {
+            if (pid != null)
+                TCIapLedger.Record(pid, product.transactionID, product.definition.type == ProductType.NonConsumable,
+                    TCSave.Coins - coinsBefore, TCSave.Gems - gemsBefore);
+        }
+        catch (Exception e) { Debug.LogWarning("[IAP] ledger record failed: " + e.Message); }
+        return result;
+    }
+
+    /// Same grants as the Shop buttons (TCMenuUI.BuildShop), used when ProcessPurchase runs without a UI callback.
+    void GrantWithoutCallback(string pid)
+    {
+        int gemPack = Array.IndexOf(GemProductIDs, pid);
+        if (gemPack >= 0) { TCSave.Gems += GemPackAmounts[gemPack]; return; }
+        if (pid == kProductIDs[0]) { TCSave.Coins += 1000; return; }
+        if (pid == kProductIDs[1]) { TCSave.NoAds = true; TCSave.Gems += 20; TCServices.Banner(false); return; }
+        if (pid == kProductIDs[2]) { TCSave.Coins += 5000; TCSave.Gems += 50; return; }
+    }
+
+    PurchaseProcessingResult ProcessPurchaseGrant(PurchaseEventArgs args)
     {
         if (Array.IndexOf(GemProductIDs, args.purchasedProduct.definition.id) >= 0)
         {

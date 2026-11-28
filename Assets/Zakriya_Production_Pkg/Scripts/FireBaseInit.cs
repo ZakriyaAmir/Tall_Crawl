@@ -9,9 +9,15 @@ public class FireBaseInit : MonoBehaviour
     void Start()
     {
 #if !UNITY_EDITOR
-        // Initialize Firebase
-        Firebase.FirebaseApp.CheckAndFixDependenciesAsync().ContinueWith(task =>
+        // Single Firebase init shared with PushNotificationService (FirebaseBootstrap.ReadyTask).
+        // A second CheckAndFixDependenciesAsync throws "Don't call other Firebase functions while CheckDependencies is running."
+        FirebaseBootstrap.ReadyTask.ContinueWith(task =>
         {
+            if (task.IsFaulted || task.IsCanceled)
+            {
+                UnityEngine.Debug.LogError("Firebase dependency check failed: " + (task.Exception != null ? task.Exception.GetBaseException().Message : "canceled"));
+                return;
+            }
             var dependencyStatus = task.Result;
             if (dependencyStatus == Firebase.DependencyStatus.Available)
             {

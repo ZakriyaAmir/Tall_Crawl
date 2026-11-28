@@ -4,18 +4,17 @@ FirebaseApp iOS and Android Dependencies.
 -->
 
 <dependencies>
-  <iosPods>
-    <iosPod name="Firebase/Core" version="10.15.0" minTargetSdk="8.0">
-    </iosPod>
-  </iosPods>
+  <remoteSwiftPackage url="https://github.com/firebase/firebase-ios-sdk.git" version="13.2.0">
+    <swiftPackage name="FirebaseCore"/>
+  </remoteSwiftPackage>
   <androidPackages>
-    <androidPackage spec="com.google.firebase:firebase-common:20.3.3">
+    <androidPackage spec="com.google.firebase:firebase-common:23.0.0">
     </androidPackage>
-    <androidPackage spec="com.google.firebase:firebase-analytics:21.3.0">
+    <androidPackage spec="com.google.firebase:firebase-analytics:24.0.0">
     </androidPackage>
-    <androidPackage spec="com.google.android.gms:play-services-base:18.2.0">
+    <androidPackage spec="com.google.android.gms:play-services-base:18.11.1">
     </androidPackage>
-    <androidPackage spec="com.google.firebase:firebase-app-unity:11.6.0">
+    <androidPackage spec="com.google.firebase:firebase-app-unity:14.2.0">
       <repositories>
         <repository>Assets/Firebase/m2repository</repository>
       </repositories>

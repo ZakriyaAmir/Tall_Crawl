@@ -21,6 +21,16 @@ public static class TCSave
         Changed?.Invoke();
     }
 
+    /// Cloud save restored values straight into PlayerPrefs: flush, re-apply audio and refresh every listener (menu UI).
+    public static void NotifyExternalChange()
+    {
+        dirty = false;
+        lastSaveTime = Time.unscaledTime;
+        PlayerPrefs.Save();
+        AudioListener.volume = Sound ? 1 : 0;
+        Changed?.Invoke();
+    }
+
     public static void Flush()
     {
         if (dirty)

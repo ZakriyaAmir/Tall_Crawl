@@ -1,2 +1,4 @@
-lastUpgrade=00964
-proj.pluginVersion=0.9.64
+lastUpgrade=20100
+proj.pluginVersion=2.1.0
+proj.AppId=369593450776
+android.SetupDone=true

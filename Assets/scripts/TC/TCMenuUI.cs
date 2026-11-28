@@ -6,8 +6,9 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 
-/// Main menu: currencies, best score, 3D spider preview, Play, Skins, Shop, Daily reward, Settings, consent.
-public class TCMenuUI : MonoBehaviour
+/// Main menu: currencies, best score, 3D spider preview, Play, Skins, Shop, Daily reward, Settings, consent,
+/// Google Play Games sign-in + distance leaderboard (TCMenuUI.Leaderboard.cs).
+public partial class TCMenuUI : MonoBehaviour
 {
     public static TCMenuUI Instance;
     RectTransform safe; Canvas canvas;
@@ -33,6 +34,7 @@ public class TCMenuUI : MonoBehaviour
         BuildUI();
         UnityIAP.OnIAPInitialized += RefreshShopPrices;
         TCSave.Changed += Refresh; Refresh();
+        TCPlayGames.Changed += RefreshGpgsUI; RefreshGpgsUI();
         StartCoroutine(PlaySplashAndEntrance());
         TCSkins.CheckAchievements();
         if (PlayerPrefs.GetInt("consent", 0) == 0) PlayerPrefs.SetInt("consent", 1);
@@ -92,13 +94,13 @@ public class TCMenuUI : MonoBehaviour
         canvas = TCUI.MakeCanvas("TC_MenuUI", 10);
         BuildBackground();
         safe = TCUI.SafeRoot(canvas.transform);
-        BuildMain(); BuildSkins(); BuildShop(); BuildSettings(); BuildDaily(); BuildConsent(); BuildToast();
+        BuildMain(); BuildSkins(); BuildShop(); BuildSettings(); BuildDaily(); BuildLeaderboard(); BuildConsent(); BuildToast();
         // polish3 palette theme: styles anything not already themed in the baked scene (never overrides editor edits)
         TCTheme.ThemeTree(canvas.transform);
         TCTheme.MenuBackground(canvas.transform.Find("BG"));
     }
     void Co(IEnumerator e) { if (Application.isPlaying) StartCoroutine(e); }
-    void OnDestroy() { TCSave.Changed -= Refresh; UnityIAP.OnIAPInitialized -= RefreshShopPrices; if (rt) rt.Release(); }
+    void OnDestroy() { TCSave.Changed -= Refresh; TCPlayGames.Changed -= RefreshGpgsUI; UnityIAP.OnIAPInitialized -= RefreshShopPrices; if (rt) rt.Release(); }
     static void StopMenuMusic()
     {
         var m = GameObject.Find("bgm");
@@ -143,7 +145,7 @@ public class TCMenuUI : MonoBehaviour
         }
 
         if (!Input.GetKeyDown(KeyCode.Escape)) return;
-        foreach (var cg in new[] { dailyPanel, skinsPanel, shopPanel, settingsPanel })
+        foreach (var cg in new[] { leaderboardPanel, dailyPanel, skinsPanel, shopPanel, settingsPanel })
             if (cg && cg.gameObject.activeSelf && cg.alpha > 0.5f) { TCUI.Hide(this, cg); return; }
     }
     IEnumerator Delay(float t, System.Action a) { yield return new WaitForSecondsRealtime(t); a(); }
@@ -793,6 +795,7 @@ public class TCMenuUI : MonoBehaviour
 
         var bestPill = TCUI.Img("Best", safe, new Color(1, 1, 1, 0.85f)); TCUI.Place(bestPill.rectTransform, new Vector2(0.5f, 0.28f), Vector2.zero, new Vector2(480, 84));
         bestText = TCUI.Label("Value", bestPill.transform, "", 44, TCUI.Cocoa); TCUI.Stretch(bestText.rectTransform);
+        BuildLeaderboardButton(); // Google Play Games distance leaderboard, right of the BEST pill
 
         var play = TCUI.Btn("Play", safe, "PLAY", TCUI.Mint, () => StartCoroutine(LoadGame()), 96, TCUI.Icon("play")); // no game-start sound
         TCUI.Place((RectTransform)play.transform, new Vector2(0.5f, 0), new Vector2(0, 310), new Vector2(640, 190));
@@ -1025,7 +1028,7 @@ public class TCMenuUI : MonoBehaviour
     static readonly int[] activeUpgradeIds = { 1, 2, 5, 6 };
     static readonly string[] upgNames = { "", "Boost Time", "Extra Heart", "Climb Bonus", "Head Start", "Freeze Powerup", "Coin Magnet" };
     static readonly int[] upgMax = { 0, 5, 2, 0, 0, 5, 5 };
-    public CanvasGroup GetPanel(string n) => n == "Skins" ? skinsPanel : n == "Shop" ? shopPanel : n == "Settings" ? settingsPanel : n == "Daily" ? dailyPanel : consentPanel;
+    public CanvasGroup GetPanel(string n) => n == "Skins" ? skinsPanel : n == "Shop" ? shopPanel : n == "Settings" ? settingsPanel : n == "Daily" ? dailyPanel : n == "Leaderboard" ? leaderboardPanel : consentPanel;
 
     static void SetRect(RectTransform rt, Vector2 anchor, Vector2 pos, Vector2 size)
     {
@@ -1254,6 +1257,7 @@ public class TCMenuUI : MonoBehaviour
         else cheatHint = card.Find("CheatHint").GetComponent<TextMeshProUGUI>();
 #endif
         TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => { FeedCheat(TCCheatCode.Kind.Other); Application.OpenURL(TCAssets.I.privacyUrl); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -175), new Vector2(620, 110));
+        BuildGpgsSettingsButton(card); // Sign in with Google Play (between PRIVACY POLICY and DONE)
         var tutBtn = card.Find("Tutorial");
         if (tutBtn) tutBtn.gameObject.SetActive(false);
         TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => { FeedCheat(TCCheatCode.Kind.Other); TCUI.Hide(this, settingsPanel); }, 50).transform, new Vector2(0.5f, 0), new Vector2(0, 95), new Vector2(420, 120));

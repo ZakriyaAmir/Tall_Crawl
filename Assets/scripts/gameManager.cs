@@ -782,6 +782,9 @@ public class gameManager : MonoBehaviour
         TCSave.Flush();
         TCServices.Log("run_end", ("metres", metres), ("coins", RunReward), ("gems", RunGems), ("is_new_best", isNewBest), ("total_runs", TCSave.Runs));
         if (isNewBest) TCServices.Log("new_high_score", ("metres", metres), ("previous_best", prevBest));
+        // Google Play Games: the leaderboard only ranks best distance (metres); cloud-save the banked run.
+        if (isNewBest) TCLeaderboard.SubmitBest();
+        TCCloudSave.SaveNow();
         return RunReward;
     }
 
