@@ -19,11 +19,7 @@ public static class TCBakeLighting
         {
             System.IO.File.WriteAllText("/tmp/tcbake.log", "Starting BakeAll...\n");
 
-            // 1. Re-apply finely baked textures
-            TCUIBake.ApplyBark();
-            System.IO.File.AppendAllText("/tmp/tcbake.log", "ApplyBark done\n");
-
-            // 2. Open gameplay scene
+            // 1. Open gameplay scene
             var scene = EditorSceneManager.OpenScene(GameplayScenePath, OpenSceneMode.Single);
             System.IO.File.AppendAllText("/tmp/tcbake.log", "OpenScene done\n");
 

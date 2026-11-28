@@ -1230,12 +1230,12 @@ public partial class TCMenuUI : MonoBehaviour
     // ---------- Settings ----------
     void BuildSettings()
     {
-        settingsPanel = TCUI.Panel("Settings", safe, out var card, new Vector2(900, 960), "SETTINGS");
-        TCGameUI.Toggle(card, "Sound", 335, () => TCSave.Sound, v => { TCSave.Sound = v; if (FeedCheat(TCCheatCode.Kind.Sound)) ActivateCheat(); }, 700);
-        TCGameUI.Toggle(card, "Music", 230, () => TCSave.Music, v => { TCSave.Music = v; ApplyMenuMusic(); FeedCheat(TCCheatCode.Kind.Music); }, 700);
-        TCGameUI.Toggle(card, "Vibration", 125, () => TCSave.Vibration, v => { TCSave.Vibration = v; if (FeedCheat(TCCheatCode.Kind.Vibration)) ActivateCheat(); }, 700);
-        var sl = TCUI.Label("SensL", card, "Control sensitivity", 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Place(sl.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 30), new Vector2(700, 70));
-        var slider = BuildSlider(card, new Vector2(0, -45)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity;
+        settingsPanel = TCUI.Panel("Settings", safe, out var card, new Vector2(900, 1080), "SETTINGS");
+        TCGameUI.Toggle(card, "Sound", 390, () => TCSave.Sound, v => { TCSave.Sound = v; if (FeedCheat(TCCheatCode.Kind.Sound)) ActivateCheat(); }, 700);
+        TCGameUI.Toggle(card, "Music", 285, () => TCSave.Music, v => { TCSave.Music = v; ApplyMenuMusic(); FeedCheat(TCCheatCode.Kind.Music); }, 700);
+        TCGameUI.Toggle(card, "Vibration", 180, () => TCSave.Vibration, v => { TCSave.Vibration = v; if (FeedCheat(TCCheatCode.Kind.Vibration)) ActivateCheat(); }, 700);
+        var sl = TCUI.Label("SensL", card, "Control sensitivity", 44, TCUI.Cocoa, TextAlignmentOptions.Left); TCUI.Place(sl.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 85), new Vector2(700, 70));
+        var slider = BuildSlider(card, new Vector2(0, 10)); slider.minValue = 0.4f; slider.maxValue = 2.2f; slider.value = TCSave.Sensitivity;
         slider.onValueChanged.RemoveAllListeners();
         System.Action<float> feedSlider = v =>
         {
@@ -1256,11 +1256,11 @@ public partial class TCMenuUI : MonoBehaviour
         }
         else cheatHint = card.Find("CheatHint").GetComponent<TextMeshProUGUI>();
 #endif
-        TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => { FeedCheat(TCCheatCode.Kind.Other); Application.OpenURL(TCAssets.I.privacyUrl); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -175), new Vector2(620, 110));
+        TCUI.Place((RectTransform)TCUI.Btn("Privacy", card, "PRIVACY POLICY", TCUI.Sky, () => { FeedCheat(TCCheatCode.Kind.Other); Application.OpenURL(TCAssets.I.privacyUrl); }, 42).transform, new Vector2(0.5f, 0.5f), new Vector2(0, -115), new Vector2(620, 105));
         BuildGpgsSettingsButton(card); // Sign in with Google Play (between PRIVACY POLICY and DONE)
         var tutBtn = card.Find("Tutorial");
         if (tutBtn) tutBtn.gameObject.SetActive(false);
-        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => { FeedCheat(TCCheatCode.Kind.Other); TCUI.Hide(this, settingsPanel); }, 50).transform, new Vector2(0.5f, 0), new Vector2(0, 95), new Vector2(420, 120));
+        TCUI.Place((RectTransform)TCUI.Btn("Close", card, "DONE", TCUI.Mint, () => { FeedCheat(TCCheatCode.Kind.Other); TCUI.Hide(this, settingsPanel); }, 50).transform, new Vector2(0.5f, 0), new Vector2(0, 95), new Vector2(420, 115));
     }
     Slider BuildSlider(RectTransform parent, Vector2 pos)
     {

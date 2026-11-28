@@ -21,7 +21,7 @@ public static class TCPlayGames
     /// Fired on the main thread whenever sign-in state or the display name changes.
     public static event Action Changed;
 
-    static bool _activated, _silentTried, _busy;
+    static bool _activated, _silentTried, _busy, _signedOut;
 
     public static bool WasLinked => PlayerPrefs.GetInt(LinkedKey, 0) == 1;
     public static string DisplayName
@@ -37,6 +37,7 @@ public static class TCPlayGames
     {
         get
         {
+            if (_signedOut) return false;
 #if UNITY_ANDROID && !UNITY_EDITOR
             try { return _activated && PlayGamesPlatform.Instance != null && PlayGamesPlatform.Instance.IsAuthenticated(); }
             catch { return false; }
@@ -74,7 +75,8 @@ public static class TCPlayGames
     static void Boot()
     {
         if (TCAutomation.IsAutomatedRun()) return;
-        TrySilentSignIn();
+        // Do not auto-sign-in on a fresh install; only silent-sign-in if the player previously signed in manually.
+        if (WasLinked) TrySilentSignIn();
     }
 
     static bool EnsureActivated()
@@ -171,9 +173,18 @@ public static class TCPlayGames
 #endif
     }
 
+    public static void SignOut()
+    {
+        _signedOut = true;
+        PlayerPrefs.SetInt(LinkedKey, 0);
+        PlayerPrefs.Save();
+        Changed?.Invoke();
+    }
+
     static void OnSignedIn(string how)
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
+        _signedOut = false;
         string name = null;
         try { name = PlayGamesPlatform.Instance.GetUserDisplayName(); } catch { }
         if (!string.IsNullOrWhiteSpace(name)) PlayerPrefs.SetString(NameKey, name.Trim());

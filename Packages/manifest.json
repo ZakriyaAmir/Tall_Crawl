@@ -9,6 +9,7 @@
     }
   ],
   "dependencies": {
+    "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main",
     "com.google.ads.mobile": "11.7.0",
     "com.unity.external-dependency-manager": "2.1.1",
     "com.unity.ai.navigation": "2.0.15",

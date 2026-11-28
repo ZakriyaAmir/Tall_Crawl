@@ -41,8 +41,20 @@ public class TCSplashScreen : MonoBehaviour
         splashObj.transform.SetAsLastSibling();
 
         var splash = splashObj.AddComponent<TCSplashScreen>();
+        // Failsafe: if anything ever stalls the splash coroutine, force-close after 5s
+        splash.StartCoroutine(splash.FailsafeTimeout(5f));
         yield return splash.RunRoutine();
         onComplete?.Invoke();
+    }
+
+    IEnumerator FailsafeTimeout(float maxSeconds)
+    {
+        yield return new WaitForSecondsRealtime(maxSeconds);
+        if (this && gameObject)
+        {
+            if (splashMat) Destroy(splashMat);
+            Destroy(gameObject);
+        }
     }
 
     IEnumerator RunRoutine()
@@ -169,9 +181,8 @@ public class TCSplashScreen : MonoBehaviour
         // --- Phase 3: Quick 2-Oscillation Logo Rattle ---
         if (!skipped)
         {
-            TCServices.LightHaptic();
-            // Play authentic salsa maraca rattle instrument sound
-            TCSfx.Play("salsa", 0.85f);
+            try { TCServices.LightHaptic(); } catch (Exception) { }
+            try { TCSfx.Play("salsa", 0.85f); } catch (Exception) { }
         }
         elapsed = 0f;
         const float rattleCycles = 2f;
@@ -230,10 +241,11 @@ public class TCSplashScreen : MonoBehaviour
         if (logoImage) { logoImage.SetMaterialDirty(); logoImage.enabled = false; }
 
         // --- Phase 6: Fade Out White BG into Main Menu ---
+        canvasGroup.blocksRaycasts = false;
         elapsed = 0f;
         while (elapsed < fadeOutDuration)
         {
-            elapsed += Time.unscaledDeltaTime;
+            elapsed += Mathf.Max(Time.unscaledDeltaTime, 0.001f);
             float t = Mathf.Clamp01(elapsed / fadeOutDuration);
             canvasGroup.alpha = 1f - (t * t * (3f - 2f * t));
             yield return null;

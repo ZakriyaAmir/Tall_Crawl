@@ -1,6 +1,8 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UI;
 
 /// <summary>
@@ -15,8 +17,11 @@ public partial class TCMenuUI
 {
     CanvasGroup leaderboardPanel;
     RectTransform lbContent;
-    TextMeshProUGUI lbMyName, lbMyRank, lbMyScore, lbStatus, lbAvatarLetter, gpgsSettingsText;
+    TextMeshProUGUI lbMyName, lbMyRank, lbMyScore, lbStatus, lbAvatarLetter, gpgsSettingsText, gpgsProfileName, gpgsAvatarLetter;
     Button lbSignInBtn, gpgsSettingsBtn;
+    GameObject gpgsProfileRow;
+    RawImage gpgsAvatarImg;
+    string loadedAvatarUrl;
     readonly List<GameObject> lbRows = new List<GameObject>();
 
     static readonly Color RowGold = new Color32(255, 232, 145, 255), RowSilver = new Color32(236, 240, 246, 255),
@@ -28,11 +33,76 @@ public partial class TCMenuUI
         TCUI.Place((RectTransform)b.transform, new Vector2(0.5f, 0.28f), new Vector2(310, 0), new Vector2(110, 110));
     }
 
-    void BuildGpgsSettingsButton(RectTransform card)
+    public void BuildGpgsSettingsButton(RectTransform card)
     {
-        gpgsSettingsBtn = TCUI.Btn("GooglePlay", card, "SIGN IN WITH GOOGLE PLAY", TCUI.Mint, OnGpgsSettingsTapped, 34, TCUI.Icon("play"));
-        TCUI.Place((RectTransform)gpgsSettingsBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -278), new Vector2(620, 84));
-        gpgsSettingsText = gpgsSettingsBtn.transform.Find("Text")?.GetComponent<TextMeshProUGUI>();
+        var gpTf = card ? card.Find("GooglePlay") : null;
+        if (gpTf != null)
+        {
+            gpgsSettingsBtn = gpTf.GetComponent<Button>();
+            if (gpgsSettingsBtn)
+            {
+                gpgsSettingsBtn.onClick.RemoveAllListeners();
+                gpgsSettingsBtn.onClick.AddListener(OnGpgsSettingsTapped);
+            }
+            gpgsSettingsText = gpTf.Find("Text")?.GetComponent<TextMeshProUGUI>();
+        }
+        else if (!Application.isPlaying)
+        {
+            gpgsSettingsBtn = TCUI.Btn("GooglePlay", card, "SIGN IN WITH GOOGLE PLAY", TCUI.Mint, OnGpgsSettingsTapped, 34, TCUI.Icon("play"));
+            TCUI.Place((RectTransform)gpgsSettingsBtn.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -235), new Vector2(620, 90));
+            gpgsSettingsText = gpgsSettingsBtn.transform.Find("Text")?.GetComponent<TextMeshProUGUI>();
+        }
+
+        var profRt = card ? card.Find("GooglePlayProfile") as RectTransform : null;
+        if (profRt != null)
+        {
+            gpgsProfileRow = profRt.gameObject;
+            gpgsProfileName = profRt.Find("Name")?.GetComponent<TextMeshProUGUI>();
+            gpgsAvatarLetter = profRt.Find("AvatarBg/Letter")?.GetComponent<TextMeshProUGUI>();
+            gpgsAvatarImg = profRt.Find("AvatarBg/AvatarImg")?.GetComponent<RawImage>();
+            var soBtn = profRt.Find("SignOut")?.GetComponent<Button>();
+            if (soBtn) { soBtn.onClick.RemoveAllListeners(); soBtn.onClick.AddListener(OnGpgsSignOutTapped); }
+            gpgsProfileRow.SetActive(false);
+        }
+        else if (!Application.isPlaying)
+        {
+            profRt = TCUI.Rect("GooglePlayProfile", card);
+            TCUI.Place(profRt, new Vector2(0.5f, 0.5f), new Vector2(0, -235), new Vector2(620, 92));
+            gpgsProfileRow = profRt.gameObject;
+
+            var bg = profRt.gameObject.AddComponent<Image>();
+            bg.sprite = TCUI.Round; bg.type = Image.Type.Sliced; bg.color = TCUI.CreamLight;
+            TCTheme.StyleChip(bg, TCUI.CreamLight, TCUI.Tan, 3f, 4f, false, false);
+
+            var avBg = TCUI.Img("AvatarBg", profRt, TCUI.Crimson, TCUI.Circle);
+            TCUI.Place(avBg.rectTransform, new Vector2(0, 0.5f), new Vector2(52, 0), new Vector2(66, 66));
+            gpgsAvatarLetter = TCUI.Label("Letter", avBg.transform, "?", 34, TCUI.Cream);
+            TCUI.Stretch(gpgsAvatarLetter.rectTransform);
+
+            var avRawRt = TCUI.Rect("AvatarImg", avBg.transform);
+            TCUI.Stretch(avRawRt);
+            gpgsAvatarImg = avRawRt.gameObject.AddComponent<RawImage>();
+            gpgsAvatarImg.enabled = false;
+
+            gpgsProfileName = TCUI.Label("Name", profRt, "Player", 34, TCUI.Ink, TextAlignmentOptions.Left);
+            TCUI.Place(gpgsProfileName.rectTransform, new Vector2(0, 0.5f), new Vector2(265, 14), new Vector2(330, 42));
+
+            var sub = TCUI.Label("Sub", profRt, "Signed in with Google Play", 22, TCUI.Brown, TextAlignmentOptions.Left);
+            TCUI.Place(sub.rectTransform, new Vector2(0, 0.5f), new Vector2(265, -18), new Vector2(330, 28));
+
+            var signOutBtn = TCUI.Btn("SignOut", profRt, "SIGN OUT", TCUI.Coral, OnGpgsSignOutTapped, 24);
+            TCUI.Place((RectTransform)signOutBtn.transform, new Vector2(1, 0.5f), new Vector2(-95, 0), new Vector2(160, 56));
+            gpgsProfileRow.SetActive(false);
+        }
+    }
+
+    void OnGpgsSignOutTapped()
+    {
+        TCPlayGames.SignOut();
+        loadedAvatarUrl = null;
+        if (gpgsAvatarImg) gpgsAvatarImg.enabled = false;
+        RefreshGpgsUI();
+        Toast("Signed out of Google Play");
     }
 
     void OnGpgsSettingsTapped()
@@ -54,10 +124,38 @@ public partial class TCMenuUI
 
     void RefreshGpgsUI()
     {
-        if (gpgsSettingsText) gpgsSettingsText.text = TCPlayGames.IsSignedIn ? "GOOGLE PLAY: " + TCPlayGames.DisplayName.ToUpperInvariant() : "SIGN IN WITH GOOGLE PLAY";
-        if (lbSignInBtn) lbSignInBtn.gameObject.SetActive(!TCPlayGames.IsSignedIn);
-        if (lbMyName) lbMyName.text = TCPlayGames.IsSignedIn ? TCPlayGames.DisplayName : "You";
+        bool signedIn = TCPlayGames.IsSignedIn;
+        if (gpgsSettingsBtn) gpgsSettingsBtn.gameObject.SetActive(!signedIn);
+        if (gpgsProfileRow) gpgsProfileRow.SetActive(signedIn);
+        if (signedIn)
+        {
+            string dn = string.IsNullOrEmpty(TCPlayGames.DisplayName) ? "Player" : TCPlayGames.DisplayName;
+            if (gpgsProfileName) gpgsProfileName.text = dn;
+            if (gpgsAvatarLetter) gpgsAvatarLetter.text = dn.Substring(0, 1).ToUpperInvariant();
+            string url = TCPlayGames.AvatarUrl;
+            if (!string.IsNullOrEmpty(url) && url != loadedAvatarUrl && gameObject.activeInHierarchy)
+            {
+                loadedAvatarUrl = url;
+                StartCoroutine(LoadGpgsAvatar(url));
+            }
+        }
+        if (gpgsSettingsText) gpgsSettingsText.text = signedIn ? "GOOGLE PLAY: " + TCPlayGames.DisplayName.ToUpperInvariant() : "SIGN IN WITH GOOGLE PLAY";
+        if (lbSignInBtn) lbSignInBtn.gameObject.SetActive(!signedIn);
+        if (lbMyName) lbMyName.text = signedIn ? TCPlayGames.DisplayName : "You";
         if (lbAvatarLetter) lbAvatarLetter.text = (lbMyName && lbMyName.text.Length > 0 ? lbMyName.text.Substring(0, 1) : "?").ToUpperInvariant();
+    }
+
+    IEnumerator LoadGpgsAvatar(string url)
+    {
+        using (var req = UnityWebRequestTexture.GetTexture(url))
+        {
+            yield return req.SendWebRequest();
+            if (req.result == UnityWebRequest.Result.Success && gpgsAvatarImg)
+            {
+                gpgsAvatarImg.texture = DownloadHandlerTexture.GetContent(req);
+                gpgsAvatarImg.enabled = true;
+            }
+        }
     }
 
     void BuildLeaderboard()
